@@ -1,0 +1,57 @@
+[project]
+name = "copapy"
+version = "1.0.0"
+authors = [
+  { name="Nicolas Kruse", email="nicolas.kruse@nonan.net" },
+]
+description = "Copy-Patch Compiler"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+  "pelfy>=1.0.2",
+]
+
+[project.urls]
+Homepage = "https://github.com/nonannet/copapy"
+Issues = "https://github.com/nonannet/copapy/issues"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+copapy = ["*.c"]
+
+[project.optional-dependencies]
+dev = [
+    "flake8",
+    "mypy",
+    "pytest",
+    "pandas",
+    "cantera",
+    "types-PyYAML",
+    "scipy-stubs"
+]
+
+[tool.mypy]
+files = ["src"]
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+check_untyped_defs = true
+no_implicit_optional = true
+show_error_codes = true
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
+testpaths = ["tests"]
+pythonpath = ["src"]
