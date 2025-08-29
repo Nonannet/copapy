@@ -1,11 +1,5 @@
-#from diss_helper import dmprint
-import pelfy
-#from IPython.display import Markdown
-
-from typing import Literal
-from copapy import Op, Write, const
+from copapy import Write, const
 import copapy as rc
-from copapy.binwrite import data_writer, Command, RelocationType, get_variable_data, get_function_data, translate_relocation
 
 def test_ast_generation():
     c1 = const(1.11)
