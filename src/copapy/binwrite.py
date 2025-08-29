@@ -8,17 +8,17 @@ Command = Enum('Command', [('ALLOCATE_DATA', 1), ('COPY_DATA', 2),
 
 RelocationType = Enum('RelocationType', [('RELOC_RELATIVE_32', 0)])
 
-def translate_relocation(new_sym_addr: int, new_patch_addr: int, reloc_type: str, r_addend: int) -> int:
+def translate_relocation(new_sym_addr: int, new_patch_addr: int, reloc_type: str, r_addend: int) -> tuple[int, int]:
     if reloc_type in ('R_AMD64_PLT32', 'R_AMD64_PC32'):
         # S + A - P
         value = new_sym_addr + r_addend - new_patch_addr
-        return RelocationType.RELOC_RELATIVE_32, value
+        return RelocationType.RELOC_RELATIVE_32.value, value
     else:
         raise Exception(f"Unknown: {reloc_type}")
 
 
 def get_variable_data(symbols: list[elf_symbol]) -> tuple[list[tuple[elf_symbol, int, int]], int]:
-    object_list = []
+    object_list: list[tuple[elf_symbol, int, int]] = []
     out_offs = 0
     for sym in symbols:
         assert sym.info == 'STT_OBJECT'
@@ -29,7 +29,7 @@ def get_variable_data(symbols: list[elf_symbol]) -> tuple[list[tuple[elf_symbol,
 
 
 def get_function_data(symbols: list[elf_symbol]) -> tuple[list[tuple[elf_symbol, int, int, int]], int]:
-    code_list = []
+    code_list: list[tuple[elf_symbol, int, int, int]] = []
     out_offs = 0
     for sym in symbols:
         assert sym.info == 'STT_FUNC'
@@ -96,3 +96,11 @@ class data_writer():
     def to_file(self, path: str):
         with open(path, 'wb') as f:
             f.write(self.get_data())
+
+def get_c_consts() -> str:
+    ret: list[str] = []
+    for c in Command:
+        ret.append (f"#define {c.name} {c.value}")
+    for c in RelocationType:
+        ret.append(f"#define {c.name} {c.value}")
+    return '\n'.join(ret)
