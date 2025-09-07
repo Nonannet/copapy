@@ -1,6 +1,6 @@
 [project]
 name = "copapy"
-version = "1.0.0"
+version = "0.0.0"
 authors = [
   { name="Nicolas Kruse", email="nicolas.kruse@nonan.net" },
 ]
@@ -13,7 +13,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-  "pelfy>=1.0.2",
+  "pelfy>=1.0.3",
 ]
 
 [project.urls]
@@ -28,17 +28,13 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-copapy = ["*.c"]
+copapy = ["*.c", "*.o"]
 
 [project.optional-dependencies]
 dev = [
     "flake8",
     "mypy",
-    "pytest",
-    "pandas",
-    "cantera",
-    "types-PyYAML",
-    "scipy-stubs"
+    "pytest"
 ]
 
 [tool.mypy]
