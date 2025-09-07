@@ -4,16 +4,20 @@ from typing import Generator, Iterable, Any
 import pelfy
 from . import binwrite as binw
 
+
 def get_var_name(var: Any, scope: dict[str, Any] = globals()) -> list[str]:
     return [name for name, value in scope.items() if value is var]
+
 
 def _get_c_function_definitions(code: str) -> dict[str, str]:
     ret = re.findall(r".*?void\s+([a-z_1-9]*)\s*\([^\)]*?\)[^\}]*?\{[^\}]*?result_([a-z_]*)\(.*?", code, flags=re.S)
     return {r[0]: r[1] for r in ret}
 
+
 _ccode = pkgutil.get_data(__name__, 'ops.c')
 assert _ccode is not None
 _function_definitions = _get_c_function_definitions(_ccode.decode('utf-8'))
+
 
 class Node:
     def __init__(self):
@@ -24,9 +28,11 @@ class Node:
         #return f"Node:{self.name}({', '.join(str(a) for a in self.args) if self.args else self.value})"
         return f"Node:{self.name}({', '.join(str(a) for a in self.args) if self.args else (self.value if isinstance(self, Const) else '')})"
 
+
 class Device():
     pass
-         
+
+
 class Net:
     def __init__(self, dtype: str, source: Node):
         self.dtype = dtype
@@ -71,6 +77,7 @@ class Const(Node):
 
         self.args = []
 
+
 class Write(Node):
     def __init__(self, net: Net):
         self.name = 'write_' + net.dtype
@@ -79,11 +86,13 @@ class Write(Node):
         #if self.name not in _function_definitions:
         #    raise ValueError(f"Unsupported operand type for write: {net.dtype}")
 
+
 class Op(Node):
     def __init__(self, typed_op_name: str, args: list[Net]):
         assert not args or any(isinstance(t, Net) for t in args), 'args parameter must be of type list[Net]'
         self.name: str = typed_op_name
         self.args: list[Net] = args
+
 
 def _add_op(op: str, args: list[Any], commutative: bool = False) -> Net:
     arg_nets = [a if isinstance(a, Net) else const(a) for a in args]
@@ -102,13 +111,16 @@ def _add_op(op: str, args: list[Any], commutative: bool = False) -> Net:
 
     return result_net
 
+
 #def read_input(hw: Device, test_value: float):
 #    return Net(type(value))
+
 
 def const(value: Any) -> Net:
     assert isinstance(value, (int, float, bool)), f'Unsupported type for const: {type(value).__name__}'
     new_const = Const(value)
     return Net(new_const.dtype, new_const)
+
 
 def _get_data_and_dtype(value: Any) -> tuple[str, float | int]:
     if isinstance(value, int):
@@ -272,7 +284,6 @@ def compile_to_instruction_list(end_nodes: Iterable[Node] | Node) -> binw.data_w
     auxiliary_functions = [s for s in elf.symbols if s.info == 'STT_FUNC']
     auxiliary_objects = [s for s in elf.symbols if s.info == 'STT_OBJECT']
 
-    
 
     # write data sections
     object_list, data_section_lengths = binw.get_variable_data(auxiliary_objects)
@@ -286,6 +297,16 @@ def compile_to_instruction_list(end_nodes: Iterable[Node] | Node) -> binw.data_w
             dw.write_int(out_offs)
             dw.write_int(lengths)
             dw.write_bytes(sym.data)
+
+    # write auxiliary_functions
+    # TODO
+
+    # write program
+    print(list(prototype_functions.keys()))
+    for net, node in extended_output_ops:
+        if node.name in prototype_functions:
+            print(prototype_functions[node.name])
+        else: print(f"- Warning: {node.name} prototype not found")
 
     print('-----')
 
