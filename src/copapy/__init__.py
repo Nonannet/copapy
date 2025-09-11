@@ -10,14 +10,16 @@ def get_var_name(var: Any, scope: dict[str, Any] = globals()) -> list[str]:
 
 
 def _get_c_function_definitions(code: str) -> dict[str, str]:
-    ret = re.findall(r".*?void\s+([a-z_1-9]*)\s*\([^\)]*?\)[^\}]*?\{[^\}]*?result_([a-z_]*)\(.*?", code, flags=re.S)
+    ret = re.findall(r".*?void\s+([a-z_0-9]*)\s*\([^\)]*?\)[^\}]*?\{[^\}]*?result_([a-z_]*)\(.*?", code, flags=re.S)
     return {r[0]: r[1] for r in ret}
 
 
-_ccode = pkgutil.get_data(__name__, 'ops.c')
+_ccode = pkgutil.get_data(__name__, 'stancils.c')
 assert _ccode is not None
 _function_definitions = _get_c_function_definitions(_ccode.decode('utf-8'))
 
+
+print(_function_definitions)
 
 class Node:
     def __init__(self):
@@ -105,7 +107,7 @@ def _add_op(op: str, args: list[Any], commutative: bool = False) -> Net:
     if typed_op not in _function_definitions:
         raise ValueError(f"Unsupported operand type(s) for {op}: {' and '.join([a.dtype for a in arg_nets])}")
 
-    result_type = _function_definitions[typed_op]
+    result_type = _function_definitions[typed_op].split('_')[0]
 
     result_net = Net(result_type, Op(typed_op, arg_nets))
 
@@ -224,7 +226,7 @@ def add_read_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], No
     Returns:
         Yields a tuples of a net and a operation. The net is the result net
         from the returned operation"""
-    registers: list[None | Net] = [None] * 16
+    registers: list[None | Net] = [None] * 2
 
     net_lookup = {net.source: net for node in node_list for net in node.args}
     
@@ -234,7 +236,9 @@ def add_read_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], No
                 if net != registers[i]:
                     #if net in registers:
                     #    print('x  swap registers')
-                    new_node = Op('read_reg' + str(i) + '_' + net.dtype, [])
+                    type_list = ['int' if r is None else r.dtype for r in registers]
+                    print(type_list)
+                    new_node = Op('read_reg' + str(i) + '_' + '_'.join(type_list), [])
                     yield net, new_node
                     registers[i] = net
     
@@ -273,7 +277,7 @@ def compile_to_instruction_list(end_nodes: Iterable[Node] | Node) -> binw.data_w
     extended_output_ops = list(add_write_ops(output_ops, const_list))
 
 
-    obj_file: str = 'src/copapy/obj/test4_o0.o'
+    obj_file: str = 'src/copapy/obj/stancils_x86_64.o'
     elf = pelfy.open_elf_file(obj_file)
 
     dw = binw.data_writer(elf.byteorder)
@@ -305,7 +309,8 @@ def compile_to_instruction_list(end_nodes: Iterable[Node] | Node) -> binw.data_w
     print(list(prototype_functions.keys()))
     for net, node in extended_output_ops:
         if node.name in prototype_functions:
-            print(prototype_functions[node.name])
+            #print(prototype_functions[node.name])
+            pass
         else: print(f"- Warning: {node.name} prototype not found")
 
     print('-----')
