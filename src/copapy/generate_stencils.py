@@ -12,7 +12,12 @@ def get_op_code(op: str, type1: str, type2: str, type_out: str):
     }}
     """
 
-def get_result_stubs(type1: str, type2: str):
+def get_result_stubs1(type1: str):
+    return f"""
+    void result_{type1}({type1} arg1);
+    """
+
+def get_result_stubs2(type1: str, type2: str):
     return f"""
     void result_{type1}_{type2}({type1} arg1, {type2} arg2);
     """
@@ -35,12 +40,12 @@ def get_read_reg1_code(type1: str, type2: str, type_out: str):
     }}
     """
 
-def get_write_code(type1: str, type2: str):
+def get_write_code(type1: str):
     return f"""
-    void write_{type1}_{type2}({type1} arg1, {type2} arg2) {{
+    void write_{type1}({type1} arg1) {{
         asm volatile (".long 0xF17ECAFE");
         dummy_{type1} = arg1;
-        result_{type1}_{type2}(arg1, arg2);
+        result_{type1}(arg1);
         asm volatile (".long 0xF27ECAFE");
     }}
     """
@@ -59,14 +64,18 @@ if __name__ == "__main__":
     ops = ['add', 'sub', 'mul', 'div']
 
     code = """
-    // Auto-generated stancils for copapy
+    // Auto-generated stencils for copapy
     // Do not edit manually
 
     volatile int dummy_int = 1337;
     volatile float dummy_float = 1337;
     """
+
+    for t1 in types:
+        code += get_result_stubs1(t1)
+
     for t1, t2 in permutate(types, types):
-        code += get_result_stubs(t1, t2)
+        code += get_result_stubs2(t1, t2)
 
     for op, t1, t2 in permutate(ops, types, types):
         t_out = t1 if t1 == t2 else 'float'
@@ -76,8 +85,8 @@ if __name__ == "__main__":
         code += get_read_reg0_code(t1, t2, t_out)
         code += get_read_reg1_code(t1, t2, t_out)
     
-    for t1, t2 in permutate(types, types):
-        code += get_write_code(t1, t2)
+    for t1 in types:
+        code += get_write_code(t1)
 
-    with open('src/copapy/stancils.c', 'w') as f:
+    with open('src/copapy/stencils.c', 'w') as f:
         f.write(code)

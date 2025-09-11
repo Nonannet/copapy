@@ -14,7 +14,7 @@ def _get_c_function_definitions(code: str) -> dict[str, str]:
     return {r[0]: r[1] for r in ret}
 
 
-_ccode = pkgutil.get_data(__name__, 'stancils.c')
+_ccode = pkgutil.get_data(__name__, 'stencils.c')
 assert _ccode is not None
 _function_definitions = _get_c_function_definitions(_ccode.decode('utf-8'))
 
@@ -238,7 +238,7 @@ def add_read_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], No
                     #    print('x  swap registers')
                     type_list = ['int' if r is None else r.dtype for r in registers]
                     print(type_list)
-                    new_node = Op('read_reg' + str(i) + '_' + '_'.join(type_list), [])
+                    new_node = Op(f"read_{net.dtype}_reg{i}_" + '_'.join(type_list), [])
                     yield net, new_node
                     registers[i] = net
     
@@ -254,11 +254,11 @@ def add_read_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], No
 def add_write_ops(net_node_list: list[tuple[Net | None, Node]], const_list: list[tuple[str, Net, float | int]]) -> Generator[tuple[Net | None, Node], None, None]:
     """Add write operation for each new defined net if a read operation is later flowed"""
     stored_nets = {c[1] for c in const_list}
-    read_back_nets = {net for net, node in net_node_list if node.name.startswith('read_reg')}
+    read_back_nets = {net for net, node in net_node_list if node.name.startswith('read_')}
     
     for net, node in net_node_list:
         yield net, node
-        if net and  net in read_back_nets and net not in stored_nets:
+        if net and net in read_back_nets and net not in stored_nets:
             yield (net, Op('write_' + net.dtype, [net]))
             stored_nets.add(net)
 
@@ -277,7 +277,7 @@ def compile_to_instruction_list(end_nodes: Iterable[Node] | Node) -> binw.data_w
     extended_output_ops = list(add_write_ops(output_ops, const_list))
 
 
-    obj_file: str = 'src/copapy/obj/stancils_x86_64.o'
+    obj_file: str = 'src/copapy/obj/stencils_x86_64.o'
     elf = pelfy.open_elf_file(obj_file)
 
     dw = binw.data_writer(elf.byteorder)

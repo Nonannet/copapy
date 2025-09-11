@@ -1,9 +1,13 @@
 
-    // Auto-generated stancils for copapy
+    // Auto-generated stencils for copapy
     // Do not edit manually
 
     volatile int dummy_int = 1337;
     volatile float dummy_float = 1337;
+    
+    void result_int(int arg1);
+    
+    void result_float(float arg1);
     
     void result_int_int(int arg1, int arg2);
     
@@ -205,31 +209,17 @@
         asm volatile (".long 0xF27ECAFE");
     }
     
-    void write_int_int(int arg1, int arg2) {
+    void write_int(int arg1) {
         asm volatile (".long 0xF17ECAFE");
         dummy_int = arg1;
-        result_int_int(arg1, arg2);
+        result_int(arg1);
         asm volatile (".long 0xF27ECAFE");
     }
     
-    void write_int_float(int arg1, float arg2) {
-        asm volatile (".long 0xF17ECAFE");
-        dummy_int = arg1;
-        result_int_float(arg1, arg2);
-        asm volatile (".long 0xF27ECAFE");
-    }
-    
-    void write_float_int(float arg1, int arg2) {
+    void write_float(float arg1) {
         asm volatile (".long 0xF17ECAFE");
         dummy_float = arg1;
-        result_float_int(arg1, arg2);
-        asm volatile (".long 0xF27ECAFE");
-    }
-    
-    void write_float_float(float arg1, float arg2) {
-        asm volatile (".long 0xF17ECAFE");
-        dummy_float = arg1;
-        result_float_float(arg1, arg2);
+        result_float(arg1);
         asm volatile (".long 0xF27ECAFE");
     }
     
