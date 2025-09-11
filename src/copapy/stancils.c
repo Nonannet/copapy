@@ -109,97 +109,97 @@
         asm volatile (".long 0xF27ECAFE");
     }
     
-    void read_reg0_int_int(int arg1, int arg2) {
+    void read_int_reg0_int_int(int arg1, int arg2) {
         asm volatile (".long 0xF17ECAFE");
         result_int_int(dummy_int, arg2);
         asm volatile (".long 0xF27ECAFE");
     }
     
-    void read_reg1_int_int(int arg1, int arg2) {
+    void read_int_reg1_int_int(int arg1, int arg2) {
         asm volatile (".long 0xF17ECAFE");
         result_int_int(arg1, dummy_int);
         asm volatile (".long 0xF27ECAFE");
     }
     
-    void read_reg0_int_int(int arg1, int arg2) {
+    void read_float_reg0_int_int(int arg1, int arg2) {
         asm volatile (".long 0xF17ECAFE");
         result_float_int(dummy_float, arg2);
         asm volatile (".long 0xF27ECAFE");
     }
     
-    void read_reg1_int_int(int arg1, int arg2) {
+    void read_float_reg1_int_int(int arg1, int arg2) {
         asm volatile (".long 0xF17ECAFE");
         result_int_float(arg1, dummy_float);
         asm volatile (".long 0xF27ECAFE");
     }
     
-    void read_reg0_int_float(int arg1, float arg2) {
+    void read_int_reg0_int_float(int arg1, float arg2) {
         asm volatile (".long 0xF17ECAFE");
         result_int_float(dummy_int, arg2);
         asm volatile (".long 0xF27ECAFE");
     }
     
-    void read_reg1_int_float(int arg1, float arg2) {
+    void read_int_reg1_int_float(int arg1, float arg2) {
         asm volatile (".long 0xF17ECAFE");
         result_int_int(arg1, dummy_int);
         asm volatile (".long 0xF27ECAFE");
     }
     
-    void read_reg0_int_float(int arg1, float arg2) {
+    void read_float_reg0_int_float(int arg1, float arg2) {
         asm volatile (".long 0xF17ECAFE");
         result_float_float(dummy_float, arg2);
         asm volatile (".long 0xF27ECAFE");
     }
     
-    void read_reg1_int_float(int arg1, float arg2) {
+    void read_float_reg1_int_float(int arg1, float arg2) {
         asm volatile (".long 0xF17ECAFE");
         result_int_float(arg1, dummy_float);
         asm volatile (".long 0xF27ECAFE");
     }
     
-    void read_reg0_float_int(float arg1, int arg2) {
+    void read_int_reg0_float_int(float arg1, int arg2) {
         asm volatile (".long 0xF17ECAFE");
         result_int_int(dummy_int, arg2);
         asm volatile (".long 0xF27ECAFE");
     }
     
-    void read_reg1_float_int(float arg1, int arg2) {
+    void read_int_reg1_float_int(float arg1, int arg2) {
         asm volatile (".long 0xF17ECAFE");
         result_float_int(arg1, dummy_int);
         asm volatile (".long 0xF27ECAFE");
     }
     
-    void read_reg0_float_int(float arg1, int arg2) {
+    void read_float_reg0_float_int(float arg1, int arg2) {
         asm volatile (".long 0xF17ECAFE");
         result_float_int(dummy_float, arg2);
         asm volatile (".long 0xF27ECAFE");
     }
     
-    void read_reg1_float_int(float arg1, int arg2) {
+    void read_float_reg1_float_int(float arg1, int arg2) {
         asm volatile (".long 0xF17ECAFE");
         result_float_float(arg1, dummy_float);
         asm volatile (".long 0xF27ECAFE");
     }
     
-    void read_reg0_float_float(float arg1, float arg2) {
+    void read_int_reg0_float_float(float arg1, float arg2) {
         asm volatile (".long 0xF17ECAFE");
         result_int_float(dummy_int, arg2);
         asm volatile (".long 0xF27ECAFE");
     }
     
-    void read_reg1_float_float(float arg1, float arg2) {
+    void read_int_reg1_float_float(float arg1, float arg2) {
         asm volatile (".long 0xF17ECAFE");
         result_float_int(arg1, dummy_int);
         asm volatile (".long 0xF27ECAFE");
     }
     
-    void read_reg0_float_float(float arg1, float arg2) {
+    void read_float_reg0_float_float(float arg1, float arg2) {
         asm volatile (".long 0xF17ECAFE");
         result_float_float(dummy_float, arg2);
         asm volatile (".long 0xF27ECAFE");
     }
     
-    void read_reg1_float_float(float arg1, float arg2) {
+    void read_float_reg1_float_float(float arg1, float arg2) {
         asm volatile (".long 0xF17ECAFE");
         result_float_float(arg1, dummy_float);
         asm volatile (".long 0xF27ECAFE");
