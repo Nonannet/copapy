@@ -21,7 +21,7 @@ def test_compile():
 
     il = rc.compile_to_instruction_list(out)
 
-    #print('#', il.print())
+    print('#', il.print())
 
 
 if __name__ == "__main__":

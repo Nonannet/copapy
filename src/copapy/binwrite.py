@@ -1,6 +1,7 @@
 from enum import Enum
 from pelfy import elf_symbol
 from typing import Literal
+import struct
 
 Command = Enum('Command', [('ALLOCATE_DATA', 1), ('COPY_DATA', 2),
                            ('ALLOCATE_CODE', 3), ('COPY_CODE', 4),
@@ -67,7 +68,6 @@ def get_function_data_blob(symbols: list[elf_symbol]) -> tuple[list[tuple[elf_sy
         out_offs += (lengths + 3) // 4 * 4
     return code_list, out_offs
 
-
 class data_writer():
     def __init__(self, byteorder: Literal['little', 'big']):
         self._data: list[tuple[str, bytes, int]] = list()
@@ -84,6 +84,18 @@ class data_writer():
 
     def write_bytes(self, value: bytes):
         self._data.append((f"BYTES {len(value)}", value, 0))
+
+    def write_value(self, value: int | float, num_bytes: int = 4):
+        if isinstance(value, int):
+            self.write_int(value, num_bytes, True)
+        else:
+            en = {'little': '<', 'big': '>'}[self.byteorder]
+            if num_bytes == 4:
+                data = struct.pack(en + 'f', value)
+            else:
+                data = struct.pack(en + 'd', value)
+            assert len(data) == num_bytes
+            self.write_bytes(data)
 
     def print(self) -> None:
         for name, dat, flag in self._data:

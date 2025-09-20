@@ -3,6 +3,7 @@ from typing import Generator
 
 op_signs = {'add': '+', 'sub': '-', 'mul': '*', 'div': '/'}
 
+
 def get_op_code(op: str, type1: str, type2: str, type_out: str):
     return f"""
     void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
@@ -17,10 +18,12 @@ def get_result_stubs1(type1: str):
     void result_{type1}({type1} arg1);
     """
 
+
 def get_result_stubs2(type1: str, type2: str):
     return f"""
     void result_{type1}_{type2}({type1} arg1, {type2} arg2);
     """
+
 
 def get_read_reg0_code(type1: str, type2: str, type_out: str):
     return f"""
@@ -31,6 +34,7 @@ def get_read_reg0_code(type1: str, type2: str, type_out: str):
     }}
     """
 
+
 def get_read_reg1_code(type1: str, type2: str, type_out: str):
     return f"""
     void read_{type_out}_reg1_{type1}_{type2}({type1} arg1, {type2} arg2) {{
@@ -39,6 +43,7 @@ def get_read_reg1_code(type1: str, type2: str, type_out: str):
         asm volatile (".long 0xF27ECAFE");
     }}
     """
+
 
 def get_write_code(type1: str):
     return f"""
@@ -50,6 +55,7 @@ def get_write_code(type1: str):
     }}
     """
 
+
 def permutate(*lists: list[str]) -> Generator[list[str], None, None]:
     if len(lists) == 0:
         yield []
@@ -58,6 +64,7 @@ def permutate(*lists: list[str]) -> Generator[list[str], None, None]:
     for item in first:
         for items in permutate(*rest):
             yield [item, *items]
+
 
 if __name__ == "__main__":
     types = ['int', 'float']

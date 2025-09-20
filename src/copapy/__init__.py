@@ -1,9 +1,12 @@
 import re
 import pkgutil
-from typing import Generator, Iterable, Any
+from tkinter import Variable
+from typing import Generator, Iterable, Any, Literal, TypeVar
 import pelfy
 from . import binwrite as binw
+from .stencil_db import stencil_database
 
+Operand =  type['Net'] | float | int
 
 def get_var_name(var: Any, scope: dict[str, Any] = globals()) -> list[str]:
     return [name for name, value in scope.items() if value is var]
@@ -18,8 +21,9 @@ _ccode = pkgutil.get_data(__name__, 'stencils.c')
 assert _ccode is not None
 _function_definitions = _get_c_function_definitions(_ccode.decode('utf-8'))
 
+sdb = stencil_database('src/copapy/obj/stencils_x86_64_O3.o')
 
-print(_function_definitions)
+#print(_function_definitions)
 
 class Node:
     def __init__(self):
@@ -104,10 +108,10 @@ def _add_op(op: str, args: list[Any], commutative: bool = False) -> Net:
 
     typed_op =  '_'.join([op] + [a.dtype for a in arg_nets])
 
-    if typed_op not in _function_definitions:
+    if typed_op not in sdb.function_definitions:
         raise ValueError(f"Unsupported operand type(s) for {op}: {' and '.join([a.dtype for a in arg_nets])}")
 
-    result_type = _function_definitions[typed_op].split('_')[0]
+    result_type = sdb.function_definitions[typed_op].split('_')[0]
 
     result_net = Net(result_type, Op(typed_op, arg_nets))
 
@@ -155,16 +159,16 @@ def get_multiuse_nets(root: list[Node]) -> set[Net]:
     """
     known_nets: set[Net] = set()
 
-    def recursiv_node_search(net_list: Iterable[Net]) -> Generator[Net, None, None]:
+    def recursive_node_search(net_list: Iterable[Net]) -> Generator[Net, None, None]:
         for net in net_list:
             #print(net)
             if net in known_nets:
                 yield net
             else:
                 known_nets.add(net)
-                yield from recursiv_node_search(net.source.args)
+                yield from recursive_node_search(net.source.args)
 
-    return set(recursiv_node_search(op.args[0] for op in root))
+    return set(recursive_node_search(op.args[0] for op in root))
 
 
 def get_path_segments(root: Iterable[Node]) -> Generator[list[Node], None, None]:
@@ -215,6 +219,10 @@ def get_ordered_ops(path_segments: list[list[Node]]) -> Generator[Node, None, No
 
                                
 def get_consts(op_list: list[Node]) -> list[tuple[str, Net, float | int]]:
+    """Get all const nodes in the op list
+    
+    Returns:
+        List of tuples of (name, net, value)"""
     net_lookup = {net.source: net for op in op_list for net in op.args}
     return [(n.name, net_lookup[n], n.value) for n in op_list if isinstance(n, Const)]
 
@@ -224,7 +232,7 @@ def add_read_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], No
     correctly in the registers
     
     Returns:
-        Yields a tuples of a net and a operation. The net is the result net
+        Yields tuples of a net and a operation. The net is the result net
         from the returned operation"""
     registers: list[None | Net] = [None] * 2
 
@@ -252,19 +260,31 @@ def add_read_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], No
 
 
 def add_write_ops(net_node_list: list[tuple[Net | None, Node]], const_list: list[tuple[str, Net, float | int]]) -> Generator[tuple[Net | None, Node], None, None]:
-    """Add write operation for each new defined net if a read operation is later flowed"""
+    """Add write operation for each new defined net if a read operation is later followed"""
     stored_nets = {c[1] for c in const_list}
     read_back_nets = {net for net, node in net_node_list if node.name.startswith('read_')}
     
     for net, node in net_node_list:
         yield net, node
         if net and net in read_back_nets and net not in stored_nets:
-            yield (net, Op('write_' + net.dtype, [net]))
+            yield (net, Write(net))
             stored_nets.add(net)
 
 
-def compile_to_instruction_list(end_nodes: Iterable[Node] | Node) -> binw.data_writer:
+def get_variable_nets(nodes: Iterable[Node], nets_in: Iterable[Net]) -> list[Net]:
+    nets: set[Net] = set()
+    for node in nodes:
+        if node.name.startswith('write_'):
+            nets.add(node.args[0])
 
+    for net_in in nets_in:
+        if net_in.source.name.startswith('read_'):
+            nets.add(net_in)
+
+    return list(nets)
+
+
+def compile_to_instruction_list(end_nodes: Iterable[Node] | Node) -> binw.data_writer:
     if isinstance(end_nodes, Node):
         node_list = [end_nodes]
     else:
@@ -276,42 +296,79 @@ def compile_to_instruction_list(end_nodes: Iterable[Node] | Node) -> binw.data_w
     output_ops = list(add_read_ops(ordered_ops))
     extended_output_ops = list(add_write_ops(output_ops, const_list))
 
+    for net, node in extended_output_ops:
+        print(node.name)
 
-    obj_file: str = 'src/copapy/obj/stencils_x86_64.o'
-    elf = pelfy.open_elf_file(obj_file)
+    variable_list = get_variable_nets((node for _, node in extended_output_ops),
+                                      (net for net, _ in extended_output_ops if net))
+    
+    #assert False
 
-    dw = binw.data_writer(elf.byteorder)
+    #obj_file: str = 'src/copapy/obj/stencils_x86_64_O3.o'
+    #elf = pelfy.open_elf_file(obj_file)
 
-    prototype_functions = {s.name: s for s in elf.symbols if s.info == 'STT_FUNC'}
-    prototype_objects = {s.name: s for s in elf.symbols if s.info == 'STT_OBJECT'}
+    dw = binw.data_writer(sdb.byteorder)
 
-    auxiliary_functions = [s for s in elf.symbols if s.info == 'STT_FUNC']
-    auxiliary_objects = [s for s in elf.symbols if s.info == 'STT_OBJECT']
+    #prototype_functions = {s.name: s for s in elf.symbols if s.info == 'STT_FUNC'}
+    #prototype_objects = {s.name: s for s in elf.symbols if s.info == 'STT_OBJECT'}
+
+    #auxiliary_functions = [s for s in elf.symbols if s.info == 'STT_FUNC']
+    #auxiliary_objects = [s for s in elf.symbols if s.info == 'STT_OBJECT']
 
 
-    # write data sections
-    object_list, data_section_lengths = binw.get_variable_data(auxiliary_objects)
+    # write auxiliary_objects to data sections
+    #object_list, data_section_lengths = binw.get_variable_data(auxiliary_objects)
 
+    #dw.write_com(binw.Command.ALLOCATE_DATA)
+    #dw.write_int(data_section_lengths)
+
+    #for sym, out_offs, lengths in object_list:
+    #    if sym.section and sym.section.type != 'SHT_NOBITS':
+    #        dw.write_com(binw.Command.COPY_DATA)
+    #        dw.write_int(out_offs)
+    #        dw.write_int(lengths)
+    #        dw.write_bytes(sym.data)
+    #        print(f'+ {sym.name} {sym.fields}')
+
+    # write variables to data sections
+
+    def variable_mem_layout(variable_list: list[Net]) -> tuple[list[tuple[Net, int, int]], int]:
+        offset: int = 0
+        object_list: list[tuple[Net, int, int]] = []
+
+        for variable in variable_list:
+            lengths = sdb.var_size['dummy_' + variable.dtype]
+            object_list.append((variable, offset, lengths))
+            offset += (lengths + 3) // 4 * 4
+
+        return object_list, offset
+
+
+    object_list, data_section_lengths = variable_mem_layout(variable_list)
+
+    #data_section_lengths = object_list[-1][1] + object_list[-1][2]
     dw.write_com(binw.Command.ALLOCATE_DATA)
     dw.write_int(data_section_lengths)
 
-    for sym, out_offs, lengths in object_list:
-        if sym.section and sym.section.type != 'SHT_NOBITS':
+    for net, out_offs, lengths in object_list:
+        if isinstance(net.source, Const):
             dw.write_com(binw.Command.COPY_DATA)
             dw.write_int(out_offs)
             dw.write_int(lengths)
-            dw.write_bytes(sym.data)
+            dw.write_value(net.source.value, lengths)
+            print(f'+ {net.dtype} {net.source.value}')
 
     # write auxiliary_functions
     # TODO
 
     # write program
-    print(list(prototype_functions.keys()))
     for net, node in extended_output_ops:
-        if node.name in prototype_functions:
-            #print(prototype_functions[node.name])
-            pass
-        else: print(f"- Warning: {node.name} prototype not found")
+        assert node.name in sdb.function_definitions, f"- Warning: {node.name} prototype not found"
+        data = sdb.get_func_data(node.name)
+        print('*', node.name, ' '.join(f'{d:02X}' for d in data))
+        for reloc_offset, lengths, bits, reloc_type in sdb.get_relocs(node.name):
+            #if not relocation.symbol.name.startswith('result_'):
+            print(relocation)
 
     print('-----')
 
