@@ -3,20 +3,11 @@ from pelfy import elf_symbol
 from typing import Literal
 import struct
 
+
 Command = Enum('Command', [('ALLOCATE_DATA', 1), ('COPY_DATA', 2),
                            ('ALLOCATE_CODE', 3), ('COPY_CODE', 4),
-                           ('RELOCATE_FUNC', 5), ('RELOCATE_OBJECT', 6),
+                           ('PATCH_FUNC', 5), ('PATCH_OBJECT', 6),
                            ('SET_ENTR_POINT', 64), ('END_PROG', 255)])
-
-RelocationType = Enum('RelocationType', [('RELOC_RELATIVE_32', 0)])
-
-def translate_relocation(new_sym_addr: int, new_patch_addr: int, reloc_type: str, r_addend: int) -> tuple[int, int]:
-    if reloc_type in ('R_AMD64_PLT32', 'R_AMD64_PC32'):
-        # S + A - P
-        value = new_sym_addr + r_addend - new_patch_addr
-        return RelocationType.RELOC_RELATIVE_32.value, value
-    else:
-        raise Exception(f"Unknown: {reloc_type}")
 
 
 def get_variable_data(symbols: list[elf_symbol]) -> tuple[list[tuple[elf_symbol, int, int]], int]:
@@ -24,7 +15,7 @@ def get_variable_data(symbols: list[elf_symbol]) -> tuple[list[tuple[elf_symbol,
     out_offs = 0
     for sym in symbols:
         assert sym.info == 'STT_OBJECT'
-        lengths = sym.fields['st_size']
+        lengths = sym.fields['st_size'],
         object_list.append((sym, out_offs, lengths))
         out_offs += (lengths + 3) // 4 * 4
     return object_list, out_offs
@@ -114,6 +105,6 @@ def get_c_consts() -> str:
     ret: list[str] = []
     for c in Command:
         ret.append (f"#define {c.name} {c.value}")
-    for c in RelocationType:
+    for c in PatchType:
         ret.append(f"#define {c.name} {c.value}")
     return '\n'.join(ret)

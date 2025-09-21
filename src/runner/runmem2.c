@@ -11,12 +11,12 @@
 #define COPY_DATA 2
 #define ALLOCATE_CODE 3
 #define COPY_CODE 4
-#define RELOCATE_FUNC 5
-#define RELOCATE_OBJECT 6
+#define PATCH_FUNC 5
+#define PATCH_OBJECT 6
 #define SET_ENTR_POINT 64
 #define END_PROG 255
 
-#define RELOC_RELATIVE_32 0
+#define PATCH_RELATIVE_32 0
 
 uint8_t *data_memory;
 uint8_t *executable_memory;
@@ -53,8 +53,8 @@ void patch_mem_32(uint8_t *patch_addr, int32_t value){
     *val_ptr = value;
 }
     
-int relocate(uint8_t *patch_addr, uint32_t reloc_type, int32_t value){
-    if (reloc_type == RELOC_RELATIVE_32){
+int patch(uint8_t *patch_addr, uint32_t reloc_type, int32_t value){
+    if (reloc_type == PATCH_RELATIVE_32){
         patch_mem_32(patch_addr, value);
     }else{
         printf("Not implemented");
@@ -104,27 +104,27 @@ int parse_commands(uint8_t *bytes){
                 memcpy(executable_memory + offs, bytes, size); bytes += size;
                 break;
             
-            case RELOCATE_FUNC:
+            case PATCH_FUNC:
                 offs = *(uint32_t*)bytes; bytes += 4;
                 reloc_type = *(uint32_t*)bytes; bytes += 4;
                 value = *(int32_t*)bytes; bytes += 4;
-                printf("RELOCATE_FUNC patch_offs=%i reloc_type=%i value=%i\n",
+                printf("PATCH_FUNC patch_offs=%i reloc_type=%i value=%i\n",
                     offs, reloc_type, value);
-                relocate(executable_memory + offs, reloc_type, value);
+                patch(executable_memory + offs, reloc_type, value);
                 break;
             
-            case RELOCATE_OBJECT:
+            case PATCH_OBJECT:
                 offs = *(uint32_t*)bytes; bytes += 4;
                 reloc_type = *(uint32_t*)bytes; bytes += 4;
                 value = *(int32_t*)bytes; bytes += 4;
-                printf("RELOCATE_OBJECT patch_offs=%i reloc_type=%i value=%i\n",
+                printf("PATCH_OBJECT patch_offs=%i reloc_type=%i value=%i\n",
                     offs, reloc_type, value);
                 data_offs = (int32_t)(data_memory - executable_memory);
                 if (abs(data_offs) > 0x7FFFFFFF) {
                     perror("code and data memory to far apart");
                     return EXIT_FAILURE;
                 }
-                relocate(executable_memory + offs, reloc_type, value + (int32_t)data_offs);
+                patch(executable_memory + offs, reloc_type, value + (int32_t)data_offs);
                 //printf("> %i\n", data_offs);
                 break;
             

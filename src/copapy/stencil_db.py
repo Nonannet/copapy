@@ -1,14 +1,37 @@
-from ast import Tuple
-from os import name
-from tkinter import NO
+from dataclasses import dataclass
 import pelfy
 from typing import Generator, Literal
+from enum import Enum
 
 
 start_marker = 0xF17ECAFE
 end_marker = 0xF27ECAFE
 
 LENGTH_CALL_INSTRUCTION = 4  # x86_64
+
+RelocationType = Enum('RelocationType', [('RELOC_RELATIVE_32', 0)])
+
+@dataclass
+class patch_entry:
+    """
+    A class for representing a relocation entry
+
+    Attributes:
+        addr (int): address of first byte to patch relative to the start of the symbol
+        type (RelocationType): relocation type"""
+    
+    type: RelocationType
+    addr: int
+
+
+def translate_relocation(relocation_addr: int, reloc_type: str, bits: int, r_addend: int) -> patch_entry:
+    if reloc_type in ('R_AMD64_PLT32', 'R_AMD64_PC32'):
+        # S + A - P
+        patch_offset = relocation_addr - r_addend
+        return patch_entry(RelocationType.RELOC_RELATIVE_32, patch_offset)
+    else:
+        raise Exception(f"Unknown: {reloc_type}")
+
 
 def get_ret_function_def(symbol: pelfy.elf_symbol):
     #print('*', symbol.name, symbol.section)
@@ -55,13 +78,8 @@ class stencil_database():
             self.elf.symbols[name].data
 
 
-    def get_relocs(self, symbol_name: str) -> Generator[tuple[int, int, str], None, None]:
-        """Return relocation offset relative to striped symbol start.
-        Yields tuples of (reloc_offset, symbol_lenght, bits, reloc_type)
-        1. reloc_offset: Offset of the relocation relative to the start of the stripped symbol data.
-        2. Length of the striped symbol.
-        3. Bits to patch
-        4. reloc_type: Type of the relocation as a string.
+    def get_patch_positions(self, symbol_name: str) -> Generator[patch_entry, None, None]:
+        """Return patch positions
         """
         symbol = self.elf.symbols[symbol_name]
         start_index = symbol.data.find(start_marker.to_bytes(4, symbol.file.byteorder))
@@ -69,10 +87,16 @@ class stencil_database():
         
         for reloc in symbol.relocations:
             
-            reloc_offset = reloc.fields['r_offset'] - symbol.fields['st_value'] - start_index
+            # address to fist byte to patch relative to the start of the symbol
+            patch = translate_relocation(
+                reloc.fields['r_offset'] - symbol.fields['st_value'] - start_index,
+                reloc.type,
+                reloc.bits,
+                reloc.fields['r_addend'])
 
-            if reloc_offset < end_index - start_index - LENGTH_CALL_INSTRUCTION:
-                yield (reloc_offset, reloc.bits, reloc.type)
+            # Exclude the call to the  result_x function
+            if patch.addr < end_index - start_index - LENGTH_CALL_INSTRUCTION:
+                yield patch
 
 
     def get_func_data(self, name: str) -> bytes:

@@ -1,8 +1,6 @@
 import re
 import pkgutil
-from tkinter import Variable
-from typing import Generator, Iterable, Any, Literal, TypeVar
-import pelfy
+from typing import Generator, Iterable, Any
 from . import binwrite as binw
 from .stencil_db import stencil_database
 
@@ -361,14 +359,39 @@ def compile_to_instruction_list(end_nodes: Iterable[Node] | Node) -> binw.data_w
     # write auxiliary_functions
     # TODO
 
-    # write program
-    for net, node in extended_output_ops:
+    # Prepare program data and relocations
+    object_addr_lookp = {net: out_offs for net, out_offs, _ in object_list}
+    data_list: list[bytes] = []
+    patch_list: list[tuple[int, int, int]] = []
+    offset = 0  # offset in generated code chunk
+
+    print('object_addr_lookp: ', object_addr_lookp)
+
+    for result_net, node in extended_output_ops:
         assert node.name in sdb.function_definitions, f"- Warning: {node.name} prototype not found"
         data = sdb.get_func_data(node.name)
+        data_list.append(data)
         print('*', node.name, ' '.join(f'{d:02X}' for d in data))
-        for reloc_offset, lengths, bits, reloc_type in sdb.get_relocs(node.name):
-            #if not relocation.symbol.name.startswith('result_'):
-            print(relocation)
+        
+        for patch in sdb.get_patch_positions(node.name):
+            assert result_net, f"Relocation found but no result net defined for operation {node.name}"
+            print('patch: ', patch)
+            object_addr = object_addr_lookp[result_net]
+            patch_list.append((patch.type.value, offset + patch.addr, object_addr))
+
+        offset += len(data)
+
+    # write program data
+    dw.write_com(binw.Command.ALLOCATE_CODE)
+    dw.write_int(offset)
+    dw.write_bytes(b''.join(data_list))
+
+    # write relocations
+    for patch_type, patch_addr, object_addr in patch_list:
+        dw.write_com(binw.Command.PATCH_OBJECT)
+        dw.write_int(patch_addr)
+        dw.write_int(patch_type)
+        dw.write_int(object_addr)
 
     print('-----')
 

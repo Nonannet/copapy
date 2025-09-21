@@ -5,5 +5,5 @@ if __name__ == "__main__":
     print('----')
     #print(sdb.function_definitions)
     for sym_name in sdb.function_definitions.keys():
-        print('-', sym_name)
-        print(list(sdb.get_relocs(sym_name)))
+        print('\n-', sym_name)
+        print(list(sdb.get_patch_positions(sym_name)))
