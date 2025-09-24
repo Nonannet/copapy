@@ -1,5 +1,4 @@
-import re
-import pkgutil
+# import pkgutil
 from typing import Generator, Iterable, Any
 from . import binwrite as binw
 from .stencil_db import stencil_database
@@ -9,19 +8,10 @@ Operand =  type['Net'] | float | int
 def get_var_name(var: Any, scope: dict[str, Any] = globals()) -> list[str]:
     return [name for name, value in scope.items() if value is var]
 
-
-def _get_c_function_definitions(code: str) -> dict[str, str]:
-    ret = re.findall(r".*?void\s+([a-z_0-9]*)\s*\([^\)]*?\)[^\}]*?\{[^\}]*?result_([a-z_]*)\(.*?", code, flags=re.S)
-    return {r[0]: r[1] for r in ret}
-
-
-_ccode = pkgutil.get_data(__name__, 'stencils.c')
-assert _ccode is not None
-_function_definitions = _get_c_function_definitions(_ccode.decode('utf-8'))
-
+# _ccode = pkgutil.get_data(__name__, 'stencils.c')
+# assert _ccode is not None
 sdb = stencil_database('src/copapy/obj/stencils_x86_64_O3.o')
 
-#print(_function_definitions)
 
 class Node:
     def __init__(self):
@@ -230,10 +220,11 @@ def add_read_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], No
     correctly in the registers
     
     Returns:
-        Yields tuples of a net and a operation. The net is the result net
-        from the returned operation"""
+        Yields tuples of a net and a operation. The net is only provided
+        for new added read operations. Otherwise None is returned in the tuple."""
     registers: list[None | Net] = [None] * 2
 
+    # Generate result net lookup table
     net_lookup = {net.source: net for node in node_list for net in node.args}
     
     for node in node_list:
@@ -249,35 +240,41 @@ def add_read_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], No
                     registers[i] = net
     
             if node in net_lookup:
-                yield net_lookup[node], node
+                yield None , node
                 registers[0] = net_lookup[node]
             else:
                 print('--->', node)
                 yield None, node
 
 
-
 def add_write_ops(net_node_list: list[tuple[Net | None, Node]], const_list: list[tuple[str, Net, float | int]]) -> Generator[tuple[Net | None, Node], None, None]:
     """Add write operation for each new defined net if a read operation is later followed"""
+
+    # Initialize set of nets with constants
     stored_nets = {c[1] for c in const_list}
-    read_back_nets = {net for net, node in net_node_list if node.name.startswith('read_')}
-    
+
+    assert all(node.name.startswith('read_') for net, node in net_node_list if net)
+    read_back_nets = {net for net, _ in net_node_list if net}
+
     for net, node in net_node_list:
-        yield net, node
+        if isinstance(node, Write):
+            yield node.args[0], node
+        else:
+            yield net, node
+
         if net and net in read_back_nets and net not in stored_nets:
-            yield (net, Write(net))
+            yield net, Write(net)
             stored_nets.add(net)
 
 
-def get_variable_nets(nodes: Iterable[Node], nets_in: Iterable[Net]) -> list[Net]:
+def get_nets(*inputs: Iterable[Iterable[Any]]) -> list[Net]:
     nets: set[Net] = set()
-    for node in nodes:
-        if node.name.startswith('write_'):
-            nets.add(node.args[0])
 
-    for net_in in nets_in:
-        if net_in.source.name.startswith('read_'):
-            nets.add(net_in)
+    for input in inputs:
+        for el in input:
+            for net in el:
+                if isinstance(net, Net):
+                    nets.add(net)
 
     return list(nets)
 
@@ -297,38 +294,12 @@ def compile_to_instruction_list(end_nodes: Iterable[Node] | Node) -> binw.data_w
     for net, node in extended_output_ops:
         print(node.name)
 
-    variable_list = get_variable_nets((node for _, node in extended_output_ops),
-                                      (net for net, _ in extended_output_ops if net))
-    
-    #assert False
+    # Get all nets associated with heap memory
+    variable_list = get_nets(const_list, extended_output_ops)
 
-    #obj_file: str = 'src/copapy/obj/stencils_x86_64_O3.o'
-    #elf = pelfy.open_elf_file(obj_file)
 
     dw = binw.data_writer(sdb.byteorder)
 
-    #prototype_functions = {s.name: s for s in elf.symbols if s.info == 'STT_FUNC'}
-    #prototype_objects = {s.name: s for s in elf.symbols if s.info == 'STT_OBJECT'}
-
-    #auxiliary_functions = [s for s in elf.symbols if s.info == 'STT_FUNC']
-    #auxiliary_objects = [s for s in elf.symbols if s.info == 'STT_OBJECT']
-
-
-    # write auxiliary_objects to data sections
-    #object_list, data_section_lengths = binw.get_variable_data(auxiliary_objects)
-
-    #dw.write_com(binw.Command.ALLOCATE_DATA)
-    #dw.write_int(data_section_lengths)
-
-    #for sym, out_offs, lengths in object_list:
-    #    if sym.section and sym.section.type != 'SHT_NOBITS':
-    #        dw.write_com(binw.Command.COPY_DATA)
-    #        dw.write_int(out_offs)
-    #        dw.write_int(lengths)
-    #        dw.write_bytes(sym.data)
-    #        print(f'+ {sym.name} {sym.fields}')
-
-    # write variables to data sections
 
     def variable_mem_layout(variable_list: list[Net]) -> tuple[list[tuple[Net, int, int]], int]:
         offset: int = 0
@@ -374,15 +345,20 @@ def compile_to_instruction_list(end_nodes: Iterable[Node] | Node) -> binw.data_w
         print('*', node.name, ' '.join(f'{d:02X}' for d in data))
         
         for patch in sdb.get_patch_positions(node.name):
-            assert result_net, f"Relocation found but no result net defined for operation {node.name}"
-            print('patch: ', patch)
+            assert result_net, f"Relocation found but no net defined for operation {node.name}"
             object_addr = object_addr_lookp[result_net]
+            print('patch: ', patch, offset + patch.addr)
             patch_list.append((patch.type.value, offset + patch.addr, object_addr))
 
         offset += len(data)
 
-    # write program data
+    # allocate program data
     dw.write_com(binw.Command.ALLOCATE_CODE)
+    dw.write_int(offset)
+
+    # write program data
+    dw.write_com(binw.Command.COPY_CODE)
+    dw.write_int(0)
     dw.write_int(offset)
     dw.write_bytes(b''.join(data_list))
 
