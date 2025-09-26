@@ -37,9 +37,9 @@ jobs:
 
     - name: Build runner
       run: |
-        mkdir runner/bin
-        gcc runner/runmem2.c -Wall -O2 -o runner/bin/runmem2
-        x86_64-w64-mingw32-gcc runner/runmem2.c -Wall -O2 -o runner/bin/runmem2.exe
+        mkdir bin
+        gcc src/runner/runmem2.c -Wall -O2 -o bin/runmem2
+        x86_64-w64-mingw32-gcc src/runner/runmem2.c -Wall -O2 -o bin/runmem2.exe
 
     #- name: Lint code with flake8
     #  run: flake8
@@ -61,4 +61,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: runner
-        path: runner/bin/*
+        path: bin/*
