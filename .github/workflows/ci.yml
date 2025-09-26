@@ -19,6 +19,9 @@ jobs:
     - name: Check out code
       uses: actions/checkout@v4
 
+    - name: Setup cross compilers
+      run: sudo apt-get update && sudo apt-get install -y mingw-w64
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
@@ -31,6 +34,12 @@ jobs:
 
     - name: Build ops obj file
       run: bash build_ops_obj.sh
+
+    - name: Build runner
+      run: |
+        mkdir runner/bin
+        gcc runner/runmem2.c -Wall -O2 -o runner/bin/runmem2
+        x86_64-w64-mingw32-gcc runner/runmem2.c -Wall -O2 -o runner/bin/runmem2.exe
 
     #- name: Lint code with flake8
     #  run: flake8
@@ -47,3 +56,9 @@ jobs:
       with:
         name: object files
         path: src/copapy/obj/*.o
+
+    - name: Upload compiled runner
+      uses: actions/upload-artifact@v4
+      with:
+        name: runner
+        path: runner/bin/*

@@ -369,6 +369,11 @@ def compile_to_instruction_list(end_nodes: Iterable[Node] | Node) -> binw.data_w
         dw.write_int(patch_type)
         dw.write_int(object_addr)
 
-    print('-----')
+    # set entry point
+    dw.write_com(binw.Command.SET_ENTR_POINT)
+    dw.write_int(0)
+
+    # run program command
+    dw.write_com(binw.Command.END_PROG)
 
     return dw

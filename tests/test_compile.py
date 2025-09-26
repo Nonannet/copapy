@@ -1,6 +1,7 @@
 from copapy import Write, const
 import copapy as rc
 
+
 def test_compile():
     c1 = const(1.11)
     c2 = const(2.22)
@@ -16,6 +17,8 @@ def test_compile():
     il = rc.compile_to_instruction_list(out)
 
     print('#', il.print())
+
+    il.to_file('test.copapy')
 
 
 if __name__ == "__main__":
