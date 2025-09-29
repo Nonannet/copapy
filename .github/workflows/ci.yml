@@ -38,8 +38,8 @@ jobs:
     - name: Build runner
       run: |
         mkdir bin
-        gcc src/runner/runmem2.c -Wall -O2 -o bin/runmem2
-        x86_64-w64-mingw32-gcc src/runner/runmem2.c -Wall -O2 -o bin/runmem2.exe
+        gcc -Wall -Wextra -Wconversion -Wsign-conversion -Wshadow -Wstrict-overflow -Werror src/runner/runmem2.c -Wall -O3 -o bin/runmem2
+        x86_64-w64-mingw32-gcc -Wall -Wextra -Wconversion -Wsign-conversion -Wshadow -Wstrict-overflow -Werror src/runner/runmem2.c -Wall -O3 -o bin/runmem2.exe
 
     #- name: Lint code with flake8
     #  run: flake8
