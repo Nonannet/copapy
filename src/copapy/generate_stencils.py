@@ -4,6 +4,22 @@ from typing import Generator
 op_signs = {'add': '+', 'sub': '-', 'mul': '*', 'div': '/'}
 
 
+def get_function_start():
+    return """
+    void function_start(){
+        result_int(0);
+        asm volatile (".long 0xF27ECAFE");
+    }
+    """
+
+def get_function_end():
+    return """
+    void function_end(){
+        result_int(0);
+        asm volatile (".long 0xF17ECAFE");
+    }
+    """
+
 def get_op_code(op: str, type1: str, type2: str, type_out: str):
     return f"""
     void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
@@ -94,6 +110,8 @@ if __name__ == "__main__":
     
     for t1 in types:
         code += get_write_code(t1)
+
+    code += get_function_start() + get_function_end()
 
     with open('src/copapy/stencils.c', 'w') as f:
         f.write(code)

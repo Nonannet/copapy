@@ -338,19 +338,29 @@ def compile_to_instruction_list(end_nodes: Iterable[Node] | Node) -> binw.data_w
 
     print('object_addr_lookp: ', object_addr_lookp)
 
+    data = sdb.get_func_data('function_start')
+    data_list.append(data)
+    offset += len(data)
+
     for result_net, node in extended_output_ops:
         assert node.name in sdb.function_definitions, f"- Warning: {node.name} prototype not found"
         data = sdb.get_func_data(node.name)
         data_list.append(data)
-        print('*', node.name, ' '.join(f'{d:02X}' for d in data))
+        print(f"* {node.name} ({offset}) " + ' '.join(f'{d:02X}' for d in data))
         
         for patch in sdb.get_patch_positions(node.name):
             assert result_net, f"Relocation found but no net defined for operation {node.name}"
             object_addr = object_addr_lookp[result_net]
-            print('patch: ', patch, offset + patch.addr)
-            patch_list.append((patch.type.value, offset + patch.addr, object_addr))
+            patch_value = object_addr + patch.addend - (offset + patch.addr)
+            print('patch: ', patch, object_addr, patch_value)
+            patch_list.append((patch.type.value, offset + patch.addr, patch_value))
 
         offset += len(data)
+
+    data = sdb.get_func_data('function_end')
+    data_list.append(data)
+    offset += len(data)
+    print('function_end', offset, data)
 
     # allocate program data
     dw.write_com(binw.Command.ALLOCATE_CODE)
@@ -367,7 +377,7 @@ def compile_to_instruction_list(end_nodes: Iterable[Node] | Node) -> binw.data_w
         dw.write_com(binw.Command.PATCH_OBJECT)
         dw.write_int(patch_addr)
         dw.write_int(patch_type)
-        dw.write_int(object_addr)
+        dw.write_int(object_addr, signed=True)
 
     # set entry point
     dw.write_com(binw.Command.SET_ENTR_POINT)

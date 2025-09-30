@@ -71,6 +71,7 @@ int parse_commands(uint8_t *bytes){
     int data_offs;
     uint32_t size;
     int err_flag = 0;
+    uint32_t rel_entr_point;
     
     while(!err_flag){
         command = *(uint32_t*)bytes;
@@ -78,8 +79,8 @@ int parse_commands(uint8_t *bytes){
         switch(command) {
         	case ALLOCATE_DATA:
                 size = *(uint32_t*)bytes; bytes += 4;
-                printf("ALLOCATE_DATA size=%i\n", size);
                 data_memory = get_data_memory(size);
+                printf("ALLOCATE_DATA size=%i mem_addr=%p\n", size, (void*)data_memory);
                 break;
             
         	case COPY_DATA:
@@ -91,9 +92,9 @@ int parse_commands(uint8_t *bytes){
             
         	case ALLOCATE_CODE:
                 size = *(uint32_t*)bytes; bytes += 4;
-                printf("ALLOCATE_CODE size=%i\n", size);
                 executable_memory = get_executable_memory(size);
                 executable_memory_len = size;
+                printf("ALLOCATE_CODE size=%i mem_addr=%p\n", size, (void*)executable_memory);
                 //printf("# d %i  c %i  off %i\n", data_memory, executable_memory, data_offs);
                 break;
             
@@ -117,19 +118,19 @@ int parse_commands(uint8_t *bytes){
                 offs = *(uint32_t*)bytes; bytes += 4;
                 reloc_type = *(uint32_t*)bytes; bytes += 4;
                 value = *(int32_t*)bytes; bytes += 4;
-                printf("PATCH_OBJECT patch_offs=%i reloc_type=%i value=%i\n",
-                    offs, reloc_type, value);
                 data_offs = (int32_t)(data_memory - executable_memory);
+                //printf("PATCH_OBJECT patch_offs=%i reloc_type=%i value=%i data_offs=%i\n",
+                //    offs, reloc_type, value, data_offs);
                 if (abs(data_offs) > 0x7FFFFFFF) {
                     perror("code and data memory to far apart");
                     return EXIT_FAILURE;
                 }
-                patch(executable_memory + offs, reloc_type, value + (int32_t)data_offs);
+                patch(executable_memory + offs, reloc_type, value + data_offs);
                 //printf("> %i\n", data_offs);
                 break;
             
             case SET_ENTR_POINT:
-                uint32_t rel_entr_point = *(uint32_t*)bytes; bytes += 4;
+                rel_entr_point = *(uint32_t*)bytes; bytes += 4;
                 printf("SET_ENTR_POINT rel_entr_point=%i\n", rel_entr_point);
                 entr_point = (int (*)())(executable_memory + rel_entr_point);    
                 break;
