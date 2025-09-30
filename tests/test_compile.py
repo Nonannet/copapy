@@ -1,6 +1,13 @@
 from copapy import Write, const
 import copapy as rc
+import subprocess
 
+def run_command(command: list[str], encoding: str = 'utf8') -> str:
+    process = subprocess.Popen(command, stdout=subprocess.PIPE)
+    output, error = process.communicate()
+
+    assert error is None, f"Error occurred: {error.decode(encoding)}"
+    return output.decode(encoding)
 
 def test_compile():
     c1 = const(1.11)
@@ -18,7 +25,12 @@ def test_compile():
 
     print('#', il.print())
 
-    il.to_file('test.copapy')
+    il.to_file('./bin/test.copapy')
+
+    result = run_command(['./bin/runmem2', 'test.copapy'])
+    print(result)
+
+    assert 'Return value: 0' in result
 
 
 if __name__ == "__main__":
