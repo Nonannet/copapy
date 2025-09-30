@@ -25,7 +25,7 @@ def test_compile():
 
     print('#', il.print())
 
-    il.to_file('./bin/test.copapy')
+    il.to_file('test.copapy')
 
     result = run_command(['./bin/runmem2', 'test.copapy'])
     print(result)
