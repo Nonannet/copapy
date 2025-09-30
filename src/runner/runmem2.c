@@ -119,8 +119,8 @@ int parse_commands(uint8_t *bytes){
                 reloc_type = *(uint32_t*)bytes; bytes += 4;
                 value = *(int32_t*)bytes; bytes += 4;
                 data_offs = (int32_t)(data_memory - executable_memory);
-                //printf("PATCH_OBJECT patch_offs=%i reloc_type=%i value=%i data_offs=%i\n",
-                //    offs, reloc_type, value, data_offs);
+                printf("PATCH_OBJECT patch_offs=%i reloc_type=%i value=%i data_offs=%i\n",
+                    offs, reloc_type, value, data_offs);
                 if (abs(data_offs) > 0x7FFFFFFF) {
                     perror("code and data memory to far apart");
                     return EXIT_FAILURE;
