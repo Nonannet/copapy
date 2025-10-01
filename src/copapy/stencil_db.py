@@ -13,6 +13,7 @@ LENGTH_CALL_INSTRUCTION = 5  # x86_64
 
 RelocationType = Enum('RelocationType', [('RELOC_RELATIVE_32', 0)])
 
+
 @dataclass
 class patch_entry:
     """
@@ -21,7 +22,7 @@ class patch_entry:
     Attributes:
         addr (int): address of first byte to patch relative to the start of the symbol
         type (RelocationType): relocation type"""
-    
+
     type: RelocationType
     addr: int
     addend: int
@@ -73,20 +74,19 @@ class stencil_database():
 
         self.function_definitions = {s.name: get_ret_function_def(s) for s in self.elf.symbols
                                      if s.info == 'STT_FUNC'}
-    
+
         self.data = {s.name: strip_symbol(s.data, self.elf.byteorder) for s in self.elf.symbols
-                                            if s.info == 'STT_FUNC'}
-        
+                     if s.info == 'STT_FUNC'}
+
         self.var_size = {s.name: s.fields['st_size'] for s in self.elf.symbols
-                                            if s.info == 'STT_OBJECT'}
-        
+                         if s.info == 'STT_OBJECT'}
+
         self.byteorder: Literal['little', 'big'] = self.elf.byteorder
 
         for name in self.function_definitions.keys():
             sym = self.elf.symbols[name]
             sym.relocations
             self.elf.symbols[name].data
-
 
     def get_patch_positions(self, symbol_name: str) -> Generator[patch_entry, None, None]:
         """Return patch positions
@@ -95,7 +95,7 @@ class stencil_database():
         start_index, end_index = get_stencil_position(symbol.data, symbol.file.byteorder)
 
         for reloc in symbol.relocations:
-            
+
             # address to fist byte to patch relative to the start of the symbol
             patch = translate_relocation(
                 reloc.fields['r_offset'] - symbol.fields['st_value'] - start_index,
@@ -107,8 +107,5 @@ class stencil_database():
             if patch.addr < end_index - start_index:
                 yield patch
 
-
     def get_func_data(self, name: str) -> bytes:
         return strip_symbol(self.elf.symbols[name].data, self.elf.byteorder)
-
-

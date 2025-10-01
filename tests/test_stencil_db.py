@@ -1,6 +1,7 @@
 from copapy import stencil_database
 from copapy import stencil_db
 
+
 def test_list_symbols():
     sdb = stencil_database('src/copapy/obj/stencils_x86_64_O3.o')
     print('----')
@@ -18,7 +19,7 @@ def test_start_end_function():
 
         start, end = stencil_db.get_stencil_position(data, sdb.elf.byteorder)
 
-        assert start>= 0 and end >= start and end <= len(data)
+        assert start >= 0 and end >= start and end <= len(data)
 
 
 if __name__ == "__main__":

@@ -1,85 +1,41 @@
 from enum import Enum
-from pelfy import elf_symbol
-from typing import Literal
+from typing import Literal, Any
 import struct
 
 
 Command = Enum('Command', [('ALLOCATE_DATA', 1), ('COPY_DATA', 2),
                            ('ALLOCATE_CODE', 3), ('COPY_CODE', 4),
                            ('PATCH_FUNC', 5), ('PATCH_OBJECT', 6),
-                           ('SET_ENTR_POINT', 64), ('END_PROG', 255)])
+                           ('SET_ENTR_POINT', 64), ('READ_DATA', 65),
+                           ('END_PROG', 255)])
 
-
-def get_variable_data(symbols: list[elf_symbol]) -> tuple[list[tuple[elf_symbol, int, int]], int]:
-    object_list: list[tuple[elf_symbol, int, int]] = []
-    out_offs = 0
-    for sym in symbols:
-        assert sym.info == 'STT_OBJECT'
-        lengths = sym.fields['st_size'],
-        object_list.append((sym, out_offs, lengths))
-        out_offs += (lengths + 3) // 4 * 4
-    return object_list, out_offs
-
-
-def get_function_data(symbols: list[elf_symbol]) -> tuple[list[tuple[elf_symbol, int, int, int]], int]:
-    code_list: list[tuple[elf_symbol, int, int, int]] = []
-    out_offs = 0
-    for sym in symbols:
-        assert sym.info == 'STT_FUNC'
-        lengths = sym.fields['st_size']
-
-        #if strip_function:
-        #    assert False, 'Not implemente'
-        # TODO: Strip functions
-        # Symbol, start out_offset in symbol, offset in output file, output lengths
-        # Set in_sym_out_offs and lengths
-        in_sym_offs = 0
-        
-        code_list.append((sym, in_sym_offs, out_offs, lengths))
-        # out_offs += (lengths + 3) // 4 * 4
-        out_offs += lengths  # should be aligned by default?
-    return code_list, out_offs
-
-
-def get_function_data_blob(symbols: list[elf_symbol]) -> tuple[list[tuple[elf_symbol, int, int, int]], int]:
-    code_list: list[tuple[elf_symbol, int, int, int]] = []
-    out_offs = 0
-    for sym in symbols:
-        assert sym.info == 'STT_FUNC'
-        lengths = sym.fields['st_size']
-
-        #if strip_function:
-        #    assert False, 'Not implemente'
-        # TODO: Strip functions
-        # Symbol, start out_offset in symbol, offset in output file, output lengths
-        # Set in_sym_out_offs and lengths
-        in_sym_offs = 0
-        
-        code_list.append((sym, in_sym_offs, out_offs, lengths))
-        out_offs += (lengths + 3) // 4 * 4
-    return code_list, out_offs
 
 class data_writer():
     def __init__(self, byteorder: Literal['little', 'big']):
         self._data: list[tuple[str, bytes, int]] = list()
-        self.byteorder = byteorder
+        self.byteorder: Literal['little', 'big'] = byteorder
+        self.variables: dict[Any, tuple[int, int, str]] = dict()
 
-    def write_int(self, value: int, num_bytes: int = 4, signed: bool = False):
+    def add_variable(self, net: Any, addr: int, lengths: int, var_type: str) -> None:
+        self.variables[net] = (addr, lengths, var_type)
+
+    def write_int(self, value: int, num_bytes: int = 4, signed: bool = False) -> None:
         self._data.append((f"INT {value}", value.to_bytes(length=num_bytes, byteorder=self.byteorder, signed=signed), 0))
 
-    def write_com(self, value: Enum, num_bytes: int = 4):
+    def write_com(self, value: Enum, num_bytes: int = 4) -> None:
         self._data.append((value.name, value.value.to_bytes(length=num_bytes, byteorder=self.byteorder, signed=False), 1))
-    
-    def write_byte(self, value: int):
+
+    def write_byte(self, value: int) -> None:
         self._data.append((f"BYTE {value}", bytes([value]), 0))
 
-    def write_bytes(self, value: bytes):
+    def write_bytes(self, value: bytes) -> None:
         self._data.append((f"BYTES {len(value)}", value, 0))
 
-    def write_value(self, value: int | float, num_bytes: int = 4):
+    def write_value(self, value: int | float, num_bytes: int = 4) -> None:
         if isinstance(value, int):
             self.write_int(value, num_bytes, True)
         else:
+            # 32 bit or 64 bit float
             en = {'little': '<', 'big': '>'}[self.byteorder]
             if num_bytes == 4:
                 data = struct.pack(en + 'f', value)
@@ -97,14 +53,6 @@ class data_writer():
     def get_data(self) -> bytes:
         return b''.join(dat for _, dat, _ in self._data)
 
-    def to_file(self, path: str):
+    def to_file(self, path: str) -> None:
         with open(path, 'wb') as f:
             f.write(self.get_data())
-
-def get_c_consts() -> str:
-    ret: list[str] = []
-    for c in Command:
-        ret.append (f"#define {c.name} {c.value}")
-    for c in PatchType:
-        ret.append(f"#define {c.name} {c.value}")
-    return '\n'.join(ret)

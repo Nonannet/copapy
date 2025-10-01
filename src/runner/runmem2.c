@@ -14,6 +14,7 @@
 #define PATCH_FUNC 5
 #define PATCH_OBJECT 6
 #define SET_ENTR_POINT 64
+#define READ_DATA 65
 #define END_PROG 255
 
 #define PATCH_RELATIVE_32 0
@@ -132,15 +133,26 @@ int parse_commands(uint8_t *bytes){
             case SET_ENTR_POINT:
                 rel_entr_point = *(uint32_t*)bytes; bytes += 4;
                 printf("SET_ENTR_POINT rel_entr_point=%i\n", rel_entr_point);
-                entr_point = (int (*)())(executable_memory + rel_entr_point);    
+                entr_point = (int (*)())(executable_memory + rel_entr_point);  
+                
+                mark_mem_executable();
+                int ret = entr_point();
+                printf("Return value: %i\n", ret);
                 break;
             
             case END_PROG:
                 printf("END_PROG\n");
-                mark_mem_executable();
-                int ret = entr_point();
-                printf("Return value: %i\n", ret);
                 err_flag = 1;
+                break;
+
+            case READ_DATA:
+                offs = *(uint32_t*)bytes; bytes += 4;
+                size = *(uint32_t*)bytes; bytes += 4;
+                printf("READ_DATA offs=%i size=%i data=", offs, size);
+                for (uint32_t i = 0; i < size; i++) {
+                    printf("%02X ", data_memory[offs + i]);
+                }
+                printf("\n");
                 break;
             
         	default:

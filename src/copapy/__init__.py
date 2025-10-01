@@ -3,22 +3,25 @@ from typing import Generator, Iterable, Any
 from . import binwrite as binw
 from .stencil_db import stencil_database
 
-Operand =  type['Net'] | float | int
+Operand = type['Net'] | float | int
+
 
 def get_var_name(var: Any, scope: dict[str, Any] = globals()) -> list[str]:
     return [name for name, value in scope.items() if value is var]
 
 # _ccode = pkgutil.get_data(__name__, 'stencils.c')
 # assert _ccode is not None
+
+
 sdb = stencil_database('src/copapy/obj/stencils_x86_64_O3.o')
 
 
 class Node:
-    def __init__(self):
+    def __init__(self) -> None:
         self.args: list[Net] = []
         self.name: str = ''
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         #return f"Node:{self.name}({', '.join(str(a) for a in self.args) if self.args else self.value})"
         return f"Node:{self.name}({', '.join(str(a) for a in self.args) if self.args else (self.value if isinstance(self, Const) else '')})"
 
@@ -37,26 +40,26 @@ class Net:
 
     def __rmul__(self, other: Any) -> 'Net':
         return _add_op('mul', [self, other], True)
-    
+
     def __add__(self, other: Any) -> 'Net':
         return _add_op('add', [self, other], True)
 
     def __radd__(self, other: Any) -> 'Net':
         return _add_op('add', [self, other], True)
 
-    def __sub__ (self, other: Any) -> 'Net':
+    def __sub__(self, other: Any) -> 'Net':
         return _add_op('sub', [self, other])
 
-    def __rsub__ (self, other: Any) -> 'Net':
+    def __rsub__(self, other: Any) -> 'Net':
         return _add_op('sub', [other, self])
 
-    def __truediv__ (self, other: Any) -> 'Net':
+    def __truediv__(self, other: Any) -> 'Net':
         return _add_op('div', [self, other])
 
-    def __rtruediv__ (self, other: Any) -> 'Net':
+    def __rtruediv__(self, other: Any) -> 'Net':
         return _add_op('div', [other, self])
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         names = get_var_name(self)
         return f"{'name:' + names[0] if names else 'id:' + str(id(self))[-5:]}"
 
@@ -94,7 +97,7 @@ def _add_op(op: str, args: list[Any], commutative: bool = False) -> Net:
     if commutative:
         arg_nets = sorted(arg_nets, key=lambda a: a.dtype)
 
-    typed_op =  '_'.join([op] + [a.dtype for a in arg_nets])
+    typed_op = '_'.join([op] + [a.dtype for a in arg_nets])
 
     if typed_op not in sdb.function_definitions:
         raise ValueError(f"Unsupported operand type(s) for {op}: {' and '.join([a.dtype for a in arg_nets])}")
@@ -141,24 +144,6 @@ def const_vector3d(x: float, y: float, z: float) -> vec3d:
     return vec3d((const(x), const(y), const(z)))
 
 
-def get_multiuse_nets(root: list[Node]) -> set[Net]:
-    """Finds all nets that get accessed more than one time. Therefore
-    storage on the heap might be better.
-    """
-    known_nets: set[Net] = set()
-
-    def recursive_node_search(net_list: Iterable[Net]) -> Generator[Net, None, None]:
-        for net in net_list:
-            #print(net)
-            if net in known_nets:
-                yield net
-            else:
-                known_nets.add(net)
-                yield from recursive_node_search(net.source.args)
-
-    return set(recursive_node_search(op.args[0] for op in root))
-
-
 def get_path_segments(root: Iterable[Node]) -> Generator[list[Node], None, None]:
     """List of all possible paths. Ops in order of execution (output at the end)
     """
@@ -190,7 +175,7 @@ def get_ordered_ops(path_segments: list[list[Node]]) -> Generator[Node, None, No
     """Merge in all tree branches at branch position into the path segments
     """
     finished_paths: set[int] = set()
-    
+
     for i, path in enumerate(path_segments):
         if i not in finished_paths:
             for op in path:
@@ -205,10 +190,10 @@ def get_ordered_ops(path_segments: list[list[Node]]) -> Generator[Node, None, No
                 yield op
             finished_paths.add(i)
 
-                               
+
 def get_consts(op_list: list[Node]) -> list[tuple[str, Net, float | int]]:
     """Get all const nodes in the op list
-    
+
     Returns:
         List of tuples of (name, net, value)"""
     net_lookup = {net.source: net for op in op_list for net in op.args}
@@ -218,7 +203,7 @@ def get_consts(op_list: list[Node]) -> list[tuple[str, Net, float | int]]:
 def add_read_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], None, None]:
     """Add read operation before each op where arguments are not already positioned
     correctly in the registers
-    
+
     Returns:
         Yields tuples of a net and a operation. The net is only provided
         for new added read operations. Otherwise None is returned in the tuple."""
@@ -226,7 +211,7 @@ def add_read_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], No
 
     # Generate result net lookup table
     net_lookup = {net.source: net for node in node_list for net in node.args}
-    
+
     for node in node_list:
         if not node.name.startswith('const_'):
             for i, net in enumerate(node.args):
@@ -238,9 +223,9 @@ def add_read_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], No
                     new_node = Op(f"read_{net.dtype}_reg{i}_" + '_'.join(type_list), [])
                     yield net, new_node
                     registers[i] = net
-    
+
             if node in net_lookup:
-                yield None , node
+                yield None, node
                 registers[0] = net_lookup[node]
             else:
                 print('--->', node)
@@ -283,7 +268,7 @@ def compile_to_instruction_list(end_nodes: Iterable[Node] | Node) -> binw.data_w
     if isinstance(end_nodes, Node):
         node_list = [end_nodes]
     else:
-        node_list = end_nodes
+        node_list = list(end_nodes)
 
     path_segments = list(get_path_segments(node_list))
     ordered_ops = list(get_ordered_ops(path_segments))
@@ -297,9 +282,7 @@ def compile_to_instruction_list(end_nodes: Iterable[Node] | Node) -> binw.data_w
     # Get all nets associated with heap memory
     variable_list = get_nets(const_list, extended_output_ops)
 
-
     dw = binw.data_writer(sdb.byteorder)
-
 
     def variable_mem_layout(variable_list: list[Net]) -> tuple[list[tuple[Net, int, int]], int]:
         offset: int = 0
@@ -312,14 +295,14 @@ def compile_to_instruction_list(end_nodes: Iterable[Node] | Node) -> binw.data_w
 
         return object_list, offset
 
-
     object_list, data_section_lengths = variable_mem_layout(variable_list)
 
-    #data_section_lengths = object_list[-1][1] + object_list[-1][2]
+    # Write data
     dw.write_com(binw.Command.ALLOCATE_DATA)
     dw.write_int(data_section_lengths)
 
     for net, out_offs, lengths in object_list:
+        dw.add_variable(net, out_offs, lengths, net.dtype)
         if isinstance(net.source, Const):
             dw.write_com(binw.Command.COPY_DATA)
             dw.write_int(out_offs)
@@ -330,7 +313,7 @@ def compile_to_instruction_list(end_nodes: Iterable[Node] | Node) -> binw.data_w
     # write auxiliary_functions
     # TODO
 
-    # Prepare program data and relocations
+    # Prepare program code and relocations
     object_addr_lookp = {net: out_offs for net, out_offs, _ in object_list}
     data_list: list[bytes] = []
     patch_list: list[tuple[int, int, int]] = []
@@ -347,7 +330,7 @@ def compile_to_instruction_list(end_nodes: Iterable[Node] | Node) -> binw.data_w
         data = sdb.get_func_data(node.name)
         data_list.append(data)
         print(f"* {node.name} ({offset}) " + ' '.join(f'{d:02X}' for d in data))
-        
+
         for patch in sdb.get_patch_positions(node.name):
             assert result_net, f"Relocation found but no net defined for operation {node.name}"
             object_addr = object_addr_lookp[result_net]
@@ -383,7 +366,12 @@ def compile_to_instruction_list(end_nodes: Iterable[Node] | Node) -> binw.data_w
     dw.write_com(binw.Command.SET_ENTR_POINT)
     dw.write_int(0)
 
-    # run program command
-    dw.write_com(binw.Command.END_PROG)
-
     return dw
+
+
+def read_variable(bw: binw.data_writer, net: Net) -> None:
+    assert net in bw.variables, f"Variable {net} not found in data writer variables"
+    addr, lengths, _ = bw.variables[net]
+    bw.write_com(binw.Command.READ_DATA)
+    bw.write_int(addr)
+    bw.write_int(lengths)

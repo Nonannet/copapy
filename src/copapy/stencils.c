@@ -223,13 +223,15 @@
         asm volatile (".long 0xF27ECAFE");
     }
     
-    void function_start(){
+    int function_start(){
         result_int(0);
         asm volatile (".long 0xF27ECAFE");
+        return 1;
     }
     
-    void function_end(){
+    int function_end(){
         result_int(0);
         asm volatile (".long 0xF17ECAFE");
+        return 1;
     }
     

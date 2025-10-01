@@ -4,23 +4,27 @@ from typing import Generator
 op_signs = {'add': '+', 'sub': '-', 'mul': '*', 'div': '/'}
 
 
-def get_function_start():
+def get_function_start() -> str:
     return """
-    void function_start(){
+    int function_start(){
         result_int(0);
         asm volatile (".long 0xF27ECAFE");
+        return 1;
     }
     """
 
-def get_function_end():
+
+def get_function_end() -> str:
     return """
-    void function_end(){
+    int function_end(){
         result_int(0);
         asm volatile (".long 0xF17ECAFE");
+        return 1;
     }
     """
 
-def get_op_code(op: str, type1: str, type2: str, type_out: str):
+
+def get_op_code(op: str, type1: str, type2: str, type_out: str) -> str:
     return f"""
     void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         asm volatile (".long 0xF17ECAFE");
@@ -29,19 +33,20 @@ def get_op_code(op: str, type1: str, type2: str, type_out: str):
     }}
     """
 
-def get_result_stubs1(type1: str):
+
+def get_result_stubs1(type1: str) -> str:
     return f"""
     void result_{type1}({type1} arg1);
     """
 
 
-def get_result_stubs2(type1: str, type2: str):
+def get_result_stubs2(type1: str, type2: str) -> str:
     return f"""
     void result_{type1}_{type2}({type1} arg1, {type2} arg2);
     """
 
 
-def get_read_reg0_code(type1: str, type2: str, type_out: str):
+def get_read_reg0_code(type1: str, type2: str, type_out: str) -> str:
     return f"""
     void read_{type_out}_reg0_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         asm volatile (".long 0xF17ECAFE");
@@ -51,7 +56,7 @@ def get_read_reg0_code(type1: str, type2: str, type_out: str):
     """
 
 
-def get_read_reg1_code(type1: str, type2: str, type_out: str):
+def get_read_reg1_code(type1: str, type2: str, type_out: str) -> str:
     return f"""
     void read_{type_out}_reg1_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         asm volatile (".long 0xF17ECAFE");
@@ -61,7 +66,7 @@ def get_read_reg1_code(type1: str, type2: str, type_out: str):
     """
 
 
-def get_write_code(type1: str):
+def get_write_code(type1: str) -> str:
     return f"""
     void write_{type1}({type1} arg1) {{
         asm volatile (".long 0xF17ECAFE");
@@ -107,7 +112,7 @@ if __name__ == "__main__":
     for t1, t2, t_out in permutate(types, types, types):
         code += get_read_reg0_code(t1, t2, t_out)
         code += get_read_reg1_code(t1, t2, t_out)
-    
+
     for t1 in types:
         code += get_write_code(t1)
 
