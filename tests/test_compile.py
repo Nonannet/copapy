@@ -14,25 +14,23 @@ def run_command(command: list[str], encoding: str = 'utf8') -> str:
 
 
 def test_example():
-    c1 = 1.11
-    c2 = 2.22
+    c1 = 4
+    c2 = 2
 
     i1 = c1 * 2
-    i2 = i1 + 3
-
-    r1 = i1 + i2
-    r2 = c2 + 4 + c1
+    r1 = i1 + 7 + (c2 + 7 * 9)
+    r2 = i1 + 9
 
     en = {'little': '<', 'big': '>'}['little']
-    data = struct.pack(en + 'f', r1)
+    data = struct.pack(en + 'i', r1)
     print("example r1 " + ' '.join(f'{b:02X}' for b in data))
 
-    data = struct.pack(en + 'f', r2)
+    data = struct.pack(en + 'i', r2)
     print("example r2 " + ' '.join(f'{b:02X}' for b in data))
 
     # assert False
-    # example r1 7B 14 EE 40
-    # example r2 5C 8F EA 40
+    #example r1 42 A0 00 00
+    #example r2 41 88 00 00
 
 
 def test_compile():
@@ -53,7 +51,7 @@ def test_compile():
     c1 = const(4)
     c2 = const(2)
     i1 = c1 * 2
-    r1 = i1 + 7
+    r1 = i1 + 7 + (c2 + 7 * 9)
     r2 = i1 + 9
     out = [Write(r1), Write(r2)]
 
@@ -69,15 +67,18 @@ def test_compile():
     # run program command
     il.write_com(binw.Command.END_PROG)
 
-    print('#', il.print())
+    print('* Data to runner:')
+    il.print()
 
     il.to_file('test.copapy')
 
     result = run_command(['./bin/runmem2', 'test.copapy'])
+    print('* Output from runner:')
     print(result)
 
     assert 'Return value: 1' in result
 
 
 if __name__ == "__main__":
+    #test_example()
     test_compile()
