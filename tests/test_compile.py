@@ -39,8 +39,8 @@ def test_compile():
 
     print(run_command(['bash', 'build.sh']))
 
-    c1 = const(4)
-    #c2 = const(2)
+    #c1 = const(1.11)
+    #c2 = const(2.22)
 
     #i1 = c1 * 2
     #i2 = i1 + 3
@@ -50,14 +50,17 @@ def test_compile():
 
     #out = [Write(r1), Write(r2)]
 
+    c1 = const(4)
+    c2 = const(2)
     i1 = c1 * 2
     r1 = i1 + 7
-    out = Write(r1)
+    r2 = i1 + 9
+    out = [Write(r1), Write(r2)]
 
     il = copapy.compile_to_instruction_list(out)
 
-    #copapy.read_variable(il, i1)
     copapy.read_variable(il, r1)
+    copapy.read_variable(il, r2)
 
     il.write_com(binw.Command.READ_DATA)
     il.write_int(0)

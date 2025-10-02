@@ -1,5 +1,6 @@
-from copapy import Write, const
+from copapy import Write, const, Node
 import copapy as rc
+from typing import Iterable, Generator
 
 
 def test_ast_generation():
@@ -20,30 +21,31 @@ def test_ast_generation():
     out = [Write(r1), Write(r2)]
 
     print(out)
-    print('-- get_path_segments:')
+    print('-- get_edges:')
 
-    path_segments = list(rc.get_path_segments(out))
-    for p in path_segments:
-        print(p)
+    edges = list(rc.get_all_dag_edges(out))
+    for p in edges:
+        print('#', p)
+
     print('-- get_ordered_ops:')
-    ordered_ops = list(rc.get_ordered_ops(path_segments))
+    ordered_ops = list(rc.stable_toposort(edges))
     for p in ordered_ops:
-        print(p)
-    print('-- get_consts:')
+        print('#', p)
 
+    print('-- get_consts:')
     const_list = rc.get_consts(ordered_ops)
     for p in const_list:
-        print(p)
-    print('-- add_read_ops:')
+        print('#', p)
 
+    print('-- add_read_ops:')
     output_ops = list(rc.add_read_ops(ordered_ops))
     for p in output_ops:
-        print(p)
-    print('-- add_write_ops:')
+        print('#', p)
 
+    print('-- add_write_ops:')
     extended_output_ops = list(rc.add_write_ops(output_ops, const_list))
     for p in extended_output_ops:
-        print(p)
+        print('#', p)
     print('--')
 
 
