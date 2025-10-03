@@ -72,7 +72,7 @@ def test_compile():
 
     il.to_file('test.copapy')
 
-    result = run_command(['./bin/runmem2', 'test.copapy'])
+    result = run_command(['./bin/coparun', 'test.copapy'])
     print('* Output from runner:')
     print(result)
 

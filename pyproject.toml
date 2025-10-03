@@ -28,7 +28,10 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-copapy = ["*.c", "*.o"]
+copapy = ["*.o"]
+
+[tool.setuptools.ext_modules]
+coparun = { sources = ["src/coparun/coparun_module.c"] }
 
 [project.optional-dependencies]
 dev = [
