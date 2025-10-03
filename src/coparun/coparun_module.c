@@ -28,8 +28,33 @@ static PyObject* coparun(PyObject* self, PyObject* args) {
     return PyLong_FromLong(result);
 }
 
+static PyObject* read_data_mem(PyObject* self, PyObject* args) {
+    unsigned long rel_addr;
+    Py_ssize_t length;
+
+    // Parse arguments: unsigned long (relative address), Py_ssize_t (length)
+    if (!PyArg_ParseTuple(args, "nk", &rel_addr, &length)) {
+        return NULL;
+    }
+
+    if (length <= 0) {
+        PyErr_SetString(PyExc_ValueError, "Length must be positive");
+        return NULL;
+    }
+
+    uint8_t *ptr = data_memory + rel_addr;
+
+    PyObject *result = PyBytes_FromStringAndSize((const char *)ptr, length);
+    if (!result) {
+        return PyErr_NoMemory();
+    }
+
+    return result;
+}
+
 static PyMethodDef MyMethods[] = {
     {"coparun", coparun, METH_VARARGS, "Pass raw command data to coparun"},
+    {"read_data_mem", read_data_mem, METH_VARARGS, "Read memory and return as bytes"},
     {NULL, NULL, 0, NULL}
 };
 

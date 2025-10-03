@@ -14,10 +14,6 @@ class data_writer():
     def __init__(self, byteorder: Literal['little', 'big']):
         self._data: list[tuple[str, bytes, int]] = list()
         self.byteorder: Literal['little', 'big'] = byteorder
-        self.variables: dict[Any, tuple[int, int, str]] = dict()
-
-    def add_variable(self, net: Any, addr: int, lengths: int, var_type: str) -> None:
-        self.variables[net] = (addr, lengths, var_type)
 
     def write_int(self, value: int, num_bytes: int = 4, signed: bool = False) -> None:
         self._data.append((f"INT {value}", value.to_bytes(length=num_bytes, byteorder=self.byteorder, signed=signed), 0))

@@ -3,6 +3,8 @@ from typing import Generator, Iterable, Any
 from . import binwrite as binw
 from .stencil_db import stencil_database
 from collections import defaultdict, deque
+from coparun_module import coparun, read_data_mem
+import struct
 
 Operand = type['Net'] | float | int
 
@@ -60,9 +62,30 @@ class Net:
     def __rtruediv__(self, other: Any) -> 'Net':
         return _add_op('div', [other, self])
 
+    def __neg__(self) -> 'Net':
+        return _add_op('sub', [const(0), self])
+
+    def __gt__(self, other: Any) -> 'Net':
+        return _add_op('gt', [self, other])
+
+    def __lt__(self, other: Any) -> 'Net':
+        return _add_op('gt', [other, self])
+
+    def __eq__(self, other: Any) -> 'Net':
+        return _add_op('eq', [self, other])
+
+    def __mod__(self, other: Any) -> 'Net':
+        return _add_op('mod', [self, other])
+
+    def __rmod__(self, other: Any) -> 'Net':
+        return _add_op('mod', [other, self])
+
     def __repr__(self) -> str:
         names = get_var_name(self)
         return f"{'name:' + names[0] if names else 'id:' + str(id(self))[-5:]}"
+
+    def __hash__(self) -> int:
+        return id(self)
 
 
 class Const(Node):
@@ -239,7 +262,7 @@ def add_read_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], No
     for node in node_list:
         if not node.name.startswith('const_'):
             for i, net in enumerate(node.args):
-                if net != registers[i]:
+                if id(net) != id(registers[i]):
                     #if net in registers:
                     #    print('x  swap registers')
                     type_list = ['int' if r is None else r.dtype for r in registers]
@@ -295,12 +318,9 @@ def get_nets(*inputs: Iterable[Iterable[Any]]) -> list[Net]:
     return list(nets)
 
 
-def compile_to_instruction_list(end_nodes: Iterable[Node] | Node) -> binw.data_writer:
-    if isinstance(end_nodes, Node):
-        node_list = [end_nodes]
-    else:
-        node_list = list(end_nodes)
-
+def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database) -> tuple[binw.data_writer, dict[Net, tuple[int, int, str]]]:
+    variables: dict[Net, tuple[int, int, str]] = dict()
+    
     ordered_ops = list(stable_toposort(get_all_dag_edges(node_list)))
     const_net_list = get_const_nets(ordered_ops)
     output_ops = list(add_read_ops(ordered_ops))
@@ -329,7 +349,7 @@ def compile_to_instruction_list(end_nodes: Iterable[Node] | Node) -> binw.data_w
     dw.write_int(data_section_lengths)
 
     for net, out_offs, lengths in object_list:
-        dw.add_variable(net, out_offs, lengths, net.dtype)
+        variables[net] = (out_offs, lengths, net.dtype)
         if isinstance(net.source, Const):
             dw.write_com(binw.Command.COPY_DATA)
             dw.write_int(out_offs)
@@ -389,16 +409,72 @@ def compile_to_instruction_list(end_nodes: Iterable[Node] | Node) -> binw.data_w
         dw.write_int(patch_type)
         dw.write_int(object_addr, signed=True)
 
-    # set entry point
-    dw.write_com(binw.Command.SET_ENTR_POINT)
-    dw.write_int(0)
-
-    return dw
+    return dw, variables
 
 
-def read_variable(bw: binw.data_writer, net: Net) -> None:
-    assert net in bw.variables, f"Variable {net} not found in data writer variables"
-    addr, lengths, _ = bw.variables[net]
-    bw.write_com(binw.Command.READ_DATA)
-    bw.write_int(addr)
-    bw.write_int(lengths)
+class Target():
+
+    def __init__(self, arch: str = 'x86_64', optimization: str = 'O3') -> None:
+        self.sdb = stencil_database(f"src/copapy/obj/stencils_{arch}_{optimization}.o")
+        self._variables: dict[Net, tuple[int, int, str]] = dict()
+
+
+    def compile(self, *variables: list[Net] | list[list[Net]]) -> None:
+        nodes: list[Node] = []
+        for s in variables:
+            if isinstance(s, Net):
+                nodes.append(Write(s))
+            else:
+                for net in s:
+                    assert isinstance(net, Net)
+                    nodes.append(Write(net))
+                
+
+        dw, self._variables = compile_to_instruction_list(nodes, self.sdb)
+        dw.write_com(binw.Command.END_PROG)
+        assert coparun(dw.get_data()) > 0
+
+
+    def run(self) -> None:
+        # set entry point and run code
+        dw = binw.data_writer(self.sdb.byteorder)
+        dw.write_com(binw.Command.SET_ENTR_POINT)
+        dw.write_int(0)
+        dw.write_com(binw.Command.END_PROG)
+        assert coparun(dw.get_data()) > 0
+
+
+    def read_value(self, net: Net) -> float | int:
+        assert net in self._variables, f"Variable {net} not found"
+        addr, lengths, var_type = self._variables[net]
+        data = read_data_mem(addr, lengths)
+        assert data is not None and len(data) == lengths, f"Failed to read variable {net}"
+        en = {'little': '<', 'big': '>'}[self.sdb.byteorder]
+        if var_type == 'float':
+            if lengths == 4:
+                value = struct.unpack(en + 'f', data)[0]
+                assert isinstance(value, float)
+                return value
+            elif lengths == 8:
+                value = struct.unpack(en + 'd', data)[0]
+                assert isinstance(value, float)
+                return value
+            else:
+                raise ValueError(f"Unsupported float length: {lengths}")
+        elif var_type == 'int':
+            if lengths in (1, 2, 4, 8):
+                value = int.from_bytes(data, byteorder=self.sdb.byteorder, signed=True)
+                assert isinstance(value, int)
+                return value
+            else:
+                raise ValueError(f"Unsupported int length: {lengths}")
+        else:
+            raise ValueError(f"Unsupported variable type: {var_type}")
+
+    def read_variable_remote(self, bw: binw.data_writer, net: Net) -> None:
+        assert net in self._variables, f"Variable {net} not found in data writer variables"
+        dw = binw.data_writer(self.sdb.byteorder)
+        addr, lengths, _ = self._variables[net]
+        bw.write_com(binw.Command.READ_DATA)
+        bw.write_int(addr)
+        bw.write_int(lengths)

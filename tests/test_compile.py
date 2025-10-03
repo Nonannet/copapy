@@ -55,16 +55,16 @@ def test_compile():
     r2 = i1 + 9
     out = [Write(r1), Write(r2)]
 
-    il = copapy.compile_to_instruction_list(out)
+    il, _ = copapy.compile_to_instruction_list(out, copapy.sdb)
 
-    copapy.read_variable(il, r1)
-    copapy.read_variable(il, r2)
+    # run program command
+    il.write_com(binwrite.Command.SET_ENTR_POINT)
+    il.write_int(0)
 
     il.write_com(binwrite.Command.READ_DATA)
     il.write_int(0)
     il.write_int(36)
 
-    # run program command
     il.write_com(binwrite.Command.END_PROG)
 
     print('* Data to runner:')

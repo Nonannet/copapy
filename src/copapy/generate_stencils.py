@@ -1,7 +1,8 @@
 from typing import Generator
 
 
-op_signs = {'add': '+', 'sub': '-', 'mul': '*', 'div': '/'}
+op_signs = {'add': '+', 'sub': '-', 'mul': '*', 'div': '/',
+            'gt': '>', 'eq': '==', 'mod': '%'}
 
 
 def get_function_start() -> str:
@@ -89,7 +90,7 @@ def permutate(*lists: list[str]) -> Generator[list[str], None, None]:
 
 if __name__ == "__main__":
     types = ['int', 'float']
-    ops = ['add', 'sub', 'mul', 'div']
+    ops = ['add', 'sub', 'mul', 'div', 'gt', 'eq']
 
     code = """
     // Auto-generated stencils for copapy
@@ -108,6 +109,8 @@ if __name__ == "__main__":
     for op, t1, t2 in permutate(ops, types, types):
         t_out = t1 if t1 == t2 else 'float'
         code += get_op_code(op, t1, t2, t_out)
+
+    code += get_op_code('mod', 'int', 'int', 'int')
 
     for t1, t2, t_out in permutate(types, types, types):
         code += get_read_reg0_code(t1, t2, t_out)

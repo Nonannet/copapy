@@ -113,6 +113,60 @@
         asm volatile (".long 0xF27ECAFE");
     }
     
+    void gt_int_int(int arg1, int arg2) {
+        asm volatile (".long 0xF17ECAFE");
+        result_int_int(arg1 > arg2, arg2);
+        asm volatile (".long 0xF27ECAFE");
+    }
+    
+    void gt_int_float(int arg1, float arg2) {
+        asm volatile (".long 0xF17ECAFE");
+        result_float_float(arg1 > arg2, arg2);
+        asm volatile (".long 0xF27ECAFE");
+    }
+    
+    void gt_float_int(float arg1, int arg2) {
+        asm volatile (".long 0xF17ECAFE");
+        result_float_int(arg1 > arg2, arg2);
+        asm volatile (".long 0xF27ECAFE");
+    }
+    
+    void gt_float_float(float arg1, float arg2) {
+        asm volatile (".long 0xF17ECAFE");
+        result_float_float(arg1 > arg2, arg2);
+        asm volatile (".long 0xF27ECAFE");
+    }
+    
+    void eq_int_int(int arg1, int arg2) {
+        asm volatile (".long 0xF17ECAFE");
+        result_int_int(arg1 == arg2, arg2);
+        asm volatile (".long 0xF27ECAFE");
+    }
+    
+    void eq_int_float(int arg1, float arg2) {
+        asm volatile (".long 0xF17ECAFE");
+        result_float_float(arg1 == arg2, arg2);
+        asm volatile (".long 0xF27ECAFE");
+    }
+    
+    void eq_float_int(float arg1, int arg2) {
+        asm volatile (".long 0xF17ECAFE");
+        result_float_int(arg1 == arg2, arg2);
+        asm volatile (".long 0xF27ECAFE");
+    }
+    
+    void eq_float_float(float arg1, float arg2) {
+        asm volatile (".long 0xF17ECAFE");
+        result_float_float(arg1 == arg2, arg2);
+        asm volatile (".long 0xF27ECAFE");
+    }
+    
+    void mod_int_int(int arg1, int arg2) {
+        asm volatile (".long 0xF17ECAFE");
+        result_int_int(arg1 % arg2, arg2);
+        asm volatile (".long 0xF27ECAFE");
+    }
+    
     void read_int_reg0_int_int(int arg1, int arg2) {
         asm volatile (".long 0xF17ECAFE");
         result_int_int(dummy_int, arg2);
