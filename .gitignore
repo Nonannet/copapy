@@ -14,3 +14,5 @@ test.copapy
 token.txt
 /src/copapy/obj/*.o
 runmem2
+src/*.so
+bin/*

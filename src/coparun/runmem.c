@@ -6,23 +6,14 @@
 #include <sys/stat.h>
 #include <string.h>
 #include <stdint.h>
+#include "runmem.h"
 
-#define ALLOCATE_DATA 1
-#define COPY_DATA 2
-#define ALLOCATE_CODE 3
-#define COPY_CODE 4
-#define PATCH_FUNC 5
-#define PATCH_OBJECT 6
-#define SET_ENTR_POINT 64
-#define READ_DATA 65
-#define END_PROG 255
-
-#define PATCH_RELATIVE_32 0
-
-uint8_t *data_memory;
-uint8_t *executable_memory;
-uint32_t executable_memory_len;
-int (*entr_point)();
+/* Definitions for globals declared extern in runmem.h */
+uint8_t *data_memory = NULL;
+uint32_t data_memory_len = 0;
+uint8_t *executable_memory = NULL;
+uint32_t executable_memory_len = 0;
+entry_point_t entr_point = NULL;
 
 uint8_t *get_executable_memory(uint32_t num_bytes){
     // Allocate executable memory
@@ -62,7 +53,14 @@ int patch(uint8_t *patch_addr, uint32_t reloc_type, int32_t value){
         return 0;
     }
     return 1;
-}  
+}
+
+void free_memory(){
+    if (executable_memory_len) munmap(executable_memory, executable_memory_len);
+    if (data_memory_len) munmap(data_memory, data_memory_len);
+    data_memory_len = 0;
+    executable_memory_len = 0;
+}
 
 int parse_commands(uint8_t *bytes){
     int32_t value;
@@ -78,9 +76,15 @@ int parse_commands(uint8_t *bytes){
         command = *(uint32_t*)bytes;
         bytes += 4;
         switch(command) {
+            case FREE_MEMORY:
+                size = *(uint32_t*)bytes; bytes += 4;
+                free_memory();
+                break;
+
         	case ALLOCATE_DATA:
                 size = *(uint32_t*)bytes; bytes += 4;
                 data_memory = get_data_memory(size);
+                data_memory_len = size;
                 printf("ALLOCATE_DATA size=%i mem_addr=%p\n", size, (void*)data_memory);
                 break;
             
@@ -162,48 +166,4 @@ int parse_commands(uint8_t *bytes){
         }
     }
     return err_flag;
-}
-
-int main(int argc, char *argv[]) {
-    if (argc != 2) {
-        fprintf(stderr, "Usage: %s <binary_file>\n", argv[0]);
-        return EXIT_FAILURE;
-    }
-
-    // Open the file
-    int fd = open(argv[1], O_RDONLY);
-    if (fd < 0) {
-        perror("open");
-        return EXIT_FAILURE;
-    }
-
-    // Get file size
-    struct stat st;
-    if (fstat(fd, &st) < 0) {
-        perror("fstat");
-        close(fd);
-        return EXIT_FAILURE;
-    }
-
-    if (st.st_size == 0) {
-        fprintf(stderr, "Error: File is empty\n");
-        close(fd);
-        return EXIT_FAILURE;
-    }
-
-    //uint8_t *file_buff = get_data_memory((uint32_t)st.st_size);
-    uint8_t *file_buff = (uint8_t*)malloc((size_t)st.st_size);
-
-    // Read file into allocated memory
-    if (read(fd, file_buff, (long unsigned int)st.st_size) != st.st_size) {
-        perror("read");
-        close(fd);
-        return EXIT_FAILURE;
-    }
-    close(fd);
-
-    parse_commands(file_buff);
-
-    munmap(executable_memory, executable_memory_len);
-    return EXIT_SUCCESS;
 }

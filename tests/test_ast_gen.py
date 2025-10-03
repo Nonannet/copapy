@@ -1,6 +1,5 @@
-from copapy import Write, const, Node
+from copapy import Write, const
 import copapy as rc
-from typing import Iterable, Generator
 
 
 def test_ast_generation():

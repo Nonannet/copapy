@@ -224,7 +224,7 @@
     }
     
     int function_start(){
-        result_int(0);  // dummy call instruction before marker gets striped 
+        result_int(0);  // dummy call instruction before marker gets striped
         asm volatile (".long 0xF27ECAFE");
         return 1;
     }

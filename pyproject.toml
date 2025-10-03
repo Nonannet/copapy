@@ -30,9 +30,6 @@ where = ["src"]
 [tool.setuptools.package-data]
 copapy = ["*.o"]
 
-[tool.setuptools.ext_modules]
-coparun = { sources = ["src/coparun/coparun_module.c"] }
-
 [project.optional-dependencies]
 dev = [
     "flake8",

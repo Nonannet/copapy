@@ -2,7 +2,7 @@ from copapy import Write, const
 import copapy
 import subprocess
 import struct
-from copapy import binwrite as binw
+from copapy import binwrite
 
 
 def run_command(command: list[str], encoding: str = 'utf8') -> str:
@@ -60,12 +60,12 @@ def test_compile():
     copapy.read_variable(il, r1)
     copapy.read_variable(il, r2)
 
-    il.write_com(binw.Command.READ_DATA)
+    il.write_com(binwrite.Command.READ_DATA)
     il.write_int(0)
     il.write_int(36)
 
     # run program command
-    il.write_com(binw.Command.END_PROG)
+    il.write_com(binwrite.Command.END_PROG)
 
     print('* Data to runner:')
     il.print()

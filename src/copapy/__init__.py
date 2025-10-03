@@ -149,11 +149,11 @@ def stable_toposort(edges: Iterable[tuple[Node, Node]]) -> list[Node]:
     """Perform a stable topological sort on a directed acyclic graph (DAG).
     Arguments:
         edges: Iterable of (u, v) pairs meaning u -> v
-    
+
     Returns:
         List of nodes in topologically sorted order.
     """
-    
+
     # Track adjacency and indegrees
     adj: defaultdict[Node, list[Node]] = defaultdict(list)
     indeg: defaultdict[Node, int] = defaultdict(int)
@@ -163,9 +163,11 @@ def stable_toposort(edges: Iterable[tuple[Node, Node]]) -> list[Node]:
     pos = 0
     for u, v in edges:
         if u not in order:
-            order[u] = pos; pos += 1
+            order[u] = pos
+            pos += 1
         if v not in order:
-            order[v] = pos; pos += 1
+            order[v] = pos
+            pos += 1
         adj[u].append(v)
         indeg[v] += 1
         indeg.setdefault(u, 0)
@@ -254,7 +256,7 @@ def add_read_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], No
 
 def add_write_ops(net_node_list: list[tuple[Net | None, Node]], const_nets: list[Net]) -> Generator[tuple[Net | None, Node], None, None]:
     """Add write operation for each new defined net if a read operation is later followed
-    
+
     Returns:
         Yields tuples of a net and a node. The associated net is provided for read and write nodes.
         Otherwise None is returned in the tuple.
@@ -306,7 +308,6 @@ def compile_to_instruction_list(end_nodes: Iterable[Node] | Node) -> binw.data_w
 
     # Get all nets associated with heap memory
     variable_list = get_nets([[const_net_list]], extended_output_ops)
-    assert(len(set(variable_list)) == len(variable_list)), 'Duplicates!'
 
     dw = binw.data_writer(sdb.byteorder)
 

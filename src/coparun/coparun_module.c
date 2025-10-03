@@ -1,31 +1,46 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
+#include "runmem.h"
 
-// A simple C function exposed to Python
-static PyObject* my_function(PyObject* self, PyObject* args) {
-    int a, b;
-    if (!PyArg_ParseTuple(args, "ii", &a, &b)) {
-        return NULL;  // Error if arguments aren't two integers
+/*
+ * coparun(PyObject *self, PyObject *args)
+ * Accepts a Python `bytes` (or objects supporting the buffer protocol).
+ * We use the "y#" format in PyArg_ParseTuple which returns a pointer to
+ * the internal bytes buffer and its length (Py_ssize_t). For safety and
+ * performance we pass that pointer directly to parse_commands which expects
+ * a uint8_t* buffer. If parse_commands needs the length, consider
+ * extending its API to accept a length parameter.
+ */
+static PyObject* coparun(PyObject* self, PyObject* args) {
+    const char *buf;
+    Py_ssize_t buf_len;
+    int result;
+
+    if (!PyArg_ParseTuple(args, "y#", &buf, &buf_len)) {
+        return NULL; /* TypeError set by PyArg_ParseTuple */
     }
-    return PyLong_FromLong(a + b);  // Return sum as Python integer
+
+    /* If parse_commands may run for a long time, release the GIL. */
+    Py_BEGIN_ALLOW_THREADS
+    result = parse_commands((uint8_t*)buf);
+    Py_END_ALLOW_THREADS
+
+    return PyLong_FromLong(result);
 }
 
-// Method definitions
 static PyMethodDef MyMethods[] = {
-    {"add", my_function, METH_VARARGS, "Adds two numbers"},
-    {NULL, NULL, 0, NULL}  // Sentinel
+    {"coparun", coparun, METH_VARARGS, "Pass raw command data to coparun"},
+    {NULL, NULL, 0, NULL}
 };
 
-// Module definition
-static struct PyModuleDef my_module = {
+static struct PyModuleDef coparun_module = {
     PyModuleDef_HEAD_INIT,
-    "my_module",  // Module name
+    "coparun_module",  // Module name
     NULL,         // Documentation
     -1,           // Size of per-interpreter state (-1 for global)
     MyMethods
 };
 
-// Module initialization function
-PyMODINIT_FUNC PyInit_my_module(void) {
-    return PyModule_Create(&my_module);
+PyMODINIT_FUNC PyInit_coparun_module(void) {
+    return PyModule_Create(&coparun_module);
 }

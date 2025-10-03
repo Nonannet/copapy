@@ -7,7 +7,7 @@ Command = Enum('Command', [('ALLOCATE_DATA', 1), ('COPY_DATA', 2),
                            ('ALLOCATE_CODE', 3), ('COPY_CODE', 4),
                            ('PATCH_FUNC', 5), ('PATCH_OBJECT', 6),
                            ('SET_ENTR_POINT', 64), ('READ_DATA', 65),
-                           ('END_PROG', 255)])
+                           ('END_PROG', 256), ('FREE_MEMORY', 257)])
 
 
 class data_writer():
