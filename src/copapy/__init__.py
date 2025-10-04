@@ -1,22 +1,21 @@
-# import pkgutil
+import pkgutil
 from typing import Generator, Iterable, Any
 from . import binwrite as binw
 from .stencil_db import stencil_database
 from collections import defaultdict, deque
 from coparun_module import coparun, read_data_mem
 import struct
+import platform
 
 Operand = type['Net'] | float | int
-
 
 def get_var_name(var: Any, scope: dict[str, Any] = globals()) -> list[str]:
     return [name for name, value in scope.items() if value is var]
 
-# _ccode = pkgutil.get_data(__name__, 'stencils.c')
-# assert _ccode is not None
-
-
-sdb = stencil_database('src/copapy/obj/stencils_x86_64_O3.o')
+_arch = platform.machine()
+_stencil_data = pkgutil.get_data(__name__, f"obj/stencils_{_arch}_O3.o")
+assert _stencil_data
+generic_sdb = stencil_database(_stencil_data)
 
 
 class Node:
@@ -71,7 +70,7 @@ class Net:
     def __lt__(self, other: Any) -> 'Net':
         return _add_op('gt', [other, self])
 
-    def __eq__(self, other: Any) -> 'Net':
+    def __eq__(self, other: Any) -> 'Net':  # type: ignore
         return _add_op('eq', [self, other])
 
     def __mod__(self, other: Any) -> 'Net':
@@ -123,10 +122,10 @@ def _add_op(op: str, args: list[Any], commutative: bool = False) -> Net:
 
     typed_op = '_'.join([op] + [a.dtype for a in arg_nets])
 
-    if typed_op not in sdb.function_definitions:
+    if typed_op not in generic_sdb.function_definitions:
         raise ValueError(f"Unsupported operand type(s) for {op}: {' and '.join([a.dtype for a in arg_nets])}")
 
-    result_type = sdb.function_definitions[typed_op].split('_')[0]
+    result_type = generic_sdb.function_definitions[typed_op].split('_')[0]
 
     result_net = Net(result_type, Op(typed_op, arg_nets))
 
@@ -301,7 +300,7 @@ def add_write_ops(net_node_list: list[tuple[Net | None, Node]], const_nets: list
         else:
             yield None, node
 
-        if net in read_back_nets and net not in stored_nets:
+        if net and net in read_back_nets and net not in stored_nets:
             yield net, Write(net)
             stored_nets.add(net)
 
@@ -414,8 +413,12 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
 
 class Target():
 
-    def __init__(self, arch: str = 'x86_64', optimization: str = 'O3') -> None:
-        self.sdb = stencil_database(f"src/copapy/obj/stencils_{arch}_{optimization}.o")
+    def __init__(self, arch: str = 'native', optimization: str = 'O3') -> None:
+        if arch == 'native':
+            arch = platform.machine()
+        stencil_data = pkgutil.get_data(__name__, f"obj/stencils_{arch}_{optimization}.o")
+        assert stencil_data
+        self.sdb = stencil_database(stencil_data)
         self._variables: dict[Net, tuple[int, int, str]] = dict()
 
 
@@ -438,7 +441,7 @@ class Target():
     def run(self) -> None:
         # set entry point and run code
         dw = binw.data_writer(self.sdb.byteorder)
-        dw.write_com(binw.Command.SET_ENTR_POINT)
+        dw.write_com(binw.Command.RUN_PROG)
         dw.write_int(0)
         dw.write_com(binw.Command.END_PROG)
         assert coparun(dw.get_data()) > 0
@@ -471,10 +474,11 @@ class Target():
         else:
             raise ValueError(f"Unsupported variable type: {var_type}")
 
-    def read_variable_remote(self, bw: binw.data_writer, net: Net) -> None:
+    def read_variable_remote(self, net: Net) -> None:
         assert net in self._variables, f"Variable {net} not found in data writer variables"
-        dw = binw.data_writer(self.sdb.byteorder)
         addr, lengths, _ = self._variables[net]
-        bw.write_com(binw.Command.READ_DATA)
-        bw.write_int(addr)
-        bw.write_int(lengths)
+        dw = binw.data_writer(self.sdb.byteorder)
+        dw.write_com(binw.Command.READ_DATA)
+        dw.write_int(addr)
+        dw.write_int(lengths)
+        assert coparun(dw.get_data()) > 0

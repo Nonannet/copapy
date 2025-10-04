@@ -67,8 +67,13 @@ def get_stencil_position(data: bytes, byteorder: ByteOrder) -> tuple[int, int]:
 
 
 class stencil_database():
-    def __init__(self, obj_file: str):
-        self.elf = pelfy.open_elf_file(obj_file)
+    def __init__(self, obj_file: str | bytes):
+        """Load the stencil database from an ELF object file
+        """
+        if isinstance(obj_file, str):
+            self.elf = pelfy.open_elf_file(obj_file)
+        else:
+            self.elf = pelfy.elf_file(obj_file)
 
         #print(self.elf.symbols)
 

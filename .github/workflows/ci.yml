@@ -35,14 +35,14 @@ jobs:
     - name: Build ops obj files and runner
       run: bash build.sh
 
-    #- name: Lint code with flake8
-    #  run: flake8
-
-    #- name: Type checking with mypy
-    #  run: mypy
-
     - name: Run tests with pytest
       run: pytest
+
+    - name: Type checking with mypy
+      run: mypy
+
+    #- name: Lint code with flake8
+    #  run: flake8
 
     - name: Upload obj files
       uses: actions/upload-artifact@v4

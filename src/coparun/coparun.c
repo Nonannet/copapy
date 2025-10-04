@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "runmem.h"
+#include "mem_man.h"
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {
@@ -33,8 +34,7 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    //uint8_t *file_buff = get_data_memory((uint32_t)st.st_size);
-    uint8_t *file_buff = (uint8_t*)malloc((size_t)st.st_size);
+    uint8_t *file_buff = allocate_buffer_memory((uint32_t)st.st_size);
 
     // Read file into allocated memory
     if (read(fd, file_buff, (long unsigned int)st.st_size) != st.st_size) {

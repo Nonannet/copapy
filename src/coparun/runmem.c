@@ -7,46 +7,22 @@
 #include <string.h>
 #include <stdint.h>
 #include "runmem.h"
+#include "mem_man.h"
 
-/* Definitions for globals declared extern in runmem.h */
+/* Globals declared extern in runmem.h */
 uint8_t *data_memory = NULL;
 uint32_t data_memory_len = 0;
 uint8_t *executable_memory = NULL;
 uint32_t executable_memory_len = 0;
 entry_point_t entr_point = NULL;
 
-uint8_t *get_executable_memory(uint32_t num_bytes){
-    // Allocate executable memory
-    uint8_t *mem = (uint8_t*)mmap(NULL, num_bytes,
-                         PROT_READ | PROT_WRITE,
-                         MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    return mem;
-}
-
-uint8_t *get_data_memory(uint32_t num_bytes) {
-    uint8_t *mem = (uint8_t*)mmap(NULL, num_bytes,
-                     PROT_READ | PROT_WRITE,
-                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    //uint8_t *mem = (uint8_t*)malloc(num_bytes);
-    return mem;
-}
-
-int mark_mem_executable(){
-    if (mprotect(executable_memory, executable_memory_len, PROT_READ | PROT_EXEC) == -1) {
-        perror("mprotect failed");
-        return 0;
-    }else{
-        return 1;
-    }
-}
-
-void patch_mem_32(uint8_t *patch_addr, int32_t value){
+void patch_mem_32(uint8_t *patch_addr, int32_t value) {
     int32_t *val_ptr = (int32_t*)patch_addr;
     *val_ptr = value;
 }
     
-int patch(uint8_t *patch_addr, uint32_t reloc_type, int32_t value){
-    if (reloc_type == PATCH_RELATIVE_32){
+int patch(uint8_t *patch_addr, uint32_t reloc_type, int32_t value) {
+    if (reloc_type == PATCH_RELATIVE_32) {
         patch_mem_32(patch_addr, value);
     }else{
         printf("Not implemented");
@@ -55,14 +31,14 @@ int patch(uint8_t *patch_addr, uint32_t reloc_type, int32_t value){
     return 1;
 }
 
-void free_memory(){
-    if (executable_memory_len) munmap(executable_memory, executable_memory_len);
-    if (data_memory_len) munmap(data_memory, data_memory_len);
-    data_memory_len = 0;
+void free_memory() {
+    deallocate_memory(executable_memory, executable_memory_len);
+    deallocate_memory(data_memory, data_memory_len);
     executable_memory_len = 0;
+    data_memory_len = 0;
 }
 
-int parse_commands(uint8_t *bytes){
+int parse_commands(uint8_t *bytes) {
     int32_t value;
     uint32_t command;
     uint32_t reloc_type;
@@ -72,18 +48,13 @@ int parse_commands(uint8_t *bytes){
     int err_flag = 0;
     uint32_t rel_entr_point;
     
-    while(!err_flag){
+    while(!err_flag) {
         command = *(uint32_t*)bytes;
         bytes += 4;
         switch(command) {
-            case FREE_MEMORY:
-                size = *(uint32_t*)bytes; bytes += 4;
-                free_memory();
-                break;
-
         	case ALLOCATE_DATA:
                 size = *(uint32_t*)bytes; bytes += 4;
-                data_memory = get_data_memory(size);
+                data_memory = allocate_data_memory(size);
                 data_memory_len = size;
                 printf("ALLOCATE_DATA size=%i mem_addr=%p\n", size, (void*)data_memory);
                 break;
@@ -97,7 +68,7 @@ int parse_commands(uint8_t *bytes){
             
         	case ALLOCATE_CODE:
                 size = *(uint32_t*)bytes; bytes += 4;
-                executable_memory = get_executable_memory(size);
+                executable_memory = allocate_executable_memory(size);
                 executable_memory_len = size;
                 printf("ALLOCATE_CODE size=%i mem_addr=%p\n", size, (void*)executable_memory);
                 //printf("# d %i  c %i  off %i\n", data_memory, executable_memory, data_offs);
@@ -131,24 +102,18 @@ int parse_commands(uint8_t *bytes){
                     return EXIT_FAILURE;
                 }
                 patch(executable_memory + offs, reloc_type, value + data_offs);
-                //printf("> %i\n", data_offs);
                 break;
             
-            case SET_ENTR_POINT:
+            case RUN_PROG:
                 rel_entr_point = *(uint32_t*)bytes; bytes += 4;
-                printf("SET_ENTR_POINT rel_entr_point=%i\n", rel_entr_point);
+                printf("RUN_PROG rel_entr_point=%i\n", rel_entr_point);
                 entr_point = (int (*)())(executable_memory + rel_entr_point);  
                 
-                mark_mem_executable();
+                mark_mem_executable(executable_memory, executable_memory_len);
                 int ret = entr_point();
                 printf("Return value: %i\n", ret);
                 break;
             
-            case END_PROG:
-                printf("END_PROG\n");
-                err_flag = 1;
-                break;
-
             case READ_DATA:
                 offs = *(uint32_t*)bytes; bytes += 4;
                 size = *(uint32_t*)bytes; bytes += 4;
@@ -157,6 +122,16 @@ int parse_commands(uint8_t *bytes){
                     printf("%02X ", data_memory[offs + i]);
                 }
                 printf("\n");
+                break;
+
+            case FREE_MEMORY:
+                size = *(uint32_t*)bytes; bytes += 4;
+                free_memory();
+                break;
+
+            case END_PROG:
+                printf("END_PROG\n");
+                err_flag = 1;
                 break;
             
         	default:

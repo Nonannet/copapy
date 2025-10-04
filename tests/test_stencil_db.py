@@ -1,9 +1,11 @@
 from copapy import stencil_database
 from copapy import stencil_db
+import platform
 
 
 def test_list_symbols():
-    sdb = stencil_database('src/copapy/obj/stencils_x86_64_O3.o')
+    arch = platform.machine()
+    sdb = stencil_database(f'src/copapy/obj/stencils_{arch}_O3.o')
     print('----')
     #print(sdb.function_definitions)
     for sym_name in sdb.function_definitions.keys():
@@ -12,7 +14,8 @@ def test_list_symbols():
 
 
 def test_start_end_function():
-    sdb = stencil_database('src/copapy/obj/stencils_x86_64_O3.o')
+    arch = platform.machine()
+    sdb = stencil_database(f'src/copapy/obj/stencils_{arch}_O3.o')
     for sym_name in sdb.function_definitions.keys():
         data = sdb.elf.symbols[sym_name].data
         print('-', sym_name, stencil_db.get_stencil_position(data, sdb.elf.byteorder), len(data))

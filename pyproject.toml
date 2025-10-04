@@ -28,7 +28,7 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-copapy = ["*.o"]
+copapy = ["obj/*.o", "py.typed"]
 
 [project.optional-dependencies]
 dev = [
