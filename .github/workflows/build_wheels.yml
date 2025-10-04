@@ -24,12 +24,13 @@ jobs:
       - name: Build object files
         run: bash src/copapy/obj/crosscompile.sh
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: stencil-object-files
           path: src/copapy/obj/*.o
 
   build_wheels:
+    needs: [build_stencils]
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -38,15 +39,15 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: stencil-object-files
           path: src/copapy/obj
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          python-version: "3.11"
 
       # Only needed for Linux ARM builds
       - name: Set up QEMU
@@ -66,7 +67,7 @@ jobs:
           CIBW_ARCHS_MACOS: "universal2" # x86_64 arm64
           CIBW_ARCHS_WINDOWS: "AMD64 x86"
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: wheels
           path: wheelhouse/*.whl
@@ -75,7 +76,7 @@ jobs:
 #    needs: [build_wheels]
 #    runs-on: ubuntu-latest
 #    steps:
-#      - uses: actions/download-artifact@v3
+#      - uses: actions/download-artifact@v4
 #        with:
 #          name: wheels
 #          path: wheelhouse
