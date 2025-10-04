@@ -15,7 +15,7 @@ def get_var_name(var: Any, scope: dict[str, Any] = globals()) -> list[str]:
 
 
 def get_local_arch() -> str:
-    arch_translation_table = {'ARM64': 'x86_64'}
+    arch_translation_table = {'AMD64': 'x86_64'}
     return arch_translation_table.get(platform.machine(), platform.machine())
 
 
