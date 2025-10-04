@@ -1,9 +1,5 @@
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <unistd.h>
 #include "runmem.h"
 #include "mem_man.h"
 
@@ -13,36 +9,41 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    // Open the file
-    int fd = open(argv[1], O_RDONLY);
-    if (fd < 0) {
-        perror("open");
+    FILE *f = fopen(argv[1], "rb");
+    if (!f) {
+        perror("fopen");
         return EXIT_FAILURE;
     }
 
-    // Get file size
-    struct stat st;
-    if (fstat(fd, &st) < 0) {
-        perror("fstat");
-        close(fd);
+    /* Determine file size */
+    if (fseek(f, 0, SEEK_END) != 0) {
+        perror("fseek");
+        fclose(f);
         return EXIT_FAILURE;
     }
+    long sz = ftell(f);
+    if (sz < 0) {
+        perror("ftell");
+        fclose(f);
+        return EXIT_FAILURE;
+    }
+    rewind(f);
 
-    if (st.st_size == 0) {
+    if (sz == 0) {
         fprintf(stderr, "Error: File is empty\n");
-        close(fd);
+        fclose(f);
         return EXIT_FAILURE;
     }
 
-    uint8_t *file_buff = allocate_buffer_memory((uint32_t)st.st_size);
+    uint8_t *file_buff = allocate_buffer_memory((uint32_t)sz);
 
-    // Read file into allocated memory
-    if (read(fd, file_buff, (long unsigned int)st.st_size) != st.st_size) {
-        perror("read");
-        close(fd);
+    /* Read file into allocated memory */
+    size_t nread = fread(file_buff, 1, (size_t)sz, f);
+    fclose(f);
+    if (nread != (size_t)sz) {
+        perror("fread");
         return EXIT_FAILURE;
     }
-    close(fd);
 
     parse_commands(file_buff);
 
