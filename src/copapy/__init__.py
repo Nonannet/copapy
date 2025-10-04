@@ -14,10 +14,14 @@ def get_var_name(var: Any, scope: dict[str, Any] = globals()) -> list[str]:
     return [name for name, value in scope.items() if value is var]
 
 
-def stencil_db_from_package(arch: str = 'native', optimization: str = 'O3') -> stencil_database:
+def get_local_arch() -> str:
     arch_translation_table = {'ARM64': 'x86_64'}
+    return arch_translation_table.get(platform.machine(), platform.machine())
+
+
+def stencil_db_from_package(arch: str = 'native', optimization: str = 'O3') -> stencil_database:
     if arch == 'native':
-        arch = arch_translation_table.get(platform.machine(), platform.machine())
+        arch = get_local_arch()
     stencil_data = pkgutil.get_data(__name__, f"obj/stencils_{arch}_{optimization}.o")
     assert stencil_data, f"stencils_{arch}_{optimization} not found"
     return stencil_database(stencil_data)
