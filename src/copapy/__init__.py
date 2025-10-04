@@ -460,21 +460,19 @@ class Target():
         if var_type == 'float':
             if lengths == 4:
                 value = struct.unpack(en + 'f', data)[0]
-                assert isinstance(value, float)
-                return value
             elif lengths == 8:
                 value = struct.unpack(en + 'd', data)[0]
-                assert isinstance(value, float)
-                return value
             else:
-                raise ValueError(f"Unsupported float length: {lengths}")
+                raise ValueError(f"Unsupported float length: {lengths} bytes")
+            assert isinstance(value, float)
+            return value
         elif var_type == 'int':
             if lengths in (1, 2, 4, 8):
                 value = int.from_bytes(data, byteorder=self.sdb.byteorder, signed=True)
                 assert isinstance(value, int)
                 return value
             else:
-                raise ValueError(f"Unsupported int length: {lengths}")
+                raise ValueError(f"Unsupported int length: {lengths} bytes")
         else:
             raise ValueError(f"Unsupported variable type: {var_type}")
 

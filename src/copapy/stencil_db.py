@@ -34,7 +34,11 @@ def translate_relocation(relocation_addr: int, reloc_type: str, bits: int, r_add
         patch_offset = relocation_addr
         return patch_entry(RelocationType.RELOC_RELATIVE_32, patch_offset, r_addend)
     else:
-        raise Exception(f"Unknown: {reloc_type}")
+        print('relocation_addr: ', relocation_addr)
+        print('reloc_type:      ', reloc_type)
+        print('bits:            ', bits)
+        print('r_addend:        ', r_addend)
+        raise Exception(f"Unknown relocation type: {reloc_type}")
 
 
 def get_ret_function_def(symbol: pelfy.elf_symbol) -> str:
