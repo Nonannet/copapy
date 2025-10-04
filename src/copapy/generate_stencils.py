@@ -35,6 +35,26 @@ def get_op_code(op: str, type1: str, type2: str, type_out: str) -> str:
     """
 
 
+def get_op_code_float(op: str, type1: str, type2: str) -> str:
+    return f"""
+    void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
+        asm volatile (".long 0xF17ECAFE");
+        result_float_{type2}((float)arg1 {op_signs[op]} arg2, arg2);
+        asm volatile (".long 0xF27ECAFE");
+    }}
+    """
+
+
+def get_op_code_int(op: str, type1: str, type2: str) -> str:
+    return f"""
+    void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
+        asm volatile (".long 0xF17ECAFE");
+        result_int_{type2}((int)(arg1 {op_signs[op]} arg2), arg2);
+        asm volatile (".long 0xF27ECAFE");
+    }}
+    """
+
+
 def get_result_stubs1(type1: str) -> str:
     return f"""
     void result_{type1}({type1} arg1);
@@ -108,7 +128,12 @@ if __name__ == "__main__":
 
     for op, t1, t2 in permutate(ops, types, types):
         t_out = t1 if t1 == t2 else 'float'
-        code += get_op_code(op, t1, t2, t_out)
+        if op == 'floordiv':
+            code += get_op_code_int('div', t1, t2)
+        elif op == 'div' and t1 == 'int':
+            code += get_op_code_float(op, t1, t2)
+        else:
+            code += get_op_code(op, t1, t2, t_out)
 
     code += get_op_code('mod', 'int', 'int', 'int')
 

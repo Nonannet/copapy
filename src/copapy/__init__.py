@@ -73,6 +73,12 @@ class Net:
     def __rtruediv__(self, other: Any) -> 'Net':
         return _add_op('div', [other, self])
 
+    def __floordiv__(self, other: Any) -> 'Net':
+        return _add_op('floordiv', [self, other])
+
+    def __rfloordiv__(self, other: Any) -> 'Net':
+        return _add_op('floordiv', [other, self])
+
     def __neg__(self) -> 'Net':
         return _add_op('sub', [const(0), self])
 

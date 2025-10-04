@@ -91,13 +91,13 @@
     
     void div_int_int(int arg1, int arg2) {
         asm volatile (".long 0xF17ECAFE");
-        result_int_int(arg1 / arg2, arg2);
+        result_float_int((float)arg1 / arg2, arg2);
         asm volatile (".long 0xF27ECAFE");
     }
     
     void div_int_float(int arg1, float arg2) {
         asm volatile (".long 0xF17ECAFE");
-        result_float_float(arg1 / arg2, arg2);
+        result_float_float((float)arg1 / arg2, arg2);
         asm volatile (".long 0xF27ECAFE");
     }
     
