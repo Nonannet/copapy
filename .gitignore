@@ -16,3 +16,6 @@ token.txt
 runmem2
 src/*.so
 bin/*
+build/*
+/*.obj
+/src/*.pyd
