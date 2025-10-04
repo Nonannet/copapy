@@ -33,6 +33,7 @@ jobs:
     needs: [build_stencils]
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
 
@@ -63,7 +64,7 @@ jobs:
         run: cibuildwheel --output-dir wheelhouse
         env:
           # Multi-arch builds
-          CIBW_ARCHS_LINUX: "x86_64 aarch64 armv7" # ppc64le s390x
+          CIBW_ARCHS_LINUX: "x86_64 aarch64"
           CIBW_ARCHS_MACOS: "universal2" # x86_64 arm64
           CIBW_ARCHS_WINDOWS: "AMD64 x86"
 

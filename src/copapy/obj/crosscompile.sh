@@ -15,28 +15,29 @@ set -v
 python src/copapy/generate_stencils.py
 SRC=src/copapy/stencils.c
 DEST=src/copapy/obj
+OPT=O3
 mkdir -p $DEST
 
 # Native x86_64
-gcc-12 -c $SRC -o $DEST/stencils_x86_64.o
+gcc-12 -c $SRC -o $DEST/stencils_x86_64_$OPT.o
 
 # ARM64
-aarch64-linux-gnu-gcc-12 -O3 -c $SRC -o $DEST/stencils_aarch64.o
+aarch64-linux-gnu-gcc-12 -$OPT -c $SRC -o $DEST/stencils_aarch64_$OPT.o
 
 # ARMv7
-arm-linux-gnueabihf-gcc-12 -O3 -c $SRC -o $DEST/stencils_armv7.o
+arm-linux-gnueabihf-gcc-12 -$OPT -c $SRC -o $DEST/stencils_armv7_$OPT.o
 
 # PowerPC64LE
-# powerpc64le-linux-gnu-gcc-12 -O3 -c $SRC -o $DEST/stencils_ppc64le.o
+# powerpc64le-linux-gnu-gcc-12 -$OPT -c $SRC -o $DEST/stencils_ppc64le_$OPT.o
 
 # S390x
-# s390x-linux-gnu-gcc-12 -O3 -c $SRC -o $DEST/stencils_s390x.o
+# s390x-linux-gnu-gcc-12 -$OPT -c $SRC -o $DEST/stencils_s390x_$OPT.o
 
 # Mips
-mips-linux-gnu-gcc-12 -O3 -c $SRC -o $DEST/stencils_mips.o
+mips-linux-gnu-gcc-12 -$OPT -c $SRC -o $DEST/stencils_mips_$OPT.o
 
 # RISCV 32 Bit
-riscv64-linux-gnu-gcc-12 -O3 -march=rv32imac -mabi=ilp32 -c $SRC -o $DEST/stencils_riscv32.o
+riscv64-linux-gnu-gcc-12 -$OPT -march=rv32imac -mabi=ilp32 -c $SRC -o $DEST/stencils_riscv32_$OPT.o
 
 # RISCV 64 Bit
-riscv64-linux-gnu-gcc-12 -O3 -c $SRC -o $DEST/stencils_riscv64.o
+riscv64-linux-gnu-gcc-12 -$OPT -c $SRC -o $DEST/stencils_riscv64_$OPT.o
