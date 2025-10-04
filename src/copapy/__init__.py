@@ -9,13 +9,21 @@ import platform
 
 Operand = type['Net'] | float | int
 
+
 def get_var_name(var: Any, scope: dict[str, Any] = globals()) -> list[str]:
     return [name for name, value in scope.items() if value is var]
 
-_arch = platform.machine()
-_stencil_data = pkgutil.get_data(__name__, f"obj/stencils_{_arch}_O3.o")
-assert _stencil_data
-generic_sdb = stencil_database(_stencil_data)
+
+def stencil_db_from_package(arch: str = 'native', optimization: str = 'O3') -> stencil_database:
+    arch_translation_table = {'ARM64': 'x86_64'}
+    if arch == 'native':
+        arch = arch_translation_table.get(platform.machine(), platform.machine())
+    stencil_data = pkgutil.get_data(__name__, f"obj/stencils_{arch}_{optimization}.o")
+    assert stencil_data, f"stencils_{arch}_{optimization} not found"
+    return stencil_database(stencil_data)
+
+
+generic_sdb = stencil_db_from_package()
 
 
 class Node:
@@ -319,7 +327,7 @@ def get_nets(*inputs: Iterable[Iterable[Any]]) -> list[Net]:
 
 def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database) -> tuple[binw.data_writer, dict[Net, tuple[int, int, str]]]:
     variables: dict[Net, tuple[int, int, str]] = dict()
-    
+
     ordered_ops = list(stable_toposort(get_all_dag_edges(node_list)))
     const_net_list = get_const_nets(ordered_ops)
     output_ops = list(add_read_ops(ordered_ops))
@@ -414,15 +422,10 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
 class Target():
 
     def __init__(self, arch: str = 'native', optimization: str = 'O3') -> None:
-        if arch == 'native':
-            arch = platform.machine()
-        stencil_data = pkgutil.get_data(__name__, f"obj/stencils_{arch}_{optimization}.o")
-        assert stencil_data
-        self.sdb = stencil_database(stencil_data)
+        self.sdb = stencil_db_from_package(arch, optimization)
         self._variables: dict[Net, tuple[int, int, str]] = dict()
 
-
-    def compile(self, *variables: list[Net] | list[list[Net]]) -> None:
+    def compile(self, *variables: Net | list[Net]) -> None:
         nodes: list[Node] = []
         for s in variables:
             if isinstance(s, Net):
@@ -431,12 +434,10 @@ class Target():
                 for net in s:
                     assert isinstance(net, Net)
                     nodes.append(Write(net))
-                
 
         dw, self._variables = compile_to_instruction_list(nodes, self.sdb)
         dw.write_com(binw.Command.END_PROG)
         assert coparun(dw.get_data()) > 0
-
 
     def run(self) -> None:
         # set entry point and run code
@@ -445,7 +446,6 @@ class Target():
         dw.write_int(0)
         dw.write_com(binw.Command.END_PROG)
         assert coparun(dw.get_data()) > 0
-
 
     def read_value(self, net: Net) -> float | int:
         assert net in self._variables, f"Variable {net} not found"

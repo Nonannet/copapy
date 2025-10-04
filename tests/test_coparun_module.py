@@ -1,7 +1,4 @@
-from coparun_module import coparun
-from copapy import Write, const, Target
-import copapy
-from copapy import binwrite
+from copapy import const, Target
 
 
 def test_compile():
