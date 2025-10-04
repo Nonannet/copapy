@@ -35,8 +35,6 @@ def test_example():
 
 def test_compile():
 
-    print(run_command(['bash', 'build.sh']))
-
     #c1 = const(1.11)
     #c2 = const(2.22)
 
@@ -70,9 +68,9 @@ def test_compile():
     print('* Data to runner:')
     il.print()
 
-    il.to_file('test.copapy')
+    il.to_file('bin/test.copapy')
 
-    result = run_command(['./bin/coparun', 'test.copapy'])
+    result = run_command(['bin/coparun', 'bin/test.copapy'])
     print('* Output from runner:')
     print(result)
 

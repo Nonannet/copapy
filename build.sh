@@ -5,11 +5,11 @@ python src/copapy/generate_stencils.py
 SRC=src/copapy/stencils.c
 DEST=src/copapy/obj
 mkdir -p $DEST
-gcc -c $SRC -o $DEST/stencils_x86_64.o
+gcc -c $SRC -O0 -o $DEST/stencils_x86_64_O0.o
 gcc -c $SRC -O1 -o $DEST/stencils_x86_64_O1.o
 gcc -c $SRC -O2 -o $DEST/stencils_x86_64_O2.o
 gcc -c $SRC -O3 -o $DEST/stencils_x86_64_O3.o
 
 mkdir bin -p
-gcc -Wall -Wextra -Wconversion -Wsign-conversion -Wshadow -Wstrict-overflow -Werror -g src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c -o bin/coparun
+gcc -Wall -Wextra -Wconversion -Wsign-conversion -Wshadow -Wstrict-overflow -Werror -g -O3 src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c -o bin/coparun
 #x86_64-w64-mingw32-gcc -Wall -Wextra -Wconversion -Wsign-conversion -Wshadow -Wstrict-overflow -Werror src/runner/runmem2.c -Wall -O3 -o bin/runmem2.exe

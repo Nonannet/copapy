@@ -7,8 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  build:
-    name: Linting, typechecking and testing code
+  build-ubuntu:
     runs-on: ubuntu-latest
 
     strategy:
@@ -19,18 +18,13 @@ jobs:
     - name: Check out code
       uses: actions/checkout@v4
 
-    #- name: Setup cross compilers
-    #  run: sudo apt-get update && sudo apt-get install -y mingw-w64
-
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
 
     - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install -e .[dev]
+      run: python -m pip install -e .[dev]
 
     - name: Build ops obj files and runner
       run: bash build.sh
@@ -48,11 +42,57 @@ jobs:
       uses: actions/upload-artifact@v4
       if: strategy.job-index == 0
       with:
-        name: object files
+        name: stencil-object-files
         path: src/copapy/obj/*.o
 
     - name: Upload compiled runner
       uses: actions/upload-artifact@v4
+      if: strategy.job-index == 0
       with:
-        name: runner
+        name: runner-linux
+        path: bin/*
+
+  build-windows:
+    needs: [build-ubuntu]
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        python-version: ["3.10"]
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - uses: actions/download-artifact@v4
+      with:
+        name: stencil-object-files
+        path: src/copapy/obj
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install Python dependencies
+      run: python -m pip install -e .[dev]
+
+    - name: Build ops obj files and runner
+      run: |
+        mkdir bin
+        cl.exe /O2 src\coparun\runmem.c src\coparun\coparun.c src\coparun\mem_man.c /Fe:bin\coparun.exe
+
+    - name: Run tests with pytest
+      run: pytest
+
+    - name: Type checking with mypy
+      run: mypy
+
+    #- name: Lint code with flake8
+    #  run: flake8
+
+    - name: Upload compiled runner
+      uses: actions/upload-artifact@v4
+      with:
+        name: runner-win
         path: bin/*
