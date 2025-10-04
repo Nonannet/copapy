@@ -1,11 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/mman.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/stat.h>
 #include <string.h>
-#include <stdint.h>
 #include "runmem.h"
 #include "mem_man.h"
 
