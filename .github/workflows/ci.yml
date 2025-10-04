@@ -64,6 +64,10 @@ jobs:
     - name: Check out code
       uses: actions/checkout@v4
 
+    - name: Set up MSVC environment
+      shell: powershell
+      run: dir
+
     - uses: actions/download-artifact@v4
       with:
         name: stencil-object-files
@@ -77,9 +81,11 @@ jobs:
     - name: Install Python dependencies
       run: python -m pip install -e .[dev]
 
-    - name: Build ops obj files and runner
+    - name: Compile coparun
+      shell: cmd
       run: |
         mkdir bin
+        call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64
         cl.exe /O2 src\coparun\runmem.c src\coparun\coparun.c src\coparun\mem_man.c /Fe:bin\coparun.exe
 
     - name: Run tests with pytest
