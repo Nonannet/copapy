@@ -78,10 +78,11 @@ jobs:
       run: python -m pip install -e .[dev]
 
     - name: Set up MSVC environment
-      shell: cmd
-      run: call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64
+      uses: microsoft/setup-msbuild@v2
+      with:
+        vs-version: 'latest'
 
-    - name: Compile coparun
+    - name: Compile
       shell: cmd
       run: |
         mkdir bin

@@ -70,20 +70,23 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: wheels
+          name: wheels-${{ matrix.os }}
           path: wheelhouse/*.whl
 
 #  publish:
 #    needs: [build_wheels]
 #    runs-on: ubuntu-latest
 #    steps:
+#      - name: Install Twine
+#        run: pip install twine
+
 #      - uses: actions/download-artifact@v4
 #        with:
-#          name: wheels
 #          path: wheelhouse
 
 #      - name: Publish to PyPI
-#        uses: pypa/gh-action-pypi-publish@v1.8.6
-#        with:
-#          user: __token__
-#          password: ${{ secrets.PYPI_API_TOKEN }}
+#        env:
+#          TWINE_USERNAME: __token__
+#          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+#        
+#        run: python -m twine upload wheelhouse/*
