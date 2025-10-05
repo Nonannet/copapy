@@ -354,6 +354,7 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
 
         for variable in variable_list:
             lengths = sdb.var_size['dummy_' + variable.dtype]
+            print('variable_mem_layout', variable.dtype, lengths)
             object_list.append((variable, offset, lengths))
             offset += (lengths + 3) // 4 * 4
 
@@ -460,6 +461,7 @@ class Target():
     def read_value(self, net: Net) -> float | int:
         assert net in self._variables, f"Variable {net} not found"
         addr, lengths, var_type = self._variables[net]
+        print('read_value', addr, lengths)
         data = read_data_mem(addr, lengths)
         assert data is not None and len(data) == lengths, f"Failed to read variable {net}"
         en = {'little': '<', 'big': '>'}[self.sdb.byteorder]
@@ -481,12 +483,17 @@ class Target():
                 raise ValueError(f"Unsupported int length: {lengths} bytes")
         else:
             raise ValueError(f"Unsupported variable type: {var_type}")
+        
 
     def read_variable_remote(self, net: Net) -> None:
-        assert net in self._variables, f"Variable {net} not found in data writer variables"
-        addr, lengths, _ = self._variables[net]
         dw = binw.data_writer(self.sdb.byteorder)
-        dw.write_com(binw.Command.READ_DATA)
-        dw.write_int(addr)
-        dw.write_int(lengths)
+        add_read_command(dw, self._variables, net)
         assert coparun(dw.get_data()) > 0
+
+def add_read_command(dw: binw.data_writer, variables: dict[Net, tuple[int, int, str]], net: Net) -> None:
+    assert net in variables, f"Variable {net} not found in data writer variables"
+    addr, lengths, _ = variables[net]
+    dw.write_com(binw.Command.READ_DATA)
+    dw.write_int(addr)
+    dw.write_int(lengths)
+    

@@ -38,7 +38,7 @@ int parse_commands(uint8_t *bytes) {
     uint32_t command;
     uint32_t reloc_type;
     uint32_t offs;
-    int data_offs;
+    ptrdiff_t data_offs;
     uint32_t size;
     int err_flag = 0;
     uint32_t rel_entr_point;
@@ -89,7 +89,7 @@ int parse_commands(uint8_t *bytes) {
                 offs = *(uint32_t*)bytes; bytes += 4;
                 reloc_type = *(uint32_t*)bytes; bytes += 4;
                 value = *(int32_t*)bytes; bytes += 4;
-                data_offs = (int32_t)(data_memory - executable_memory);
+                data_offs = data_memory - executable_memory;
                 printf("PATCH_OBJECT patch_offs=%i reloc_type=%i value=%i data_offs=%i\n",
                     offs, reloc_type, value, data_offs);
                 if (abs(data_offs) > 0x7FFFFFFF) {

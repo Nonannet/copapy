@@ -1,6 +1,6 @@
 from copapy import const, Target
 from pytest import approx
-
+import time
 
 def function(c1, c2):
     i1 = c1 * 3.3 + 5
@@ -19,14 +19,17 @@ def test_compile():
     ret = function(c1, c2)
 
     tg = Target()
+    print('* compile and copy ...')
     tg.compile(ret)
-    tg.run()
+    #time.sleep(5)
+    print('* run and copy ...')
+    #tg.run()
+    #print('* finished')
 
     ret_ref = function(4, 2)
 
-    print()
-
     for test, ref, name in zip(ret, ret_ref, ['i1', 'i2', 'r1', 'r2']):
+        print('+', name)
         assert tg.read_value(test) == approx(ref, 1e-5), name
 
 
