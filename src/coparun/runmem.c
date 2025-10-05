@@ -39,7 +39,7 @@ int update_data_offs() {
         perror("Error: code and data memory to far apart");
         return 0;
     }
-    data_offs = data_memory - executable_memory;
+    data_offs = (int)(data_memory - executable_memory);
     return 1;
 }
 
