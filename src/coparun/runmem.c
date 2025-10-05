@@ -10,6 +10,7 @@ uint32_t data_memory_len = 0;
 uint8_t *executable_memory = NULL;
 uint32_t executable_memory_len = 0;
 entry_point_t entr_point = NULL;
+int data_offs = 0;
 
 void patch_mem_32(uint8_t *patch_addr, int32_t value) {
     int32_t *val_ptr = (int32_t*)patch_addr;
@@ -33,12 +34,20 @@ void free_memory() {
     data_memory_len = 0;
 }
 
+int update_data_offs() {
+    if (data_memory && executable_memory && (data_memory - executable_memory > 0x7FFFFFFF || executable_memory - data_memory > 0x7FFFFFFF)) {
+        perror("Error: code and data memory to far apart");
+        return 0;
+    }
+    data_offs = data_memory - executable_memory;
+    return 1;
+}
+
 int parse_commands(uint8_t *bytes) {
     int32_t value;
     uint32_t command;
     uint32_t reloc_type;
     uint32_t offs;
-    ptrdiff_t data_offs;
     uint32_t size;
     int err_flag = 0;
     uint32_t rel_entr_point;
@@ -47,26 +56,28 @@ int parse_commands(uint8_t *bytes) {
         command = *(uint32_t*)bytes;
         bytes += 4;
         switch(command) {
-        	case ALLOCATE_DATA:
+            case ALLOCATE_DATA:
                 size = *(uint32_t*)bytes; bytes += 4;
                 data_memory = allocate_data_memory(size);
                 data_memory_len = size;
                 printf("ALLOCATE_DATA size=%i mem_addr=%p\n", size, (void*)data_memory);
+                if (!update_data_offs()) return EXIT_FAILURE;
                 break;
             
-        	case COPY_DATA:
+            case COPY_DATA:
                 offs = *(uint32_t*)bytes; bytes += 4;
                 size = *(uint32_t*)bytes; bytes += 4;
                 printf("COPY_DATA offs=%i size=%i\n", offs, size);
                 memcpy(data_memory + offs, bytes, size); bytes += size;
                 break;
             
-        	case ALLOCATE_CODE:
+            case ALLOCATE_CODE:
                 size = *(uint32_t*)bytes; bytes += 4;
                 executable_memory = allocate_executable_memory(size);
                 executable_memory_len = size;
                 printf("ALLOCATE_CODE size=%i mem_addr=%p\n", size, (void*)executable_memory);
                 //printf("# d %i  c %i  off %i\n", data_memory, executable_memory, data_offs);
+                if (!update_data_offs()) return EXIT_FAILURE;
                 break;
             
             case COPY_CODE:
@@ -89,13 +100,8 @@ int parse_commands(uint8_t *bytes) {
                 offs = *(uint32_t*)bytes; bytes += 4;
                 reloc_type = *(uint32_t*)bytes; bytes += 4;
                 value = *(int32_t*)bytes; bytes += 4;
-                data_offs = data_memory - executable_memory;
                 printf("PATCH_OBJECT patch_offs=%i reloc_type=%i value=%i data_offs=%i\n",
                     offs, reloc_type, value, data_offs);
-                if (abs(data_offs) > 0x7FFFFFFF) {
-                    perror("code and data memory to far apart");
-                    return EXIT_FAILURE;
-                }
                 patch(executable_memory + offs, reloc_type, value + data_offs);
                 break;
             
@@ -129,11 +135,11 @@ int parse_commands(uint8_t *bytes) {
                 err_flag = 1;
                 break;
             
-        	default:
+            default:
                 printf("Unknown command\n");
-                err_flag = -1;
+                return EXIT_FAILURE;
                 break;
         }
     }
-    return err_flag;
+    return EXIT_SUCCESS;
 }

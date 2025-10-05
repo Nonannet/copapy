@@ -23,6 +23,7 @@ extern uint8_t *data_memory;
 extern uint32_t data_memory_len;
 extern uint8_t *executable_memory;
 extern uint32_t executable_memory_len;
+extern int data_offs;
 
 /* Entry point type and variable */
 typedef int (*entry_point_t)(void);
