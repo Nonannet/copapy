@@ -7,25 +7,6 @@ on:
     branches: [main]
 
 jobs:
-  build_stencils:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install cross compilers
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y mingw-w64
-
-      - name: Build ops obj files
-        run: |
-          bash src/copapy/obj/nativecompile.sh
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: stencil-object-files
-          path: src/copapy/obj/*.o
-
   build-ubuntu:
     needs: [build_stencils]
     runs-on: ubuntu-latest
@@ -38,20 +19,14 @@ jobs:
     - name: Check out code
       uses: actions/checkout@v4
 
-    - uses: actions/download-artifact@v4
-      with:
-        name: stencil-object-files
-        path: src/copapy/obj
-
-    - name: Install compiler
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y gcc-12-mingw-w64-x86-64
-
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
+
+    - name: Build ops obj files
+      run: |
+        bash src/copapy/obj/nativecompile.sh
 
     - name: Install Python dependencies
       run: python -m pip install -e .[dev]
@@ -70,15 +45,19 @@ jobs:
     #- name: Lint code with flake8
     #  run: flake8
 
-    - name: Upload compiled runner
-      uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v4
+      if: strategy.job-index == 0
+      with:
+        name: stencil-object-files-linux
+        path: src/copapy/obj/*.o
+
+    - uses: actions/upload-artifact@v4
       if: strategy.job-index == 0
       with:
         name: runner-linux
         path: bin/*
 
   build-windows:
-    needs: [build_stencils]
     runs-on: windows-latest
 
     strategy:
@@ -98,6 +77,10 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
+
+    - name: Build ops obj files
+      run: |
+        bash src/copapy/obj/nativecompile_win.sh
 
     - name: Install Python dependencies
       run: python -m pip install -e .[dev]
@@ -123,8 +106,14 @@ jobs:
     #- name: Lint code with flake8
     #  run: flake8
 
-    - name: Upload compiled runner
-      uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v4
+      if: strategy.job-index == 0
+      with:
+        name: stencil-object-files-win
+        path: src/copapy/obj/*.o
+
+    - uses: actions/upload-artifact@v4
+      if: strategy.job-index == 0
       with:
         name: runner-win
         path: bin/*
