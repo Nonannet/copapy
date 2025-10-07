@@ -27,7 +27,7 @@ jobs:
       run: python -m pip install -e .[dev]
 
     - name: Build ops obj files and runner
-      run: bash build.sh
+      run: bash src/copapy/obj/nativecompile.sh
 
     - name: Run tests with pytest
       run: pytest

@@ -19,7 +19,7 @@ OPT=O3
 mkdir -p $DEST
 
 # Native x86_64
-gcc-12 -c $SRC -o $DEST/stencils_x86_64_$OPT.o
+gcc-12 -$OPT -c $SRC -o $DEST/stencils_x86_64_$OPT.o
 
 # ARM64
 aarch64-linux-gnu-gcc-12 -$OPT -c $SRC -o $DEST/stencils_aarch64_$OPT.o

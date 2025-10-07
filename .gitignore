@@ -13,9 +13,11 @@ __pycache__
 /bin/*
 token.txt
 /src/copapy/obj/*.o
+/src/copapy/obj/old/*.o
 runmem2
 src/*.so
 bin/*
 build/*
 /*.obj
 /src/*.pyd
+src/copapy/stencils.c
