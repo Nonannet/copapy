@@ -21,3 +21,4 @@ build/*
 /*.obj
 /src/*.pyd
 src/copapy/stencils.c
+vc140.pdb
