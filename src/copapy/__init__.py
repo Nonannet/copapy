@@ -14,14 +14,9 @@ def get_var_name(var: Any, scope: dict[str, Any] = globals()) -> list[str]:
     return [name for name, value in scope.items() if value is var]
 
 
-def get_local_arch() -> str:
-    arch_translation_table = {'AMD64': 'x86_64'}
-    return arch_translation_table.get(platform.machine(), platform.machine())
-
-
 def stencil_db_from_package(arch: str = 'native', optimization: str = 'O3') -> stencil_database:
     if arch == 'native':
-        arch = get_local_arch()
+        arch = platform.machine()
     stencil_data = pkgutil.get_data(__name__, f"obj/stencils_{arch}_{optimization}.o")
     assert stencil_data, f"stencils_{arch}_{optimization} not found"
     return stencil_database(stencil_data)
@@ -484,12 +479,12 @@ class Target():
                 raise ValueError(f"Unsupported int length: {lengths} bytes")
         else:
             raise ValueError(f"Unsupported variable type: {var_type}")
-        
 
     def read_variable_remote(self, net: Net) -> None:
         dw = binw.data_writer(self.sdb.byteorder)
         add_read_command(dw, self._variables, net)
         assert coparun(dw.get_data()) > 0
+
 
 def add_read_command(dw: binw.data_writer, variables: dict[Net, tuple[int, int, str]], net: Net) -> None:
     assert net in variables, f"Variable {net} not found in data writer variables"
@@ -497,4 +492,3 @@ def add_read_command(dw: binw.data_writer, variables: dict[Net, tuple[int, int, 
     dw.write_com(binw.Command.READ_DATA)
     dw.write_int(addr)
     dw.write_int(lengths)
-    

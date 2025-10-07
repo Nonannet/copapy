@@ -1,7 +1,6 @@
 from copapy import Write, const
 import copapy
 import subprocess
-import struct
 from copapy import binwrite
 
 
@@ -19,14 +18,14 @@ def function(c1, c2):
     r1 = i1 + i2 * 55 / 4
     r2 = 4 * i2 + 5
 
-    return i1, i2, r1, r2 
+    return i1, i2, r1, r2
 
 
 def test_compile():
 
     c1 = const(4)
     c2 = const(2)
-    
+
     ret = function(c1, c2)
 
     dw, variable_list = copapy.compile_to_instruction_list([Write(net) for net in ret], copapy.generic_sdb)
@@ -50,6 +49,7 @@ def test_compile():
     print('* Output from runner:')
     print(result)
     assert 'Return value: 1' in result
+
 
 if __name__ == "__main__":
     #test_example()

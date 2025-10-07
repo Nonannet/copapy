@@ -55,12 +55,13 @@ class data_writer():
         with open(path, 'wb') as f:
             f.write(self.get_data())
 
+
 class data_reader():
     def __init__(self, data: bytes | bytearray, byteorder: ByteOrder):
         self._data = data
         self._index: int = 0
         self.byteorder: ByteOrder = byteorder
-        
+
     def read_int(self, num_bytes: int = 4, signed: bool = False) -> int:
         ret = int.from_bytes(self._data[self._index:self._index + num_bytes], byteorder=self.byteorder, signed=signed)
         self._index += num_bytes
@@ -77,7 +78,7 @@ class data_reader():
         self._index += 1
         return ret
 
-    def read_bytes(self, num_bytes: int) -> bytes:
+    def read_bytes(self, num_bytes: int) -> bytes | bytearray:
         ret = self._data[self._index:self._index + num_bytes]
         self._index += num_bytes
         return ret

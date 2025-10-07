@@ -21,6 +21,9 @@ mkdir -p $DEST
 # Native x86_64
 gcc-12 -$OPT -c $SRC -o $DEST/stencils_x86_64_$OPT.o
 
+# Windows x86_64 (ARM64)
+x86_64-w64-mingw32-gcc -$OPT -c $SRC -o $DEST/stencils_AMD64_$OPT.o
+
 # ARM64
 aarch64-linux-gnu-gcc-12 -$OPT -c $SRC -o $DEST/stencils_aarch64_$OPT.o
 

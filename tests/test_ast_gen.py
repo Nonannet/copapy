@@ -13,7 +13,7 @@ def test_ast_generation():
 
     #r1 = i1 + i3
     #r2 = i3 * i2
-    
+
     #c1 = const(4)
     #i1 = c1 * 2
     #r1 = i1 + 7

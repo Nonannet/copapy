@@ -10,7 +10,7 @@ jobs:
   build_stencils:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install cross compilers
         run: |
@@ -19,7 +19,8 @@ jobs:
             gcc-12-aarch64-linux-gnu \
             gcc-12-arm-linux-gnueabihf \
             gcc-12-mips-linux-gnu \
-            gcc-12-riscv64-linux-gnu
+            gcc-12-riscv64-linux-gnu \
+            gcc-12-mingw-w64-x86-64
 
       - name: Build object files
         run: bash src/copapy/obj/crosscompile.sh
@@ -38,7 +39,7 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v4
         with:

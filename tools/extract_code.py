@@ -16,7 +16,7 @@ buffer_index: int = 0
 end_flag: int = 0
 program_data: bytearray = bytearray([])
 
-while(end_flag == 0):
+while (end_flag == 0):
     com = dr.read_com()
 
     if com == Command.ALLOCATE_DATA:
