@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
 set -v
-python src/copapy/generate_stencils.py
 SRC=src/copapy/stencils.c
 DEST=src/copapy/obj
+python src/copapy/generate_stencils.py $SRC
 mkdir -p $DEST
 gcc -c $SRC -O0 -o $DEST/stencils_x86_64_O0.o
 gcc -c $SRC -O1 -o $DEST/stencils_x86_64_O1.o

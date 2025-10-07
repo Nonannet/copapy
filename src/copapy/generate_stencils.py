@@ -1,27 +1,29 @@
 from typing import Generator
+import argparse
 
 
 op_signs = {'add': '+', 'sub': '-', 'mul': '*', 'div': '/',
             'gt': '>', 'eq': '==', 'mod': '%'}
 
+func_prefix = ''  # __attribute__((ms_abi)) 
 
 def get_function_start() -> str:
-    return """
-    int function_start(){
+    return f"""
+    {func_prefix}int function_start(){{
         result_int(0);  // dummy call instruction before marker gets striped
         asm volatile (".long 0xE2401F0F");
         return 1;
-    }
+    }}
     """
 
 
 def get_function_end() -> str:
-    return """
-    int function_end(){
+    return f"""
+    {func_prefix}int function_end(){{
         result_int(0);
         asm volatile (".long 0xE1401F0F");
         return 1;
-    }
+    }}
     """
 
 
@@ -109,6 +111,14 @@ def permutate(*lists: list[str]) -> Generator[list[str], None, None]:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("path", type=str, help="Output file path")
+    parser.add_argument("--abi", type=str, default="", help="Optionaler String (Standard: '')")
+    args = parser.parse_args()
+
+    if args.abi:
+        func_prefix = f"__attribute__(({args.abi}_abi)) "
+
     types = ['int', 'float']
     ops = ['add', 'sub', 'mul', 'div', 'gt', 'eq']
 
@@ -146,5 +156,5 @@ if __name__ == "__main__":
 
     code += get_function_start() + get_function_end()
 
-    with open('src/copapy/stencils.c', 'w') as f:
+    with open(args.path, 'w') as f:
         f.write(code)

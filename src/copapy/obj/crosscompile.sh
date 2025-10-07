@@ -12,19 +12,20 @@
 
 set -e
 set -v
-python src/copapy/generate_stencils.py
+
 SRC=src/copapy/stencils.c
 DEST=src/copapy/obj
 OPT=O3
+
 mkdir -p $DEST
 
-x86_64-w64-mingw32-gcc --version
+# Windows x86_64 (ARM64)
+python src/copapy/generate_stencils.py --abi ms $SRC
+gcc-12 -$OPT -c $SRC -o $DEST/stencils_AMD64_$OPT.o
 
 # Native x86_64
+python src/copapy/generate_stencils.py $SRC
 gcc-12 -$OPT -c $SRC -o $DEST/stencils_x86_64_$OPT.o
-
-# Windows x86_64 (ARM64)
-mingw-w64 -$OPT -c $SRC -o $DEST/stencils_AMD64_$OPT.o
 
 # ARM64
 aarch64-linux-gnu-gcc-12 -$OPT -c $SRC -o $DEST/stencils_aarch64_$OPT.o

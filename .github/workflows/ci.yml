@@ -7,7 +7,21 @@ on:
     branches: [main]
 
 jobs:
+  build_stencils:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build object files
+        run: bash src/copapy/obj/crosscompile.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stencil-object-files
+          path: src/copapy/obj/*.o
+
   build-ubuntu:
+    needs: [build_stencils]
     runs-on: ubuntu-latest
 
     strategy:
@@ -18,14 +32,15 @@ jobs:
     - name: Check out code
       uses: actions/checkout@v4
 
+    - uses: actions/download-artifact@v4
+      with:
+        name: stencil-object-files
+        path: src/copapy/obj
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
-
-    - name: Build ops obj files
-      run: |
-        bash src/copapy/obj/nativecompile.sh
 
     - name: Install Python dependencies
       run: python -m pip install -e .[dev]
@@ -47,16 +62,11 @@ jobs:
     - uses: actions/upload-artifact@v4
       if: strategy.job-index == 0
       with:
-        name: stencil-object-files-linux
-        path: src/copapy/obj/*.o
-
-    - uses: actions/upload-artifact@v4
-      if: strategy.job-index == 0
-      with:
         name: runner-linux
         path: bin/*
 
   build-windows:
+    needs: [build_stencils]
     runs-on: windows-latest
 
     strategy:
@@ -66,6 +76,11 @@ jobs:
     steps:
     - name: Check out code
       uses: actions/checkout@v4
+
+    - uses: actions/download-artifact@v4
+      with:
+        name: stencil-object-files
+        path: src/copapy/obj
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
@@ -99,12 +114,6 @@ jobs:
 
     #- name: Lint code with flake8
     #  run: flake8
-
-    - uses: actions/upload-artifact@v4
-      if: strategy.job-index == 0
-      with:
-        name: stencil-object-files-win
-        path: src/copapy/obj/*.o
 
     - uses: actions/upload-artifact@v4
       if: strategy.job-index == 0
