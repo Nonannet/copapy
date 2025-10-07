@@ -8,7 +8,6 @@ on:
 
 jobs:
   build-ubuntu:
-    needs: [build_stencils]
     runs-on: ubuntu-latest
 
     strategy:
