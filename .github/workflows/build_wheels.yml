@@ -20,7 +20,7 @@ jobs:
             gcc-12-arm-linux-gnueabihf \
             gcc-12-mips-linux-gnu \
             gcc-12-riscv64-linux-gnu \
-            gcc-12-mingw-w64-x86-64
+            mingw-w64
 
       - name: Build object files
         run: bash src/copapy/obj/crosscompile.sh
