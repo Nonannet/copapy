@@ -29,12 +29,6 @@ jobs:
     - name: Build ops obj files and runner
       run: bash src/copapy/obj/nativecompile.sh
 
-    - name: Run tests with pytest
-      run: pytest
-
-    - name: Type checking with mypy
-      run: mypy
-
     #- name: Lint code with flake8
     #  run: flake8
 
@@ -51,6 +45,12 @@ jobs:
       with:
         name: runner-linux
         path: bin/*
+
+    - name: Run tests with pytest
+      run: pytest
+
+    - name: Type checking with mypy
+      run: mypy
 
   build-windows:
     needs: [build-ubuntu]
