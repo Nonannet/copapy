@@ -10,7 +10,7 @@ optimization (/O2). For MSVC without optimization and gcc with -O3 there is no i
 
 The callee code is composed of stencils build with gcc-12 -O3:
 
-``` bash
+```
     1000:       f3 0f 1e fa             endbr64
     1004:       48 83 ec 08             sub    $0x8,%rsp
     1008:       31 ff                   xor    %edi,%edi
@@ -35,7 +35,7 @@ The callee code is composed of stencils build with gcc-12 -O3:
 
 ## Caller
 
-The caller (src/copapy/runmem.c):
+The caller (src/copapy/runmem.c) calls the callee (here named "entr_point") like so:
 
 ``` c
 case RUN_PROG:
@@ -51,7 +51,7 @@ case RUN_PROG:
 
 Compiled with MSVC and optimization (crash):
 
-``` bash
+```
   00000001400078CA: 8B 1E              mov         ebx,dword ptr [rsi]
   00000001400078CC: 48 8D 0D AD 30 08  lea         rcx,[??_C@_0BM@DFBMBFEB@RUN_PROG?5rel_entr_point?$DN?$CFi?6@]
                     00
@@ -75,7 +75,7 @@ Compiled with MSVC and optimization (crash):
 
 Compiled with MSVC and no optimization (no crash):
 
-``` bash
+```
   0000000140007978: 48 8B 44 24 70     mov         rax,qword ptr [rsp+70h]
   000000014000797D: 8B 00              mov         eax,dword ptr [rax]
   000000014000797F: 89 44 24 4C        mov         dword ptr [rsp+4Ch],eax

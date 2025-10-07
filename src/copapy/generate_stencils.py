@@ -7,7 +7,7 @@ op_signs = {'add': '+', 'sub': '-', 'mul': '*', 'div': '/',
 
 def get_function_start() -> str:
     return """
-    int function_start(){
+    __attribute__((ms_abi)) int function_start(){
         result_int(0);  // dummy call instruction before marker gets striped
         asm volatile (".long 0xE2401F0F");
         return 1;
@@ -17,7 +17,7 @@ def get_function_start() -> str:
 
 def get_function_end() -> str:
     return """
-    int function_end(){
+    __attribute__((ms_abi)) int function_end(){
         result_int(0);
         asm volatile (".long 0xE1401F0F");
         return 1;
