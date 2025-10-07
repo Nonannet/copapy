@@ -458,6 +458,7 @@ class Target():
         assert net in self._variables, f"Variable {net} not found"
         addr, lengths, var_type = self._variables[net]
         print('read_value', addr, lengths)
+        assert lengths > 0
         data = read_data_mem(addr, lengths)
         assert data is not None and len(data) == lengths, f"Failed to read variable {net}"
         en = {'little': '<', 'big': '>'}[self.sdb.byteorder]
