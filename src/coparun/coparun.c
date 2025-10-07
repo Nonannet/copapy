@@ -45,9 +45,9 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    parse_commands(file_buff);
+    int ret = parse_commands(file_buff);
 
     free_memory();
 
-    return EXIT_SUCCESS;
+    return ret < 0;
 }

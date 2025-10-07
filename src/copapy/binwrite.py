@@ -2,24 +2,26 @@ from enum import Enum
 from typing import Literal
 import struct
 
+ByteOrder = Literal['little', 'big']
 
 Command = Enum('Command', [('ALLOCATE_DATA', 1), ('COPY_DATA', 2),
                            ('ALLOCATE_CODE', 3), ('COPY_CODE', 4),
                            ('PATCH_FUNC', 5), ('PATCH_OBJECT', 6),
                            ('RUN_PROG', 64), ('READ_DATA', 65),
                            ('END_PROG', 256), ('FREE_MEMORY', 257)])
+COMMAND_SIZE = 4
 
 
 class data_writer():
-    def __init__(self, byteorder: Literal['little', 'big']):
+    def __init__(self, byteorder: ByteOrder):
         self._data: list[tuple[str, bytes, int]] = list()
-        self.byteorder: Literal['little', 'big'] = byteorder
+        self.byteorder: ByteOrder = byteorder
 
     def write_int(self, value: int, num_bytes: int = 4, signed: bool = False) -> None:
         self._data.append((f"INT {value}", value.to_bytes(length=num_bytes, byteorder=self.byteorder, signed=signed), 0))
 
-    def write_com(self, value: Enum, num_bytes: int = 4) -> None:
-        self._data.append((value.name, value.value.to_bytes(length=num_bytes, byteorder=self.byteorder, signed=False), 1))
+    def write_com(self, value: Command) -> None:
+        self._data.append((value.name, value.value.to_bytes(length=COMMAND_SIZE, byteorder=self.byteorder, signed=False), 1))
 
     def write_byte(self, value: int) -> None:
         self._data.append((f"BYTE {value}", bytes([value]), 0))
@@ -52,3 +54,30 @@ class data_writer():
     def to_file(self, path: str) -> None:
         with open(path, 'wb') as f:
             f.write(self.get_data())
+
+class data_reader():
+    def __init__(self, data: bytes | bytearray, byteorder: ByteOrder):
+        self._data = data
+        self._index: int = 0
+        self.byteorder: ByteOrder = byteorder
+        
+    def read_int(self, num_bytes: int = 4, signed: bool = False) -> int:
+        ret = int.from_bytes(self._data[self._index:self._index + num_bytes], byteorder=self.byteorder, signed=signed)
+        self._index += num_bytes
+        return ret
+
+    def read_com(self) -> Command:
+        com_value = int.from_bytes(self._data[self._index:self._index + COMMAND_SIZE], byteorder=self.byteorder)
+        ret = Command(com_value)
+        self._index += COMMAND_SIZE
+        return ret
+
+    def read_byte(self) -> int:
+        ret = self._data[self._index]
+        self._index += 1
+        return ret
+
+    def read_bytes(self, num_bytes: int) -> bytes:
+        ret = self._data[self._index:self._index + num_bytes]
+        self._index += num_bytes
+        return ret

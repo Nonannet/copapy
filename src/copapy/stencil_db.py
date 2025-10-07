@@ -5,11 +5,12 @@ from enum import Enum
 
 ByteOrder = Literal['little', 'big']
 
-START_MARKER = 0xF17ECAFE
-END_MARKER = 0xF27ECAFE
-MARKER_LENGTH = 4
+START_MARKER = 0x0F1F4400E1  # Nop on x86-64 
+END_MARKER = 0x0F1F4400E2    # Nop on x86-64 
+MARKER_LENGTH = 5
 
-LENGTH_CALL_INSTRUCTION = 5  # x86_64
+ # on x86_64: call or jmp instruction when tail call optimized 
+LENGTH_CALL_INSTRUCTION = 5
 
 RelocationType = Enum('RelocationType', [('RELOC_RELATIVE_32', 0)])
 

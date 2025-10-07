@@ -354,7 +354,6 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
 
         for variable in variable_list:
             lengths = sdb.var_size['dummy_' + variable.dtype]
-            print('variable_mem_layout', variable.dtype, lengths)
             object_list.append((variable, offset, lengths))
             offset += (lengths + 3) // 4 * 4
 
@@ -455,6 +454,8 @@ class Target():
         dw = binw.data_writer(self.sdb.byteorder)
         dw.write_com(binw.Command.RUN_PROG)
         dw.write_int(0)
+        #for s in self._variables:
+        #    add_read_command(dw, self._variables, s)
         dw.write_com(binw.Command.END_PROG)
         assert coparun(dw.get_data()) > 0
 

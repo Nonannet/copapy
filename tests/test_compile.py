@@ -48,10 +48,12 @@ def test_compile():
 
     c1 = const(4)
     c2 = const(2)
-    i1 = c1 * 2
-    r1 = i1 + 7 + (c2 + 7 * 9)
-    r2 = i1 + 9
-    out = [Write(r1), Write(r2)]
+    #i1 = c1 * 2
+    #r1 = i1 + 7 + (c2 + 7 * 9)
+    #r2 = i1 + 9
+    #out = [Write(r1), Write(r2)]
+    r1 = c1 * 5 + 8 + c2 * 3
+    out = [Write(r1)]
 
     il, _ = copapy.compile_to_instruction_list(out, copapy.generic_sdb)
 

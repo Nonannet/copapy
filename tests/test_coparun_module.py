@@ -23,7 +23,7 @@ def test_compile():
     tg.compile(ret)
     #time.sleep(5)
     print('* run and copy ...')
-    #tg.run()
+    tg.run()
     #print('* finished')
 
     ret_ref = function(4, 2)

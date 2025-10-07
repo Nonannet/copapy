@@ -49,10 +49,10 @@ int parse_commands(uint8_t *bytes) {
     uint32_t reloc_type;
     uint32_t offs;
     uint32_t size;
-    int err_flag = 0;
+    int end_flag = 0;
     uint32_t rel_entr_point;
     
-    while(!err_flag) {
+    while(!end_flag) {
         command = *(uint32_t*)bytes;
         bytes += 4;
         switch(command) {
@@ -61,7 +61,7 @@ int parse_commands(uint8_t *bytes) {
                 data_memory = allocate_data_memory(size);
                 data_memory_len = size;
                 printf("ALLOCATE_DATA size=%i mem_addr=%p\n", size, (void*)data_memory);
-                if (!update_data_offs()) return EXIT_FAILURE;
+                if (!update_data_offs()) end_flag = -4;
                 break;
             
             case COPY_DATA:
@@ -77,7 +77,7 @@ int parse_commands(uint8_t *bytes) {
                 executable_memory_len = size;
                 printf("ALLOCATE_CODE size=%i mem_addr=%p\n", size, (void*)executable_memory);
                 //printf("# d %i  c %i  off %i\n", data_memory, executable_memory, data_offs);
-                if (!update_data_offs()) return EXIT_FAILURE;
+                if (!update_data_offs()) end_flag = -4;
                 break;
             
             case COPY_CODE:
@@ -126,20 +126,19 @@ int parse_commands(uint8_t *bytes) {
                 break;
 
             case FREE_MEMORY:
-                size = *(uint32_t*)bytes; bytes += 4;
                 free_memory();
                 break;
 
             case END_PROG:
                 printf("END_PROG\n");
-                err_flag = 1;
+                end_flag = 1;
                 break;
             
             default:
                 printf("Unknown command\n");
-                return EXIT_FAILURE;
+                end_flag = -1;
                 break;
         }
     }
-    return EXIT_SUCCESS;
+    return end_flag;
 }
