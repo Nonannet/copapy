@@ -9,7 +9,7 @@ def get_function_start() -> str:
     return """
     int function_start(){
         result_int(0);  // dummy call instruction before marker gets striped
-        asm volatile (".long 0xE200441F0F");
+        asm volatile (".long 0xE2401F0F");
         return 1;
     }
     """
@@ -19,7 +19,7 @@ def get_function_end() -> str:
     return """
     int function_end(){
         result_int(0);
-        asm volatile (".long 0xE100441F0F");
+        asm volatile (".long 0xE1401F0F");
         return 1;
     }
     """
@@ -28,9 +28,9 @@ def get_function_end() -> str:
 def get_op_code(op: str, type1: str, type2: str, type_out: str) -> str:
     return f"""
     void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        asm volatile (".long 0xE100441F0F");
+        asm volatile (".long 0xE1401F0F");
         result_{type_out}_{type2}(arg1 {op_signs[op]} arg2, arg2);
-        asm volatile (".long 0xE200441F0F");
+        asm volatile (".long 0xE2401F0F");
     }}
     """
 
@@ -38,9 +38,9 @@ def get_op_code(op: str, type1: str, type2: str, type_out: str) -> str:
 def get_op_code_float(op: str, type1: str, type2: str) -> str:
     return f"""
     void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        asm volatile (".long 0xE100441F0F");
+        asm volatile (".long 0xE1401F0F");
         result_float_{type2}((float)arg1 {op_signs[op]} arg2, arg2);
-        asm volatile (".long 0xE200441F0F");
+        asm volatile (".long 0xE2401F0F");
     }}
     """
 
@@ -48,9 +48,9 @@ def get_op_code_float(op: str, type1: str, type2: str) -> str:
 def get_op_code_int(op: str, type1: str, type2: str) -> str:
     return f"""
     void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        asm volatile (".long 0xE100441F0F");
+        asm volatile (".long 0xE1401F0F");
         result_int_{type2}((int)(arg1 {op_signs[op]} arg2), arg2);
-        asm volatile (".long 0xE200441F0F");
+        asm volatile (".long 0xE2401F0F");
     }}
     """
 
@@ -70,9 +70,9 @@ def get_result_stubs2(type1: str, type2: str) -> str:
 def get_read_reg0_code(type1: str, type2: str, type_out: str) -> str:
     return f"""
     void read_{type_out}_reg0_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        asm volatile (".long 0xE100441F0F");
+        asm volatile (".long 0xE1401F0F");
         result_{type_out}_{type2}(dummy_{type_out}, arg2);
-        asm volatile (".long 0xE200441F0F");
+        asm volatile (".long 0xE2401F0F");
     }}
     """
 
@@ -80,9 +80,9 @@ def get_read_reg0_code(type1: str, type2: str, type_out: str) -> str:
 def get_read_reg1_code(type1: str, type2: str, type_out: str) -> str:
     return f"""
     void read_{type_out}_reg1_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        asm volatile (".long 0xE100441F0F");
+        asm volatile (".long 0xE1401F0F");
         result_{type1}_{type_out}(arg1, dummy_{type_out});
-        asm volatile (".long 0xE200441F0F");
+        asm volatile (".long 0xE2401F0F");
     }}
     """
 
@@ -90,10 +90,10 @@ def get_read_reg1_code(type1: str, type2: str, type_out: str) -> str:
 def get_write_code(type1: str) -> str:
     return f"""
     void write_{type1}({type1} arg1) {{
-        asm volatile (".long 0xE100441F0F");
+        asm volatile (".long 0xE1401F0F");
         dummy_{type1} = arg1;
         result_{type1}(arg1);
-        asm volatile (".long 0xE200441F0F");
+        asm volatile (".long 0xE2401F0F");
     }}
     """
 

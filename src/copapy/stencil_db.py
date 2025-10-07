@@ -5,9 +5,9 @@ from enum import Enum
 
 ByteOrder = Literal['little', 'big']
 
-START_MARKER = 0xE100441F0F    # Nop on x86-64 
-END_MARKER = 0xE200441F0F    # Nop on x86-64 
-MARKER_LENGTH = 5
+START_MARKER = 0xE1401F0F  # Nop on x86-64 
+END_MARKER = 0xE2401F0F  # Nop on x86-64 
+MARKER_LENGTH = 4
 
  # on x86_64: call or jmp instruction when tail call optimized 
 LENGTH_CALL_INSTRUCTION = 5
