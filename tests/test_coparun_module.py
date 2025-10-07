@@ -5,7 +5,8 @@ from pytest import approx
 def function(c1, c2):
     i1 = c1 * 3.3 + 5
     i2 = c2 * 5 + c1
-    r1 = i1 + i2 * 55 / 4
+    #r1 = i1 + i2 * 55 / 4
+    r1 = i1 + i2 * 55 * 4
     r2 = 4 * i2 + 5
 
     return i1, i2, r1, r2
