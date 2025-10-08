@@ -12,44 +12,16 @@ def run_command(command: list[str], encoding: str = 'utf8') -> str:
     assert error is None, f"Error occurred: {error.decode(encoding)}"
     return output.decode(encoding)
 
+def function(c1):
+    r1 = c1 / 2
 
-def test_example():
-    c1 = 4
-    c2 = 2
-
-    i1 = c1 * 2
-    r1 = i1 + 7 + (c2 + 7 * 9)
-    r2 = i1 + 9
-
-    en = {'little': '<', 'big': '>'}['little']
-    data = struct.pack(en + 'i', r1)
-    print("example r1 " + ' '.join(f'{b:02X}' for b in data))
-
-    data = struct.pack(en + 'i', r2)
-    print("example r2 " + ' '.join(f'{b:02X}' for b in data))
-
-    # assert False
-    #example r1 42 A0 00 00
-    #example r2 41 88 00 00
-
-
-
-def function(c1, c2):
-    i1 = c1 * 3.3 + 5
-    i2 = c2 * 5 + c1
-    #r1 = i1 + i2 * 55 / 4
-    r1 = i1 + i2 * 55 / 4
-    r2 = 4 * i2 + 5
-
-    return i1, i2, r1, r2
-
+    return [r1]
 
 def test_compile():
 
-    c1 = const(4)
-    c2 = const(2)
+    c1 = const(16)
 
-    ret = function(c1, c2)
+    ret = function(c1)
 
     out = [Write(r) for r in ret]
 

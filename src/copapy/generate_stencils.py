@@ -5,11 +5,12 @@ import argparse
 op_signs = {'add': '+', 'sub': '-', 'mul': '*', 'div': '/',
             'gt': '>', 'eq': '==', 'mod': '%'}
 
-func_prefix = ''  # __attribute__((ms_abi)) 
+entry_func_prefix = ''
+stencil_func_prefix = '__attribute__((naked)) '  # Remove collee prolog
 
 def get_function_start() -> str:
     return f"""
-    {func_prefix}int function_start(){{
+    {entry_func_prefix}int function_start(){{
         result_int(0);  // dummy call instruction before marker gets striped
         asm volatile (".long 0xE2401F0F");
         return 1;
@@ -19,7 +20,7 @@ def get_function_start() -> str:
 
 def get_function_end() -> str:
     return f"""
-    {func_prefix}int function_end(){{
+    {entry_func_prefix}int function_end(){{
         result_int(0);
         asm volatile (".long 0xE1401F0F");
         return 1;
@@ -29,8 +30,7 @@ def get_function_end() -> str:
 
 def get_op_code(op: str, type1: str, type2: str, type_out: str) -> str:
     return f"""
-    void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        asm volatile (".long 0xE1401F0F");
+    {stencil_func_prefix}void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         result_{type_out}_{type2}(arg1 {op_signs[op]} arg2, arg2);
         asm volatile (".long 0xE2401F0F");
     }}
@@ -39,8 +39,7 @@ def get_op_code(op: str, type1: str, type2: str, type_out: str) -> str:
 
 def get_conv_code(type1: str, type2: str, type_out: str) -> str:
     return f"""
-    void conv_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        asm volatile (".long 0xE1401F0F");
+    {stencil_func_prefix}void conv_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         result_{type_out}_{type2}(({type_out})arg1, arg2);
         asm volatile (".long 0xE2401F0F");
     }}
@@ -49,8 +48,7 @@ def get_conv_code(type1: str, type2: str, type_out: str) -> str:
 
 def get_op_code_float(op: str, type1: str, type2: str) -> str:
     return f"""
-    void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        asm volatile (".long 0xE1401F0F");
+    {stencil_func_prefix}void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         result_float_{type2}((float)arg1 {op_signs[op]} (float)arg2, arg2);
         asm volatile (".long 0xE2401F0F");
     }}
@@ -59,8 +57,7 @@ def get_op_code_float(op: str, type1: str, type2: str) -> str:
 
 def get_op_code_int(op: str, type1: str, type2: str) -> str:
     return f"""
-    void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        asm volatile (".long 0xE1401F0F");
+    {stencil_func_prefix}void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         result_int_{type2}((int)(arg1 {op_signs[op]} arg2), arg2);
         asm volatile (".long 0xE2401F0F");
     }}
@@ -81,8 +78,7 @@ def get_result_stubs2(type1: str, type2: str) -> str:
 
 def get_read_reg0_code(type1: str, type2: str, type_out: str) -> str:
     return f"""
-    void read_{type_out}_reg0_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        asm volatile (".long 0xE1401F0F");
+    {stencil_func_prefix}void read_{type_out}_reg0_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         result_{type_out}_{type2}(dummy_{type_out}, arg2);
         asm volatile (".long 0xE2401F0F");
     }}
@@ -91,8 +87,7 @@ def get_read_reg0_code(type1: str, type2: str, type_out: str) -> str:
 
 def get_read_reg1_code(type1: str, type2: str, type_out: str) -> str:
     return f"""
-    void read_{type_out}_reg1_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        asm volatile (".long 0xE1401F0F");
+    {stencil_func_prefix}void read_{type_out}_reg1_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         result_{type1}_{type_out}(arg1, dummy_{type_out});
         asm volatile (".long 0xE2401F0F");
     }}
@@ -101,8 +96,7 @@ def get_read_reg1_code(type1: str, type2: str, type_out: str) -> str:
 
 def get_write_code(type1: str) -> str:
     return f"""
-    void write_{type1}({type1} arg1) {{
-        asm volatile (".long 0xE1401F0F");
+    {stencil_func_prefix}void write_{type1}({type1} arg1) {{
         dummy_{type1} = arg1;
         result_{type1}(arg1);
         asm volatile (".long 0xE2401F0F");
@@ -127,7 +121,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.abi:
-        func_prefix = f"__attribute__(({args.abi}_abi)) "
+        entry_func_prefix = f"__attribute__(({args.abi}_abi)) "
 
     types = ['int', 'float']
     ops = ['add', 'sub', 'mul', 'div', 'gt', 'eq']
