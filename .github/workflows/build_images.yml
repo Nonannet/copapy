@@ -1,0 +1,37 @@
+name: Build & Push Images
+
+on:
+  push:
+    branches: [main]
+    path: [.github/workflows, tools/build_container]
+  workflow_dispatch:
+
+permissions:
+  packages: write
+  contents: read
+
+jobs:
+  docker-build:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set image name
+        run: echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/cross_compiler_unix:1" >> $GITHUB_ENV
+
+      - name: Build Docker image
+        run:  docker build -t $IMAGE_NAME ./tools/build_container/
+
+      - name: Push Docker image
+        run:  docker push $IMAGE_NAME
