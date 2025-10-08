@@ -1,9 +1,6 @@
 name: Build & Push Images
 
 on:
-  push:
-    branches: [main]
-    path: [.github/workflows/build_images.yml, tools/build_container]
   workflow_dispatch:
 
 permissions:

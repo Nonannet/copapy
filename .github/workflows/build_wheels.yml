@@ -60,7 +60,7 @@ jobs:
           # Multi-arch builds
           CIBW_ARCHS_LINUX: ${{ matrix.os == 'ubuntu-latest' && 'x86_64' || '' }}  # aarch64
           CIBW_ARCHS_MACOS: ${{ matrix.os == 'macos-latest' && 'universal2' || '' }}
-          CIBW_ARCHS_WINDOWS: ${{ matrix.os == 'windows-latest' && 'amd64 x86' || '' }}
+          CIBW_ARCHS_WINDOWS: ${{ matrix.os == 'windows-latest' && 'AMD64 x86' || '' }}
           CIBW_TEST_REQUIRES: "pytest"
           CIBW_TEST_COMMAND: "pytest {package}/tests/test_coparun_module.py"
 
