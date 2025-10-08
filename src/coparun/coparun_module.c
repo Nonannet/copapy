@@ -21,10 +21,10 @@ static PyObject* coparun(PyObject* self, PyObject* args) {
 
 static PyObject* read_data_mem(PyObject* self, PyObject* args) {
     unsigned long rel_addr;
-    Py_ssize_t length;
+    unsigned long length;
 
     // Parse arguments: unsigned long (relative address), Py_ssize_t (length)
-    if (!PyArg_ParseTuple(args, "nk", &rel_addr, &length)) {
+    if (!PyArg_ParseTuple(args, "nn", &rel_addr, &length)) {
         return NULL;
     }
 
@@ -33,9 +33,9 @@ static PyObject* read_data_mem(PyObject* self, PyObject* args) {
         return NULL;
     }
 
-    uint8_t *ptr = data_memory + rel_addr;
+    const char *ptr = (const char *)(data_memory + rel_addr);
 
-    PyObject *result = PyBytes_FromStringAndSize((const char *)ptr, length);
+    PyObject *result = PyBytes_FromStringAndSize(ptr, length);
     if (!result) {
         return PyErr_NoMemory();
     }
