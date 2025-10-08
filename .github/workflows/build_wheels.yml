@@ -62,7 +62,7 @@ jobs:
 
       - name: Build wheels
         # run: cibuildwheel --output-dir wheelhouse
-        uses: pypa/cibuildwheel@v3
+        uses: pypa/cibuildwheel@v2
         env:
           # Multi-arch builds
           CIBW_ARCHS_LINUX: "x86_64 aarch64"
