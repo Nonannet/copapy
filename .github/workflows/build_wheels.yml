@@ -53,30 +53,16 @@ jobs:
       #- name: Install dependencies
       #  run: python -m pip install --upgrade pip cibuildwheel setuptools wheel pytest
 
-      - name: Build wheels (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        uses: pypa/cibuildwheel@v2.11.4
+      - name: Build wheels
+        # run: cibuildwheel --output-dir wheelhouse
+        uses: pypa/cibuildwheel@v3.2.0
         env:
-          CIBW_ARCHS_LINUX: "x86_64 aarch64"
-          CIBW_TEST_REQUIRES: "pytest"
-          CIBW_TEST_COMMAND: "pytest {package}/tests/test_coparun_module.py"
-
-      - name: Build wheels (macOS)
-        if: matrix.os == 'macos-latest'
-        uses: pypa/cibuildwheel@v2.11.4
-        env:
-          CIBW_ARCHS_MACOS: "universal2"
-          CIBW_TEST_REQUIRES: "pytest"
-          CIBW_TEST_COMMAND: "pytest {package}/tests/test_coparun_module.py"
-
-      - name: Build wheels (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: pypa/cibuildwheel@v2.11.4
-        env:
+          # Multi-arch builds
+          CIBW_ARCHS_LINUX: "x86_64"  # aarch64
+          CIBW_ARCHS_MACOS: "universal2" # x86_64 arm64
           CIBW_ARCHS_WINDOWS: "AMD64 x86"
           CIBW_TEST_REQUIRES: "pytest"
           CIBW_TEST_COMMAND: "pytest {package}/tests/test_coparun_module.py"
-
 
       - uses: actions/upload-artifact@v4
         with:
