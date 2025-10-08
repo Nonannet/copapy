@@ -23,7 +23,6 @@ python3 tools/generate_stencils.py $SRC
 gcc-13 -$OPT -c $SRC -o $DEST/stencils_x86_64_$OPT.o
 
 # Native i686
-python tools/generate_stencils.py $SRC
 gcc-13 -m32 -$OPT -c $SRC -o $DEST/stencils_i686_$OPT.o
 
 # ARM64 linux (aarch64)
