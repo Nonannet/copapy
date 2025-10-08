@@ -19,7 +19,8 @@ jobs:
             gcc-12-aarch64-linux-gnu \
             gcc-12-arm-linux-gnueabihf \
             gcc-12-mips-linux-gnu \
-            gcc-12-riscv64-linux-gnu
+            gcc-12-riscv64-linux-gnu \
+            gcc-12-multilib
 
       - name: Build object files
         run: bash tools/crosscompile.sh
@@ -67,7 +68,7 @@ jobs:
           # Multi-arch builds
           CIBW_ARCHS_LINUX: "x86_64 aarch64"
           CIBW_ARCHS_MACOS: "universal2" # x86_64 arm64
-          CIBW_ARCHS_WINDOWS: "AMD64" # x86
+          CIBW_ARCHS_WINDOWS: "amd64 x86"
           CIBW_TEST_REQUIRES: "pytest"
           CIBW_TEST_COMMAND: "pytest {package}/tests/test_coparun_module.py"
 

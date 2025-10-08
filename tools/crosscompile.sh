@@ -28,6 +28,14 @@ gcc-12 -$OPT -c $SRC -o $DEST/stencils_AMD64_$OPT.o
 python tools/generate_stencils.py $SRC
 gcc-12 -$OPT -c $SRC -o $DEST/stencils_x86_64_$OPT.o
 
+# Windows x86
+python tools/generate_stencils.py --abi ms $SRC
+gcc-12 -m32 -$OPT -c $SRC -o $DEST/stencils_x86_$OPT.o
+
+# Native i686
+python tools/generate_stencils.py $SRC
+gcc-12 -m32 -$OPT -c $SRC -o $DEST/stencils_i686_$OPT.o
+
 # ARM64 linux (aarch64)
 aarch64-linux-gnu-gcc-12 -$OPT -c $SRC -o $DEST/stencils_aarch64_$OPT.o
 
