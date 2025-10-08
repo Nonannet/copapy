@@ -58,7 +58,7 @@ jobs:
           platforms: all
 
       - name: Install dependencies
-        run: python -m pip install --upgrade pip cibuildwheel cython setuptools wheel
+        run: python -m pip install --upgrade pip cibuildwheel setuptools wheel pytest
 
       - name: Build wheels
         run: cibuildwheel --output-dir wheelhouse
@@ -67,6 +67,7 @@ jobs:
           CIBW_ARCHS_LINUX: "x86_64 aarch64"
           CIBW_ARCHS_MACOS: "universal2" # x86_64 arm64
           CIBW_ARCHS_WINDOWS: "AMD64 x86"
+          CIBW_TEST_COMMAND: "pytest {package}/tests/test_coparun_module.py"
 
       - uses: actions/upload-artifact@v4
         with:
