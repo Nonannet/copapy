@@ -18,7 +18,7 @@ RelocationType = Enum('RelocationType', [('RELOC_RELATIVE_32', 0)])
 @dataclass
 class patch_entry:
     """
-    A class for representing a relocation entry
+    A dataclass for representing a relocation entry
 
     Attributes:
         addr (int): address of first byte to patch relative to the start of the symbol
@@ -42,19 +42,16 @@ def translate_relocation(relocation_addr: int, reloc_type: str, bits: int, r_add
         raise Exception(f"Unknown relocation type: {reloc_type}")
 
 
-def get_ret_function_def(symbol: pelfy.elf_symbol) -> str:
-    #print('*', symbol.name, len(symbol.relocations))
+def get_return_function_type(symbol: pelfy.elf_symbol) -> str:
     if symbol.relocations:
         result_func = symbol.relocations[-1].symbol
-
-        assert result_func.name.startswith('result_')
-        return result_func.name[7:]
-    else:
-        return 'void'
+        if result_func.name.startswith('result_'):
+            return result_func.name[7:]
+    return 'void'
 
 
 def strip_symbol(data: bytes, byteorder: ByteOrder) -> bytes:
-    """Return data between start and end marker and removing last instruction (call)"""
+    """Return striped function code based on NOP markers"""
     start_index, end_index = get_stencil_position(data, byteorder)
     return data[start_index:end_index]
 
@@ -72,26 +69,37 @@ def get_stencil_position(data: bytes, byteorder: ByteOrder) -> tuple[int, int]:
 
 
 class stencil_database():
+    """A class for loading and querying a stencil database from an ELF object file
+
+    Attributes:
+        function_definitions (dict[str, str]): dictionary of function names and their return types
+        data (dict[str, bytes]): dictionary of function names and their stripped code
+        var_size (dict[str, int]): dictionary of object names and their sizes
+        byteorder (ByteOrder): byte order of the ELF file
+        elf (elf_file): the loaded ELF file
+    """
+
     def __init__(self, obj_file: str | bytes):
         """Load the stencil database from an ELF object file
+
+        Args:
+            obj_file: path to the ELF object file or bytes of the ELF object file
         """
         if isinstance(obj_file, str):
             self.elf = pelfy.open_elf_file(obj_file)
         else:
             self.elf = pelfy.elf_file(obj_file)
 
-        #print(self.elf.symbols)
-
-        self.function_definitions = {s.name: get_ret_function_def(s) for s in self.elf.symbols
+        self.function_definitions = {s.name: get_return_function_type(s)
+                                     for s in self.elf.symbols
                                      if s.info == 'STT_FUNC'}
-
-        self.data = {s.name: strip_symbol(s.data, self.elf.byteorder) for s in self.elf.symbols
+        self.data = {s.name: strip_symbol(s.data, self.elf.byteorder)
+                     for s in self.elf.symbols
                      if s.info == 'STT_FUNC'}
-
-        self.var_size = {s.name: s.fields['st_size'] for s in self.elf.symbols
+        self.var_size = {s.name: s.fields['st_size']
+                         for s in self.elf.symbols
                          if s.info == 'STT_OBJECT'}
-
-        self.byteorder: Literal['little', 'big'] = self.elf.byteorder
+        self.byteorder = self.elf.byteorder
 
         for name in self.function_definitions.keys():
             sym = self.elf.symbols[name]
@@ -99,7 +107,13 @@ class stencil_database():
             self.elf.symbols[name].data
 
     def get_patch_positions(self, symbol_name: str) -> Generator[patch_entry, None, None]:
-        """Return patch positions
+        """Return patch positions for a provided symbol (function or object)
+
+        Args:
+            symbol_name: function or object name
+
+        Yields:
+            patch_entry: every relocation for the symbol
         """
         symbol = self.elf.symbols[symbol_name]
         start_index, end_index = get_stencil_position(symbol.data, symbol.file.byteorder)
@@ -118,4 +132,12 @@ class stencil_database():
                 yield patch
 
     def get_func_data(self, name: str) -> bytes:
+        """Return the striped function code for a provided function name
+        
+        Args:
+            name: function name
+
+        Returns:
+            Striped function code
+        """
         return strip_symbol(self.elf.symbols[name].data, self.elf.byteorder)
