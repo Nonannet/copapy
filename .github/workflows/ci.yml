@@ -9,11 +9,13 @@ on:
 jobs:
   build_stencils:
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/nonannet/cross_compiler_unix:1
     steps:
       - uses: actions/checkout@v4
 
       - name: Build object files
-        run: bash tools/nativecompile.sh
+        run: bash tools/crosscompile.sh
 
       - uses: actions/upload-artifact@v4
         with:
