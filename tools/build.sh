@@ -1,6 +1,7 @@
 #!/bin/bash
 set -e
 set -v
+mkdir -p bin
 SRC=bin/stencils.c
 DEST=src/copapy/obj
 python tools/generate_stencils.py $SRC
