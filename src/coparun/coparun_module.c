@@ -2,15 +2,6 @@
 #include <Python.h>
 #include "runmem.h"
 
-/*
- * coparun(PyObject *self, PyObject *args)
- * Accepts a Python `bytes` (or objects supporting the buffer protocol).
- * We use the "y#" format in PyArg_ParseTuple which returns a pointer to
- * the internal bytes buffer and its length (Py_ssize_t). For safety and
- * performance we pass that pointer directly to parse_commands which expects
- * a uint8_t* buffer. If parse_commands needs the length, consider
- * extending its API to accept a length parameter.
- */
 static PyObject* coparun(PyObject* self, PyObject* args) {
     const char *buf;
     Py_ssize_t buf_len;

@@ -37,11 +37,21 @@ def get_op_code(op: str, type1: str, type2: str, type_out: str) -> str:
     """
 
 
+def get_conv_code(type1: str, type2: str, type_out: str) -> str:
+    return f"""
+    void conv_{type1}_{type2}({type1} arg1, {type2} arg2) {{
+        asm volatile (".long 0xE1401F0F");
+        result_{type_out}_{type2}(({type_out})arg1, arg2);
+        asm volatile (".long 0xE2401F0F");
+    }}
+    """
+
+
 def get_op_code_float(op: str, type1: str, type2: str) -> str:
     return f"""
     void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         asm volatile (".long 0xE1401F0F");
-        result_float_{type2}((float)arg1 {op_signs[op]} arg2, arg2);
+        result_float_{type2}((float)arg1 {op_signs[op]} (float)arg2, arg2);
         asm volatile (".long 0xE2401F0F");
     }}
     """
@@ -140,7 +150,7 @@ if __name__ == "__main__":
         t_out = t1 if t1 == t2 else 'float'
         if op == 'floordiv':
             code += get_op_code_int('div', t1, t2)
-        elif op == 'div' and t1 == 'int':
+        elif op == 'div':
             code += get_op_code_float(op, t1, t2)
         else:
             code += get_op_code(op, t1, t2, t_out)
