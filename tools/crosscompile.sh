@@ -13,18 +13,18 @@
 set -e
 set -v
 
-SRC=src/copapy/stencils.c
+SRC=bin/stencils.c
 DEST=src/copapy/obj
 OPT=O3
 
 mkdir -p $DEST
 
 # Windows x86_64 (ARM64)
-python src/copapy/generate_stencils.py --abi ms $SRC
+python tools/generate_stencils.py --abi ms $SRC
 gcc-12 -$OPT -c $SRC -o $DEST/stencils_AMD64_$OPT.o
 
 # Native x86_64
-python src/copapy/generate_stencils.py $SRC
+python tools/generate_stencils.py $SRC
 gcc-12 -$OPT -c $SRC -o $DEST/stencils_x86_64_$OPT.o
 
 # ARM64

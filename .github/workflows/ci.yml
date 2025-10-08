@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build object files
-        run: bash src/copapy/obj/nativecompile.sh
+        run: bash tools/nativecompile.sh
 
       - uses: actions/upload-artifact@v4
         with:

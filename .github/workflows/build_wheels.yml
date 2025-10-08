@@ -22,7 +22,7 @@ jobs:
             gcc-12-riscv64-linux-gnu
 
       - name: Build object files
-        run: bash src/copapy/obj/crosscompile.sh
+        run: bash tools/crosscompile.sh
 
       - uses: actions/upload-artifact@v4
         with:
