@@ -2,7 +2,7 @@ from typing import Generator
 import argparse
 
 
-op_signs = {'add': '+', 'sub': '-', 'mul': '*', 'div': '/',
+op_signs = {'add': '+', 'sub': '-', 'mul': '*', 'div': '/', 'floordiv': '/',
             'gt': '>', 'eq': '==', 'mod': '%'}
 
 entry_func_prefix = ''
@@ -123,9 +123,6 @@ if __name__ == "__main__":
     if args.abi:
         entry_func_prefix = f"__attribute__(({args.abi}_abi)) "
 
-    types = ['int', 'float']
-    ops = ['add', 'sub', 'mul', 'div', 'gt', 'eq']
-
     code = """
     // Auto-generated stencils for copapy
     // Do not edit manually
@@ -133,6 +130,10 @@ if __name__ == "__main__":
     volatile int dummy_int = 1337;
     volatile float dummy_float = 1337;
     """
+
+    # Scalar arithmetic:
+    types = ['int', 'float']
+    ops = ['add', 'sub', 'mul', 'div', 'floordiv', 'gt', 'eq']
 
     for t1 in types:
         code += get_result_stubs1(t1)
@@ -143,9 +144,11 @@ if __name__ == "__main__":
     for op, t1, t2 in permutate(ops, types, types):
         t_out = t1 if t1 == t2 else 'float'
         if op == 'floordiv':
-            code += get_op_code_int('div', t1, t2)
+            code += get_op_code_int('floordiv', t1, t2)
         elif op == 'div':
             code += get_op_code_float(op, t1, t2)
+        elif op == 'gt' or op == 'eq':
+            code += get_op_code(op, t1, t2, 'int')
         else:
             code += get_op_code(op, t1, t2, t_out)
 
