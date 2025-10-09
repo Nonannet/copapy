@@ -1,4 +1,4 @@
-from copapy import const, Target
+from copapy import CPVariable, Target
 from pytest import approx
 
 
@@ -10,7 +10,7 @@ def function(c1):
 
 def test_compile():
 
-    c1 = const(16)
+    c1 = CPVariable(16)
 
     ret = function(c1)
 

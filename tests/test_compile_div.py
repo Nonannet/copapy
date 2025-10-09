@@ -1,4 +1,4 @@
-from copapy import Write, const
+from copapy import Write, CPVariable
 import copapy
 import subprocess
 import struct
@@ -19,7 +19,7 @@ def function(c1):
 
 def test_compile():
 
-    c1 = const(16)
+    c1 = CPVariable(16)
 
     ret = function(c1)
 
