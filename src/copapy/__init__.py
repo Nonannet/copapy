@@ -356,6 +356,9 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
 
     object_list, data_section_lengths = variable_mem_layout(variable_list)
 
+    # Deallocate old allocated memory (if existing)
+    dw.write_com(binw.Command.FREE_MEMORY)
+
     # Write data
     dw.write_com(binw.Command.ALLOCATE_DATA)
     dw.write_int(data_section_lengths)

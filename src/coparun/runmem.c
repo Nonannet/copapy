@@ -100,8 +100,8 @@ int parse_commands(uint8_t *bytes) {
                 offs = *(uint32_t*)bytes; bytes += 4;
                 reloc_type = *(uint32_t*)bytes; bytes += 4;
                 value = *(int32_t*)bytes; bytes += 4;
-                printf("PATCH_OBJECT patch_offs=%i reloc_type=%i value=%i data_offs=%i\n",
-                    offs, reloc_type, value, data_offs);
+                printf("PATCH_OBJECT patch_offs=%i reloc_type=%i value=%i\n",
+                    offs, reloc_type, value);
                 patch(executable_memory + offs, reloc_type, value + data_offs);
                 break;
             
