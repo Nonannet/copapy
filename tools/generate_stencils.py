@@ -2,7 +2,7 @@ from typing import Generator
 import argparse
 
 
-op_signs = {'add': '+', 'sub': '-', 'mul': '*', 'div': '/', 'floordiv': '/',
+op_signs = {'add': '+', 'sub': '-', 'mul': '*', 'div': '/',
             'gt': '>', 'eq': '==', 'mod': '%'}
 
 entry_func_prefix = ''
@@ -11,7 +11,7 @@ stencil_func_prefix = '__attribute__((naked)) '  # Remove collee prolog
 def get_function_start() -> str:
     return f"""
     {entry_func_prefix}int function_start(){{
-        result_int(0);  // dummy call instruction before marker gets striped
+        result_int(0);  // dummy call instruction: call instruction before marker gets striped
         asm volatile (".long 0xE2401F0F");
         return 1;
     }}
@@ -21,7 +21,7 @@ def get_function_start() -> str:
 def get_function_end() -> str:
     return f"""
     {entry_func_prefix}int function_end(){{
-        result_int(0);
+        result_int(0); // dummy call instruction: call instruction before marker gets striped
         asm volatile (".long 0xE1401F0F");
         return 1;
     }}
@@ -55,10 +55,10 @@ def get_op_code_float(op: str, type1: str, type2: str) -> str:
     """
 
 
-def get_op_code_int(op: str, type1: str, type2: str) -> str:
+def get_floordiv(op: str, type1: str, type2: str) -> str:
     return f"""
     {stencil_func_prefix}void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        result_int_{type2}((int)(arg1 {op_signs[op]} arg2), arg2);
+        result_int_{type2}(floor_int((float)arg1 / (float)arg2), arg2);
         asm volatile (".long 0xE2401F0F");
     }}
     """
@@ -129,6 +129,13 @@ if __name__ == "__main__":
 
     volatile int dummy_int = 1337;
     volatile float dummy_float = 1337;
+
+    float floor_int(float x) {
+        int i = (int)x;
+        if (x < 0 && x != (float)i)
+            i -= 1;
+        return i;
+    }
     """
 
     # Scalar arithmetic:
@@ -144,7 +151,7 @@ if __name__ == "__main__":
     for op, t1, t2 in permutate(ops, types, types):
         t_out = t1 if t1 == t2 else 'float'
         if op == 'floordiv':
-            code += get_op_code_int('floordiv', t1, t2)
+            code += get_floordiv('floordiv', t1, t2)
         elif op == 'div':
             code += get_op_code_float(op, t1, t2)
         elif op == 'gt' or op == 'eq':
