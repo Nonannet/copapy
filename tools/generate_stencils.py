@@ -58,7 +58,10 @@ def get_op_code_float(op: str, type1: str, type2: str) -> str:
 def get_floordiv(op: str, type1: str, type2: str) -> str:
     return f"""
     {stencil_func_prefix}void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        result_int_{type2}(floor_int((float)arg1 / (float)arg2), arg2);
+        float x = (float)arg1 / (float)arg2;
+        int i = (int)x;
+        if (x < 0 && x != (float)i) i -= 1;
+        result_int_{type2}(i, arg2);
         asm volatile (".long 0xE2401F0F");
     }}
     """
@@ -129,13 +132,6 @@ if __name__ == "__main__":
 
     volatile int dummy_int = 1337;
     volatile float dummy_float = 1337;
-
-    float floor_int(float x) {
-        int i = (int)x;
-        if (x < 0 && x != (float)i)
-            i -= 1;
-        return i;
-    }
     """
 
     # Scalar arithmetic:
