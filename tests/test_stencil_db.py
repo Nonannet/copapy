@@ -16,12 +16,12 @@ def test_start_end_function():
     arch = platform.machine()
     sdb = stencil_database(f'src/copapy/obj/stencils_{arch}_O3.o')
     for sym_name in sdb.function_definitions.keys():
-        data = sdb.elf.symbols[sym_name].data
-        print('-', sym_name, stencil_db.get_stencil_position(data, sdb.elf.byteorder), len(data))
+        symbol = sdb.elf.symbols[sym_name]
+        print('-', sym_name, stencil_db.get_stencil_position(symbol), len(symbol.data))
 
-        start, end = stencil_db.get_stencil_position(data, sdb.elf.byteorder)
+        start, end = stencil_db.get_stencil_position(symbol)
 
-        assert start >= 0 and end >= start and end <= len(data)
+        assert start >= 0 and end >= start and end <= len(symbol.data)
 
 
 if __name__ == "__main__":
