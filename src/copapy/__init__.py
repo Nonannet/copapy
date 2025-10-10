@@ -387,13 +387,13 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
 
     # print('object_addr_lookp: ', object_addr_lookp)
 
-    data = sdb.get_func_data('function_start')
+    data = sdb.get_function_body('function_start', 'start')
     data_list.append(data)
     offset += len(data)
 
     for associated_net, node in extended_output_ops:
         assert node.name in sdb.function_definitions, f"- Warning: {node.name} prototype not found"
-        data = sdb.get_func_data(node.name)
+        data = sdb.get_stencil_code(node.name)
         data_list.append(data)
         # print(f"* {node.name} ({offset}) " + ' '.join(f'{d:02X}' for d in data))
 
@@ -406,7 +406,7 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
 
         offset += len(data)
 
-    data = sdb.get_func_data('function_end')
+    data = sdb.get_function_body('function_end', 'end')
     data_list.append(data)
     offset += len(data)
     # print('function_end', offset, data)

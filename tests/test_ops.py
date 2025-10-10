@@ -12,7 +12,7 @@ def test_compile():
 
     c1 = CPVariable(9)
 
-    ret = function1(c1)
+    ret = function2(c1)
 
     tg = Target()
     print('* compile and copy ...')
@@ -22,7 +22,7 @@ def test_compile():
     tg.run()
     #print('* finished')
 
-    ret_ref = function1(9)
+    ret_ref = function2(9)
 
     for test, ref, name in zip(ret, ret_ref, ['r1', 'r2', 'r3', 'r4', 'r5']):
         val = tg.read_value(test)

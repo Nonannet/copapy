@@ -6,13 +6,12 @@ op_signs = {'add': '+', 'sub': '-', 'mul': '*', 'div': '/',
             'gt': '>', 'eq': '==', 'mod': '%'}
 
 entry_func_prefix = ''
-stencil_func_prefix = '__attribute__((naked)) '  # Remove collee prolog
+stencil_func_prefix = '__attribute__((naked)) '  # Remove callee prolog
 
 def get_function_start() -> str:
     return f"""
     {entry_func_prefix}int function_start(){{
-        result_int(0);  // dummy call instruction: call instruction before marker gets striped
-        asm volatile (".long 0xE2401F0F");
+        result_int(0);
         return 1;
     }}
     """
@@ -21,8 +20,7 @@ def get_function_start() -> str:
 def get_function_end() -> str:
     return f"""
     {entry_func_prefix}int function_end(){{
-        result_int(0); // dummy call instruction: call instruction before marker gets striped
-        asm volatile (".long 0xE1401F0F");
+        result_int(0);
         return 1;
     }}
     """
@@ -32,7 +30,6 @@ def get_op_code(op: str, type1: str, type2: str, type_out: str) -> str:
     return f"""
     {stencil_func_prefix}void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         result_{type_out}_{type2}(arg1 {op_signs[op]} arg2, arg2);
-        asm volatile (".long 0xE2401F0F");
     }}
     """
 
@@ -41,7 +38,6 @@ def get_conv_code(type1: str, type2: str, type_out: str) -> str:
     return f"""
     {stencil_func_prefix}void conv_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         result_{type_out}_{type2}(({type_out})arg1, arg2);
-        asm volatile (".long 0xE2401F0F");
     }}
     """
 
@@ -50,7 +46,6 @@ def get_op_code_float(op: str, type1: str, type2: str) -> str:
     return f"""
     {stencil_func_prefix}void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         result_float_{type2}((float)arg1 {op_signs[op]} (float)arg2, arg2);
-        asm volatile (".long 0xE2401F0F");
     }}
     """
 
@@ -62,7 +57,6 @@ def get_floordiv(op: str, type1: str, type2: str) -> str:
         int i = (int)x;
         if (x < 0 && x != (float)i) i -= 1;
         result_int_{type2}(i, arg2);
-        asm volatile (".long 0xE2401F0F");
     }}
     """
 
@@ -83,7 +77,6 @@ def get_read_reg0_code(type1: str, type2: str, type_out: str) -> str:
     return f"""
     {stencil_func_prefix}void read_{type_out}_reg0_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         result_{type_out}_{type2}(dummy_{type_out}, arg2);
-        asm volatile (".long 0xE2401F0F");
     }}
     """
 
@@ -92,7 +85,6 @@ def get_read_reg1_code(type1: str, type2: str, type_out: str) -> str:
     return f"""
     {stencil_func_prefix}void read_{type_out}_reg1_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         result_{type1}_{type_out}(arg1, dummy_{type_out});
-        asm volatile (".long 0xE2401F0F");
     }}
     """
 
@@ -102,7 +94,6 @@ def get_write_code(type1: str) -> str:
     {stencil_func_prefix}void write_{type1}({type1} arg1) {{
         dummy_{type1} = arg1;
         result_{type1}(arg1);
-        asm volatile (".long 0xE2401F0F");
     }}
     """
 

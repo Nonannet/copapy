@@ -51,30 +51,22 @@ def get_return_function_type(symbol: elf_symbol) -> str:
 
 
 def strip_function(func: elf_symbol) -> bytes:
-    """Return striped function code based on NOP markers"""
+    """Return stencil code by striped stancil function"""
     start_index, end_index = get_stencil_position(func)
     return func.data[start_index:end_index]
 
 
 def get_stencil_position(func: elf_symbol) -> tuple[int, int]:
-
-    #assert func.name != 'function_start', func.relocations
-
-    # Find first start marker
-    marker_index = func.data.find(START_MARKER.to_bytes(MARKER_LENGTH, func.file.byteorder))
-    start_index = 0 if marker_index < 0 else marker_index + MARKER_LENGTH
-
-    # Find last end marker
-    end_index = func.data.rfind(END_MARKER.to_bytes(MARKER_LENGTH, func.file.byteorder))
-    end_index = len(func.data) if end_index < 0 else end_index - LENGTH_CALL_INSTRUCTION
-
-    reloc = func.relocations[-1]
-    end_index2 = reloc.fields['r_offset'] - func.fields['st_value'] - reloc.fields['r_addend'] - LENGTH_CALL_INSTRUCTION
-
-    print(func.relocations[-1])
-    assert end_index2 == end_index, func.name
-
+    start_index = 0  # For a "naked" function
+    end_index = get_last_call_in_function(func)
     return start_index, end_index
+
+
+def get_last_call_in_function(func: elf_symbol) -> int:
+    # Find last relocation in function
+    reloc = func.relocations[-1]
+    assert reloc, f'No call function in stencil function {func.name}.'
+    return reloc.fields['r_offset'] - func.fields['st_value'] - reloc.fields['r_addend'] - LENGTH_CALL_INSTRUCTION
 
 
 def get_stencil_position2(func: elf_symbol) -> tuple[int, int]:
@@ -152,7 +144,7 @@ class stencil_database():
             if patch.addr < end_index - start_index:
                 yield patch
 
-    def get_func_data(self, name: str) -> bytes:
+    def get_stencil_code(self, name: str) -> bytes:
         """Return the striped function code for a provided function name
         
         Args:
@@ -162,3 +154,11 @@ class stencil_database():
             Striped function code
         """
         return strip_function(self.elf.symbols[name])
+
+    def get_function_body(self, name: str, part: Literal['start', 'end']) -> bytes:
+        func = self.elf.symbols[name]
+        index = get_last_call_in_function(func)
+        if part == 'start':
+            return func.data[:index]
+        else:
+            return func.data[index + LENGTH_CALL_INSTRUCTION:]
