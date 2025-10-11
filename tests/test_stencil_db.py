@@ -1,4 +1,3 @@
-from numpy import info
 from copapy import stencil_database, stencil_db
 import platform
 
