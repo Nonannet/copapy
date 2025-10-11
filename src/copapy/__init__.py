@@ -334,6 +334,18 @@ def get_nets(*inputs: Iterable[Iterable[Any]]) -> list[Net]:
     return list(nets)
 
 
+def get_variable_mem_layout(variable_list: list[Net], sdb: stencil_database) -> tuple[list[tuple[Net, int, int]], int]:
+    offset: int = 0
+    object_list: list[tuple[Net, int, int]] = []
+
+    for variable in variable_list:
+        lengths = sdb.var_size['dummy_' + variable.dtype]
+        object_list.append((variable, offset, lengths))
+        offset += (lengths + 3) // 4 * 4
+
+    return object_list, offset
+
+
 def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database) -> tuple[binw.data_writer, dict[Net, tuple[int, int, str]]]:
     variables: dict[Net, tuple[int, int, str]] = dict()
 
@@ -347,18 +359,7 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
 
     dw = binw.data_writer(sdb.byteorder)
 
-    def variable_mem_layout(variable_list: list[Net]) -> tuple[list[tuple[Net, int, int]], int]:
-        offset: int = 0
-        object_list: list[tuple[Net, int, int]] = []
-
-        for variable in variable_list:
-            lengths = sdb.var_size['dummy_' + variable.dtype]
-            object_list.append((variable, offset, lengths))
-            offset += (lengths + 3) // 4 * 4
-
-        return object_list, offset
-
-    object_list, data_section_lengths = variable_mem_layout(variable_list)
+    object_list, data_section_lengths = get_variable_mem_layout(variable_list, sdb)
 
     # Deallocate old allocated memory (if existing)
     dw.write_com(binw.Command.FREE_MEMORY)
@@ -385,8 +386,7 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
     patch_list: list[tuple[int, int, int]] = []
     offset = 0  # offset in generated code chunk
 
-    # print('object_addr_lookp: ', object_addr_lookp)
-
+    # assemble stencils to main program
     data = sdb.get_function_body('function_start', 'start')
     data_list.append(data)
     offset += len(data)
@@ -456,8 +456,6 @@ class Target():
         dw = binw.data_writer(self.sdb.byteorder)
         dw.write_com(binw.Command.RUN_PROG)
         dw.write_int(0)
-        #for s in self._variables:
-        #    add_read_command(dw, self._variables, s)
         dw.write_com(binw.Command.END_PROG)
         assert coparun(dw.get_data()) > 0
 

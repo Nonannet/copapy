@@ -5,10 +5,6 @@ from enum import Enum
 
 ByteOrder = Literal['little', 'big']
 
-START_MARKER = 0xE1401F0F  # Nop on x86-64
-END_MARKER = 0xE2401F0F  # Nop on x86-64
-MARKER_LENGTH = 4
-
 # on x86_64: call or jmp instruction when tail call optimized
 LENGTH_CALL_INSTRUCTION = 5
 
@@ -67,18 +63,6 @@ def get_last_call_in_function(func: elf_symbol) -> int:
     reloc = func.relocations[-1]
     assert reloc, f'No call function in stencil function {func.name}.'
     return reloc.fields['r_offset'] - func.fields['st_value'] - reloc.fields['r_addend'] - LENGTH_CALL_INSTRUCTION
-
-
-def get_stencil_position2(func: elf_symbol) -> tuple[int, int]:
-    # Find first start marker
-    marker_index = func.data.find(START_MARKER.to_bytes(MARKER_LENGTH, func.file.byteorder))
-    start_index = 0 if marker_index < 0 else marker_index + MARKER_LENGTH
-
-    # Find last end marker
-    end_index = func.data.rfind(END_MARKER.to_bytes(MARKER_LENGTH, func.file.byteorder))
-    end_index = len(func.data) if end_index < 0 else end_index - LENGTH_CALL_INSTRUCTION
-
-    return start_index, end_index
 
 
 class stencil_database():
@@ -140,7 +124,7 @@ class stencil_database():
                 reloc.bits,
                 reloc.fields['r_addend'])
 
-            # Exclude the call to the result_x function
+            # Exclude the call to the result_* function
             if patch.addr < end_index - start_index:
                 yield patch
 
