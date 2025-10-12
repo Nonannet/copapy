@@ -388,20 +388,10 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
             dw.write_value(net.source.value, lengths)
             # print(f'+ {net.dtype} {net.source.value}')
 
-    # allocate program data
-    dw.write_com(binw.Command.ALLOCATE_CODE)
-    dw.write_int(0)
-
-    # write auxiliary_functions
+    # prep auxiliary_functions
     aux_function_names = sdb.get_sub_functions(node.name for _, node in extended_output_ops)
     aux_function_mem_layout, aux_function_lengths = get_aux_function_mem_layout(aux_function_names, sdb)
     aux_func_addr_lookup = {name: offs for name, offs, _ in aux_function_mem_layout}
-
-    for name, out_offs, lengths in aux_function_mem_layout:
-        dw.write_com(binw.Command.COPY_CODE)
-        dw.write_int(out_offs)
-        dw.write_int(lengths)
-        dw.write_bytes(sdb.get_function_code(name))
 
     # Prepare program code and relocations
     object_addr_lookup = {net: offs for net, offs, _ in variable_mem_layout}
@@ -440,7 +430,18 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
     offset += len(data)
     # print('function_end', offset, data)
 
-    # write program data
+    # allocate program data
+    dw.write_com(binw.Command.ALLOCATE_CODE)
+    dw.write_int(offset)
+
+    # write aux code
+    for name, out_offs, lengths in aux_function_mem_layout:
+        dw.write_com(binw.Command.COPY_CODE)
+        dw.write_int(out_offs)
+        dw.write_int(lengths)
+        dw.write_bytes(sdb.get_function_code(name))
+
+    # write program code
     dw.write_com(binw.Command.COPY_CODE)
     dw.write_int(aux_function_lengths)
     dw.write_int(offset - aux_function_lengths)
