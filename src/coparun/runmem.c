@@ -50,7 +50,7 @@ int parse_commands(uint8_t *bytes) {
     uint32_t offs;
     uint32_t size;
     int end_flag = 0;
-    uint32_t rel_entr_point;
+    uint32_t rel_entr_point = 0;
     
     while(!end_flag) {
         command = *(uint32_t*)bytes;
