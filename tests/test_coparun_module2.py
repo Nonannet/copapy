@@ -18,7 +18,6 @@ def test_compile():
 
     # run program command
     il.write_com(binwrite.Command.RUN_PROG)
-    il.write_int(0)
 
     il.write_com(binwrite.Command.READ_DATA)
     il.write_int(0)

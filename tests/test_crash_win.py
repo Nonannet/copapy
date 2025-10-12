@@ -32,7 +32,6 @@ def test_compile():
 
     # run program command
     dw.write_com(binwrite.Command.RUN_PROG)
-    dw.write_int(0)
 
     dw.write_com(binwrite.Command.READ_DATA)
     dw.write_int(0)
