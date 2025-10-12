@@ -59,7 +59,6 @@ if __name__ == "__main__":
             rel_entr_point = dr.read_int()
             print(f"ENTRY_POINT rel_entr_point={rel_entr_point}")
         elif com == Command.RUN_PROG:
-            rel_entr_point = dr.read_int()
             print(f"RUN_PROG")
         elif com == Command.READ_DATA:
             offs = dr.read_int()
