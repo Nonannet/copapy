@@ -23,18 +23,15 @@ class patch_entry:
     type: RelocationType
     addr: int
     addend: int
+    target_symbol_name: str
+    target_symbol_info: str
 
 
-def translate_relocation(relocation_addr: int, reloc_type: str, bits: int, r_addend: int) -> patch_entry:
+def translate_relocation(relocation_addr: int, reloc_type: str, bits: int, r_addend: int) -> RelocationType:
     if reloc_type in ('R_AMD64_PLT32', 'R_AMD64_PC32'):
         # S + A - P
-        patch_offset = relocation_addr
-        return patch_entry(RelocationType.RELOC_RELATIVE_32, patch_offset, r_addend)
+        return RelocationType.RELOC_RELATIVE_32
     else:
-        print('relocation_addr: ', relocation_addr)
-        print('reloc_type:      ', reloc_type)
-        print('bits:            ', bits)
-        print('r_addend:        ', r_addend)
         raise Exception(f"Unknown relocation type: {reloc_type}")
 
 
@@ -48,8 +45,11 @@ def get_return_function_type(symbol: elf_symbol) -> str:
 
 def strip_function(func: elf_symbol) -> bytes:
     """Return stencil code by striped stancil function"""
-    start_index, end_index = get_stencil_position(func)
-    return func.data[start_index:end_index]
+    if func.relocations and func.relocations[-1].symbol.info == 'STT_NOTYPE':
+        start_index, end_index = get_stencil_position(func)
+        return func.data[start_index:end_index]
+    else:
+        return func.data
 
 
 def get_stencil_position(func: elf_symbol) -> tuple[int, int]:
@@ -117,12 +117,16 @@ class stencil_database():
 
         for reloc in symbol.relocations:
 
+            patch_offset = reloc.fields['r_offset'] - symbol.fields['st_value'] - start_index
+
             # address to fist byte to patch relative to the start of the symbol
-            patch = translate_relocation(
-                reloc.fields['r_offset'] - symbol.fields['st_value'] - start_index,
+            rtype = translate_relocation(
+                patch_offset,
                 reloc.type,
                 reloc.bits,
                 reloc.fields['r_addend'])
+
+            patch = patch_entry(rtype, patch_offset, reloc.fields['r_addend'], reloc.symbol.name, reloc.symbol.info)
 
             # Exclude the call to the result_* function
             if patch.addr < end_index - start_index:

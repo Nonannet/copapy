@@ -387,26 +387,30 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
     offset = 0  # offset in generated code chunk
 
     # assemble stencils to main program
-    data = sdb.get_function_body('function_start', 'start')
+    data = sdb.get_function_body('entry_function_shell', 'start')
     data_list.append(data)
     offset += len(data)
 
     for associated_net, node in extended_output_ops:
-        assert node.name in sdb.function_definitions, f"- Warning: {node.name} prototype not found"
+        assert node.name in sdb.function_definitions, f"- Warning: {node.name} stencil not found"
         data = sdb.get_stencil_code(node.name)
         data_list.append(data)
         # print(f"* {node.name} ({offset}) " + ' '.join(f'{d:02X}' for d in data))
 
         for patch in sdb.get_patch_positions(node.name):
-            assert associated_net, f"Relocation found but no net defined for operation {node.name}"
-            object_addr = object_addr_lookp[associated_net]
-            patch_value = object_addr + patch.addend - (offset + patch.addr)
-            # print('patch: ', patch, object_addr, patch_value)
-            patch_list.append((patch.type.value, offset + patch.addr, patch_value))
+            if patch.target_symbol_info == 'STT_OBJECT':
+                assert associated_net, f"Relocation found but no net defined for operation {node.name}"
+                object_addr = object_addr_lookp[associated_net]
+                patch_value = object_addr + patch.addend - (offset + patch.addr)
+                # print('patch: ', patch, object_addr, patch_value)
+                patch_list.append((patch.type.value, offset + patch.addr, patch_value))
+                print('++ ', patch.target_symbol_info, patch.target_symbol_name)
+            else:
+                raise ValueError(f"Unsupported: {node.name} {patch.target_symbol_info} {patch.target_symbol_name}")
 
         offset += len(data)
 
-    data = sdb.get_function_body('function_end', 'end')
+    data = sdb.get_function_body('entry_function_shell', 'end')
     data_list.append(data)
     offset += len(data)
     # print('function_end', offset, data)

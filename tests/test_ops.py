@@ -8,11 +8,14 @@ def function1(c1):
 def function2(c1):
     return [c1 / 4, c1 / -4, c1 / 4, c1 / -4, (c1 * -1) / 4]
 
+def function3(c1):
+    return [c1 / 4]
+
 def test_compile():
 
     c1 = CPVariable(9)
 
-    ret = function2(c1)
+    ret = function3(c1)
 
     tg = Target()
     print('* compile and copy ...')
@@ -22,7 +25,7 @@ def test_compile():
     tg.run()
     #print('* finished')
 
-    ret_ref = function2(9)
+    ret_ref = function3(9)
 
     for test, ref, name in zip(ret, ret_ref, ['r1', 'r2', 'r3', 'r4', 'r5']):
         val = tg.read_value(test)
