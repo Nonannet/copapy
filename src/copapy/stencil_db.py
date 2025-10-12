@@ -95,9 +95,9 @@ class stencil_database():
         #             for s in self.elf.symbols
         #             if s.info == 'STT_FUNC'}
 
-        self.var_size = {s.name: s.fields['st_size']
-                         for s in self.elf.symbols
-                         if s.info == 'STT_OBJECT'}
+        #self.var_size = {s.name: s.fields['st_size']
+        #                 for s in self.elf.symbols
+        #                 if s.info == 'STT_OBJECT'}
         self.byteorder: ByteOrder = self.elf.byteorder
 
         #for name in self.function_definitions.keys():
@@ -150,9 +150,10 @@ class stencil_database():
         for name in names:
             if name not in name_set:
                 func = self.elf.symbols[name]
-                for reloc in func.relocations:
-                    name_set.add(reloc.symbol.name)
-                    name_set |= self.get_sub_functions(name_set)
+                for r in func.relocations:
+                    if r.symbol.info == 'STT_FUNC':
+                        name_set.add(r.symbol.name)
+                        name_set |= self.get_sub_functions([r.symbol.name])
         return name_set
 
     def get_symbol_size(self, name: str) -> int:

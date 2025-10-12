@@ -334,19 +334,19 @@ def get_nets(*inputs: Iterable[Iterable[Any]]) -> list[Net]:
     return list(nets)
 
 
-def get_variable_mem_layout(variable_list: list[Net], sdb: stencil_database) -> tuple[list[tuple[Net, int, int]], int]:
+def get_variable_mem_layout(variable_list: Iterable[Net], sdb: stencil_database) -> tuple[list[tuple[Net, int, int]], int]:
     offset: int = 0
     object_list: list[tuple[Net, int, int]] = []
 
     for variable in variable_list:
-        lengths = sdb.var_size['dummy_' + variable.dtype]
+        lengths = sdb.get_symbol_size('dummy_' + variable.dtype)
         object_list.append((variable, offset, lengths))
         offset += (lengths + 3) // 4 * 4
 
     return object_list, offset
 
 
-def get_aux_function_mem_layout(function_names: list[str], sdb: stencil_database) -> tuple[list[tuple[str, int, int]], int]:
+def get_aux_function_mem_layout(function_names: Iterable[str], sdb: stencil_database) -> tuple[list[tuple[str, int, int]], int]:
     offset: int = 0
     function_list: list[tuple[str, int, int]] = []
 
@@ -375,11 +375,11 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
     variable_list = get_nets([[const_net_list]], extended_output_ops)
 
     # Write data
-    object_list, data_section_lengths = get_variable_mem_layout(variable_list, sdb)
+    variable_mem_layout, data_section_lengths = get_variable_mem_layout(variable_list, sdb)
     dw.write_com(binw.Command.ALLOCATE_DATA)
     dw.write_int(data_section_lengths)
 
-    for net, out_offs, lengths in object_list:
+    for net, out_offs, lengths in variable_mem_layout:
         variables[net] = (out_offs, lengths, net.dtype)
         if isinstance(net.source, InitVar):
             dw.write_com(binw.Command.COPY_DATA)
@@ -388,25 +388,22 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
             dw.write_value(net.source.value, lengths)
             # print(f'+ {net.dtype} {net.source.value}')
 
-    # Write auxiliary_functions
-    object_list, data_section_lengths = get_aux_function_mem_layout(variable_list, sdb)
-    dw.write_com(binw.Command.ALLOCATE_DATA)
-    dw.write_int(data_section_lengths)
+    # write auxiliary_functions
+    aux_function_names = sdb.get_sub_functions(node.name for _, node in extended_output_ops)
+    aux_function_mem_layout, aux_function_lengths = get_aux_function_mem_layout(aux_function_names, sdb)
+    aux_func_addr_lookup = {name: offs for name, offs, _ in aux_function_mem_layout}
 
-    for net, out_offs, lengths in object_list:
-        variables[net] = (out_offs, lengths, net.dtype)
-        if isinstance(net.source, InitVar):
-            dw.write_com(binw.Command.COPY_DATA)
-            dw.write_int(out_offs)
-            dw.write_int(lengths)
-            dw.write_value(net.source.value, lengths)
-            # print(f'+ {net.dtype} {net.source.value}')
+    dw.write_com(binw.Command.COPY_CODE)
+    dw.write_int(0)
+    dw.write_int(aux_function_lengths)
+    for name, _, _ in aux_function_mem_layout:
+        dw.write_bytes(sdb.get_function_code(name))
 
     # Prepare program code and relocations
-    object_addr_lookup = {net: out_offs for net, out_offs, _ in object_list}
+    object_addr_lookup = {net: offs for net, offs, _ in variable_mem_layout}
     data_list: list[bytes] = []
     patch_list: list[tuple[int, int, int]] = []
-    offset = 0  # offset in generated code chunk
+    offset = aux_function_lengths  # offset in generated code chunk
 
     # assemble stencils to main program
     data = sdb.get_function_code('entry_function_shell', 'start')
@@ -422,13 +419,15 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
         for patch in sdb.get_patch_positions(node.name):
             if patch.target_symbol_info == 'STT_OBJECT':
                 assert associated_net, f"Relocation found but no net defined for operation {node.name}"
-                object_addr = object_addr_lookup[associated_net]
-                patch_value = object_addr + patch.addend - (offset + patch.addr)
-                # print('patch: ', patch, object_addr, patch_value)
-                patch_list.append((patch.type.value, offset + patch.addr, patch_value))
-                print('++ ', patch.target_symbol_info, patch.target_symbol_name)
+                addr = object_addr_lookup[associated_net]
+            elif patch.target_symbol_info == 'STT_FUNC':
+                addr = aux_func_addr_lookup[patch.target_symbol_name]
             else:
                 raise ValueError(f"Unsupported: {node.name} {patch.target_symbol_info} {patch.target_symbol_name}")
+            
+            patch_value = addr + patch.addend - (offset + patch.addr)
+            patch_list.append((patch.type.value, offset + patch.addr, patch_value))
+            print('++ ', patch.target_symbol_info, patch.target_symbol_name)
 
         offset += len(data)
 
@@ -448,11 +447,14 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
     dw.write_bytes(b''.join(data_list))
 
     # write relocations
-    for patch_type, patch_addr, object_addr in patch_list:
+    for patch_type, patch_addr, addr in patch_list:
         dw.write_com(binw.Command.PATCH_OBJECT)
         dw.write_int(patch_addr)
         dw.write_int(patch_type)
-        dw.write_int(object_addr, signed=True)
+        dw.write_int(addr, signed=True)
+
+    dw.write_com(binw.Command.ENTRY_POINT)
+    dw.write_int(aux_function_lengths)
 
     return dw, variables
 
@@ -474,15 +476,14 @@ class Target():
                     nodes.append(Write(net))
 
         dw, self._variables = compile_to_instruction_list(nodes, self.sdb)
-        dw.write_com(binw.Command.END_PROG)
+        dw.write_com(binw.Command.END_COM)
         assert coparun(dw.get_data()) > 0
 
     def run(self) -> None:
         # set entry point and run code
         dw = binw.data_writer(self.sdb.byteorder)
         dw.write_com(binw.Command.RUN_PROG)
-        dw.write_int(0)
-        dw.write_com(binw.Command.END_PROG)
+        dw.write_com(binw.Command.END_COM)
         assert coparun(dw.get_data()) > 0
 
     def read_value(self, net: Net) -> float | int:

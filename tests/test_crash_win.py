@@ -42,7 +42,7 @@ def test_compile():
         print('+', name)
         copapy.add_read_command(dw, variable_list, net)
 
-    dw.write_com(binwrite.Command.END_PROG)
+    dw.write_com(binwrite.Command.END_COM)
 
     dw.to_file('bin/test.copapy')
     result = run_command(['bin/coparun', 'bin/test.copapy'])

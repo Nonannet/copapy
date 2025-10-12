@@ -16,13 +16,12 @@ def test_compile() -> None:
 
     # run program command
     il.write_com(binwrite.Command.RUN_PROG)
-    il.write_int(0)
 
     il.write_com(binwrite.Command.READ_DATA)
     il.write_int(0)
     il.write_int(36)
 
-    il.write_com(binwrite.Command.END_PROG)
+    il.write_com(binwrite.Command.END_COM)
 
     print('* Data to runner:')
     il.print()

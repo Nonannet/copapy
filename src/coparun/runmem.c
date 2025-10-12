@@ -104,13 +104,16 @@ int parse_commands(uint8_t *bytes) {
                     offs, reloc_type, value);
                 patch(executable_memory + offs, reloc_type, value + data_offs);
                 break;
+
+            case ENTRY_POINT:
+                printf("ENTRY_POINT rel_entr_point=%i\n", rel_entr_point);
+                rel_entr_point = *(uint32_t*)bytes; bytes += 4;
+                entr_point = (entry_point_t)(executable_memory + rel_entr_point);  
+                mark_mem_executable(executable_memory, executable_memory_len);
+                break;
             
             case RUN_PROG:
-                rel_entr_point = *(uint32_t*)bytes; bytes += 4;
-                printf("RUN_PROG rel_entr_point=%i\n", rel_entr_point);
-                entr_point = (entry_point_t)(executable_memory + rel_entr_point);  
-                
-                mark_mem_executable(executable_memory, executable_memory_len);
+                printf("RUN_PROG");
                 int ret = entr_point();
                 printf("Return value: %i\n", ret);
                 break;

@@ -25,7 +25,7 @@ def test_compile():
     il.write_int(36)
 
     # run program command
-    il.write_com(binwrite.Command.END_PROG)
+    il.write_com(binwrite.Command.END_COM)
 
     #print('* Data to runner:')
     #il.print()

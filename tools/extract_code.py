@@ -55,17 +55,20 @@ if __name__ == "__main__":
             assert reloc_type == RelocationType.RELOC_RELATIVE_32.value
             program_data[offs:offs + 4] = (value + data_section_offset).to_bytes(4, byteorder, signed=True)
             print(f"PATCH_OBJECT patch_offs={offs} reloc_type={reloc_type} value={value}")
+        elif com == Command.ENTRY_POINT:
+            rel_entr_point = dr.read_int()
+            print(f"ENTRY_POINT rel_entr_point={rel_entr_point}")
         elif com == Command.RUN_PROG:
             rel_entr_point = dr.read_int()
-            print(f"RUN_PROG rel_entr_point={rel_entr_point}")
+            print(f"RUN_PROG")
         elif com == Command.READ_DATA:
             offs = dr.read_int()
             size = dr.read_int()
             print(f"READ_DATA offs={offs} size={size}")
         elif com == Command.FREE_MEMORY:
             print("READ_DATA")
-        elif com == Command.END_PROG:
-            print("END_PROG")
+        elif com == Command.END_COM:
+            print("END_COM")
             end_flag = 1
         else:
             assert False, f"Unknown command: {com}"

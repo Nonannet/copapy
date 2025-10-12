@@ -10,9 +10,10 @@
 #define COPY_CODE        4
 #define PATCH_FUNC       5
 #define PATCH_OBJECT     6
+#define ENTRY_POINT      7
 #define RUN_PROG        64
 #define READ_DATA       65
-#define END_PROG       256
+#define END_COM        256
 #define FREE_MEMORY    257
 
 /* Relocation types */

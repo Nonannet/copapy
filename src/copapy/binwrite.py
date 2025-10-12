@@ -6,9 +6,9 @@ ByteOrder = Literal['little', 'big']
 
 Command = Enum('Command', [('ALLOCATE_DATA', 1), ('COPY_DATA', 2),
                            ('ALLOCATE_CODE', 3), ('COPY_CODE', 4),
-                           ('PATCH_FUNC', 5), ('PATCH_OBJECT', 6),
+                           ('PATCH_FUNC', 5), ('PATCH_OBJECT', 6), ('ENTRY_POINT', 7),
                            ('RUN_PROG', 64), ('READ_DATA', 65),
-                           ('END_PROG', 256), ('FREE_MEMORY', 257)])
+                           ('END_COM', 256), ('FREE_MEMORY', 257)])
 COMMAND_SIZE = 4
 
 
