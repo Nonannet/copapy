@@ -443,7 +443,7 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
     # write program data
     dw.write_com(binw.Command.COPY_CODE)
     dw.write_int(aux_function_lengths)
-    dw.write_int(offset)
+    dw.write_int(offset - aux_function_lengths)
     dw.write_bytes(b''.join(data_list))
 
     # write relocations
