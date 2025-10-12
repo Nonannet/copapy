@@ -393,15 +393,11 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
     aux_function_mem_layout, aux_function_lengths = get_aux_function_mem_layout(aux_function_names, sdb)
     aux_func_addr_lookup = {name: offs for name, offs, _ in aux_function_mem_layout}
 
-    dw.write_com(binw.Command.COPY_CODE)
-    dw.write_int(0)
-    dw.write_int(aux_function_lengths)
-    idat: int = 0
-    for name, _, _ in aux_function_mem_layout:
-        dat = sdb.get_function_code(name)
-        dw.write_bytes(dat)
-        idat += len(dat)
-    assert idat == aux_function_lengths
+    for name, out_offs, lengths in aux_function_mem_layout:
+        dw.write_com(binw.Command.COPY_CODE)
+        dw.write_int(out_offs)
+        dw.write_int(lengths)
+        dw.write_bytes(sdb.get_function_code(name))
 
     # Prepare program code and relocations
     object_addr_lookup = {net: offs for net, offs, _ in variable_mem_layout}
