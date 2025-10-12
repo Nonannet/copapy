@@ -163,10 +163,12 @@ class stencil_database():
         """Returns machine code for a specified function name"""
         func = self.elf.symbols[name]
         assert func.info == 'STT_FUNC', f"{name} is not a function"
-        index = get_last_call_in_function(func)
+
         if part == 'start':
+            index = get_last_call_in_function(func)
             return func.data[:index]
         elif part == 'end':
+            index = get_last_call_in_function(func)
             return func.data[index + LENGTH_CALL_INSTRUCTION:]
         else:
             return func.data
