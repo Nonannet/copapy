@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pelfy import open_elf_file, elf_file, elf_symbol
-from typing import Generator, Literal
+from typing import Generator, Literal, Iterable
 from enum import Enum
 
 ByteOrder = Literal['little', 'big']
@@ -45,11 +45,9 @@ def get_return_function_type(symbol: elf_symbol) -> str:
 
 def strip_function(func: elf_symbol) -> bytes:
     """Return stencil code by striped stancil function"""
-    if func.relocations and func.relocations[-1].symbol.info == 'STT_NOTYPE':
-        start_index, end_index = get_stencil_position(func)
-        return func.data[start_index:end_index]
-    else:
-        return func.data
+    assert func.relocations and func.relocations[-1].symbol.info == 'STT_NOTYPE', f"{func.name} is not a stancil function"
+    start_index, end_index = get_stencil_position(func)
+    return func.data[start_index:end_index]
 
 
 def get_stencil_position(func: elf_symbol) -> tuple[int, int]:
@@ -64,13 +62,15 @@ def get_last_call_in_function(func: elf_symbol) -> int:
     assert reloc, f'No call function in stencil function {func.name}.'
     return reloc.fields['r_offset'] - func.fields['st_value'] - reloc.fields['r_addend'] - LENGTH_CALL_INSTRUCTION
 
+def symbol_is_stencil(sym: elf_symbol) -> bool:
+    return (sym.info == 'STT_FUNC' and len(sym.relocations) > 0 and
+            sym.relocations[-1].symbol.info == 'STT_NOTYPE')
 
 class stencil_database():
     """A class for loading and querying a stencil database from an ELF object file
 
     Attributes:
-        function_definitions (dict[str, str]): dictionary of function names and their return types
-        data (dict[str, bytes]): dictionary of function names and their stripped code
+        stencil_definitions (dict[str, str]): dictionary of function names and their return types
         var_size (dict[str, int]): dictionary of object names and their sizes
         byteorder (ByteOrder): byte order of the ELF file
         elf (elf_file): the loaded ELF file
@@ -87,21 +87,23 @@ class stencil_database():
         else:
             self.elf = elf_file(obj_file)
 
-        self.function_definitions = {s.name: get_return_function_type(s)
-                                     for s in self.elf.symbols
-                                     if s.info == 'STT_FUNC'}
-        self.data = {s.name: strip_function(s)
-                     for s in self.elf.symbols
-                     if s.info == 'STT_FUNC'}
+        self.stencil_definitions = {s.name: get_return_function_type(s)
+                                    for s in self.elf.symbols
+                                    if s.info == 'STT_FUNC'}
+        
+        #self.data = {s.name: strip_function(s)
+        #             for s in self.elf.symbols
+        #             if s.info == 'STT_FUNC'}
+
         self.var_size = {s.name: s.fields['st_size']
                          for s in self.elf.symbols
                          if s.info == 'STT_OBJECT'}
         self.byteorder: ByteOrder = self.elf.byteorder
 
-        for name in self.function_definitions.keys():
-            sym = self.elf.symbols[name]
-            sym.relocations
-            self.elf.symbols[name].data
+        #for name in self.function_definitions.keys():
+        #    sym = self.elf.symbols[name]
+        #    sym.relocations
+        #    self.elf.symbols[name].data
 
     def get_patch_positions(self, symbol_name: str) -> Generator[patch_entry, None, None]:
         """Return patch positions for a provided symbol (function or object)
@@ -142,11 +144,28 @@ class stencil_database():
             Striped function code
         """
         return strip_function(self.elf.symbols[name])
+    
+    def get_sub_functions(self, names: Iterable[str]) -> set[str]:
+        name_set: set[str] = set()
+        for name in names:
+            if name not in name_set:
+                func = self.elf.symbols[name]
+                for reloc in func.relocations:
+                    name_set.add(reloc.symbol.name)
+                    name_set |= self.get_sub_functions(name_set)
+        return name_set
 
-    def get_function_body(self, name: str, part: Literal['start', 'end']) -> bytes:
+    def get_symbol_size(self, name: str) -> int:
+        return self.elf.symbols[name].fields['st_size']
+
+    def get_function_code(self, name: str, part: Literal['full', 'start', 'end'] = 'full') -> bytes:
+        """Returns machine code for a specified function name"""
         func = self.elf.symbols[name]
+        assert func.info == 'STT_FUNC', f"{name} is not a function"
         index = get_last_call_in_function(func)
         if part == 'start':
             return func.data[:index]
-        else:
+        elif part == 'end':
             return func.data[index + LENGTH_CALL_INSTRUCTION:]
+        else:
+            return func.data

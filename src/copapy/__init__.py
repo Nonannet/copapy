@@ -128,10 +128,10 @@ def _add_op(op: str, args: list[Any], commutative: bool = False) -> Net:
 
     typed_op = '_'.join([op] + [a.dtype for a in arg_nets])
 
-    if typed_op not in generic_sdb.function_definitions:
+    if typed_op not in generic_sdb.stencil_definitions:
         raise ValueError(f"Unsupported operand type(s) for {op}: {' and '.join([a.dtype for a in arg_nets])}")
 
-    result_type = generic_sdb.function_definitions[typed_op].split('_')[0]
+    result_type = generic_sdb.stencil_definitions[typed_op].split('_')[0]
 
     result_net = Net(result_type, Op(typed_op, arg_nets))
 
@@ -346,6 +346,18 @@ def get_variable_mem_layout(variable_list: list[Net], sdb: stencil_database) -> 
     return object_list, offset
 
 
+def get_aux_function_mem_layout(function_names: list[str], sdb: stencil_database) -> tuple[list[tuple[str, int, int]], int]:
+    offset: int = 0
+    function_list: list[tuple[str, int, int]] = []
+
+    for name in function_names:
+        lengths = sdb.get_symbol_size(name)
+        function_list.append((name, offset, lengths))
+        offset += (lengths + 3) // 4 * 4
+
+    return function_list, offset
+
+
 def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database) -> tuple[binw.data_writer, dict[Net, tuple[int, int, str]]]:
     variables: dict[Net, tuple[int, int, str]] = dict()
 
@@ -354,17 +366,16 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
     output_ops = list(add_read_ops(ordered_ops))
     extended_output_ops = list(add_write_ops(output_ops, const_net_list))
 
-    # Get all nets associated with heap memory
-    variable_list = get_nets([[const_net_list]], extended_output_ops)
-
     dw = binw.data_writer(sdb.byteorder)
-
-    object_list, data_section_lengths = get_variable_mem_layout(variable_list, sdb)
 
     # Deallocate old allocated memory (if existing)
     dw.write_com(binw.Command.FREE_MEMORY)
 
+    # Get all nets/variables associated with heap memory
+    variable_list = get_nets([[const_net_list]], extended_output_ops)
+
     # Write data
+    object_list, data_section_lengths = get_variable_mem_layout(variable_list, sdb)
     dw.write_com(binw.Command.ALLOCATE_DATA)
     dw.write_int(data_section_lengths)
 
@@ -377,22 +388,33 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
             dw.write_value(net.source.value, lengths)
             # print(f'+ {net.dtype} {net.source.value}')
 
-    # write auxiliary_functions
-    # TODO
+    # Write auxiliary_functions
+    object_list, data_section_lengths = get_aux_function_mem_layout(variable_list, sdb)
+    dw.write_com(binw.Command.ALLOCATE_DATA)
+    dw.write_int(data_section_lengths)
+
+    for net, out_offs, lengths in object_list:
+        variables[net] = (out_offs, lengths, net.dtype)
+        if isinstance(net.source, InitVar):
+            dw.write_com(binw.Command.COPY_DATA)
+            dw.write_int(out_offs)
+            dw.write_int(lengths)
+            dw.write_value(net.source.value, lengths)
+            # print(f'+ {net.dtype} {net.source.value}')
 
     # Prepare program code and relocations
-    object_addr_lookp = {net: out_offs for net, out_offs, _ in object_list}
+    object_addr_lookup = {net: out_offs for net, out_offs, _ in object_list}
     data_list: list[bytes] = []
     patch_list: list[tuple[int, int, int]] = []
     offset = 0  # offset in generated code chunk
 
     # assemble stencils to main program
-    data = sdb.get_function_body('entry_function_shell', 'start')
+    data = sdb.get_function_code('entry_function_shell', 'start')
     data_list.append(data)
     offset += len(data)
 
     for associated_net, node in extended_output_ops:
-        assert node.name in sdb.function_definitions, f"- Warning: {node.name} stencil not found"
+        assert node.name in sdb.stencil_definitions, f"- Warning: {node.name} stencil not found"
         data = sdb.get_stencil_code(node.name)
         data_list.append(data)
         # print(f"* {node.name} ({offset}) " + ' '.join(f'{d:02X}' for d in data))
@@ -400,7 +422,7 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
         for patch in sdb.get_patch_positions(node.name):
             if patch.target_symbol_info == 'STT_OBJECT':
                 assert associated_net, f"Relocation found but no net defined for operation {node.name}"
-                object_addr = object_addr_lookp[associated_net]
+                object_addr = object_addr_lookup[associated_net]
                 patch_value = object_addr + patch.addend - (offset + patch.addr)
                 # print('patch: ', patch, object_addr, patch_value)
                 patch_list.append((patch.type.value, offset + patch.addr, patch_value))
@@ -410,7 +432,7 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
 
         offset += len(data)
 
-    data = sdb.get_function_body('entry_function_shell', 'end')
+    data = sdb.get_function_code('entry_function_shell', 'end')
     data_list.append(data)
     offset += len(data)
     # print('function_end', offset, data)

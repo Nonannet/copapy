@@ -7,13 +7,13 @@ sdb = stencil_database(f'src/copapy/obj/stencils_{arch}_O3.o')
 def test_list_symbols():
     print('----')
     #print(sdb.function_definitions)
-    for sym_name in sdb.function_definitions.keys():
+    for sym_name in sdb.stencil_definitions.keys():
         print('\n-', sym_name)
         #print(list(sdb.get_patch_positions(sym_name)))
 
 
 def test_start_end_function():
-    for sym_name in sdb.function_definitions.keys():
+    for sym_name in sdb.stencil_definitions.keys():
         symbol = sdb.elf.symbols[sym_name]
 
         if symbol.relocations and symbol.relocations[-1].symbol.info == 'STT_NOTYPE':
@@ -26,7 +26,7 @@ def test_start_end_function():
 
 
 def test_aux_functions():
-    for sym_name in sdb.function_definitions.keys():
+    for sym_name in sdb.stencil_definitions.keys():
         symbol = sdb.elf.symbols[sym_name]
         for reloc in symbol.relocations:
             if reloc.symbol.info != "STT_NOTYPE":
@@ -35,5 +35,4 @@ def test_aux_functions():
 
 
 if __name__ == "__main__":
-    test_list_symbols()
-    test_start_end_function()
+    test_aux_functions()
