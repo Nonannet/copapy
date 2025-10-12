@@ -132,8 +132,8 @@ int parse_commands(uint8_t *bytes) {
                 free_memory();
                 break;
 
-            case END_PROG:
-                printf("END_PROG\n");
+            case END_COM:
+                printf("END_COM\n");
                 end_flag = 1;
                 break;
             
