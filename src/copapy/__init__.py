@@ -388,6 +388,10 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
             dw.write_value(net.source.value, lengths)
             # print(f'+ {net.dtype} {net.source.value}')
 
+    # allocate program data
+    dw.write_com(binw.Command.ALLOCATE_CODE)
+    dw.write_int(0)
+
     # write auxiliary_functions
     aux_function_names = sdb.get_sub_functions(node.name for _, node in extended_output_ops)
     aux_function_mem_layout, aux_function_lengths = get_aux_function_mem_layout(aux_function_names, sdb)
@@ -435,10 +439,6 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
     data_list.append(data)
     offset += len(data)
     # print('function_end', offset, data)
-
-    # allocate program data
-    dw.write_com(binw.Command.ALLOCATE_CODE)
-    dw.write_int(offset)
 
     # write program data
     dw.write_com(binw.Command.COPY_CODE)
