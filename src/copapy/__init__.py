@@ -24,6 +24,9 @@ def stencil_db_from_package(arch: str = 'native', optimization: str = 'O3') -> s
 
 generic_sdb = stencil_db_from_package()
 
+def transl_type(t: str):
+    return {'bool': 'int'}.get(t, t)
+
 
 class Node:
     def __init__(self) -> None:
@@ -84,7 +87,16 @@ class Net:
         return _add_op('gt', [other, self])
 
     def __eq__(self, other: Any) -> 'Net':  # type: ignore
-        return _add_op('eq', [self, other])
+        return _add_op('eq', [self, other], True)
+    
+    def __req__(self, other: Any) -> 'Net':  # type: ignore
+        return _add_op('eq', [self, other], True)
+
+    def __ne__(self, other: Any) -> 'Net':  # type: ignore
+        return _add_op('ne', [self, other], True)
+    
+    def __rne__(self, other: Any) -> 'Net':  # type: ignore
+        return _add_op('ne', [self, other], True)
 
     def __mod__(self, other: Any) -> 'Net':
         return _add_op('mod', [self, other])
@@ -109,7 +121,7 @@ class InitVar(Node):
 
 class Write(Node):
     def __init__(self, net: Net):
-        self.name = 'write_' + net.dtype
+        self.name = 'write_' + transl_type(net.dtype)
         self.args = [net]
 
 
@@ -126,12 +138,15 @@ def _add_op(op: str, args: list[Any], commutative: bool = False) -> Net:
     if commutative:
         arg_nets = sorted(arg_nets, key=lambda a: a.dtype)
 
-    typed_op = '_'.join([op] + [a.dtype for a in arg_nets])
+    typed_op = '_'.join([op] + [transl_type(a.dtype) for a in arg_nets])
 
     if typed_op not in generic_sdb.stencil_definitions:
         raise ValueError(f"Unsupported operand type(s) for {op}: {' and '.join([a.dtype for a in arg_nets])}")
 
-    result_type = generic_sdb.stencil_definitions[typed_op].split('_')[0]
+    if op in {'eq', 'ne', 'ge'}:
+        result_type = 'bool'
+    else:
+        result_type = generic_sdb.stencil_definitions[typed_op].split('_')[0]
 
     result_net = Net(result_type, Op(typed_op, arg_nets))
 
@@ -160,12 +175,12 @@ class CPBool(CPVariable):
 
 
 def _get_data_and_dtype(value: Any) -> tuple[str, float | int]:
-    if isinstance(value, int):
+    if isinstance(value, bool):
+        return ('bool', int(value))
+    elif isinstance(value, int):
         return ('int', int(value))
     elif isinstance(value, float):
         return ('float', float(value))
-    elif isinstance(value, bool):
-        return ('bool', int(value))
     else:
         raise ValueError(f'Non supported data type: {type(value).__name__}')
 
@@ -281,8 +296,8 @@ def add_read_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], No
                 if id(net) != id(registers[i]):
                     #if net in registers:
                     #    print('x  swap registers')
-                    type_list = ['int' if r is None else r.dtype for r in registers]
-                    new_node = Op(f"read_{net.dtype}_reg{i}_" + '_'.join(type_list), [])
+                    type_list = ['int' if r is None else transl_type(r.dtype) for r in registers]
+                    new_node = Op(f"read_{transl_type(net.dtype)}_reg{i}_" + '_'.join(type_list), [])
                     yield net, new_node
                     registers[i] = net
 
@@ -339,7 +354,7 @@ def get_variable_mem_layout(variable_list: Iterable[Net], sdb: stencil_database)
     object_list: list[tuple[Net, int, int]] = []
 
     for variable in variable_list:
-        lengths = sdb.get_symbol_size('dummy_' + variable.dtype)
+        lengths = sdb.get_symbol_size('dummy_' + transl_type(variable.dtype))
         object_list.append((variable, offset, lengths))
         offset += (lengths + 3) // 4 * 4
 
@@ -421,7 +436,6 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
             
             patch_value = addr + patch.addend - (offset + patch.addr)
             patch_list.append((patch.type.value, offset + patch.addr, patch_value))
-            print('++ ', patch.target_symbol_info, patch.target_symbol_name)
 
         offset += len(data)
 
@@ -473,7 +487,7 @@ class Target():
                 nodes.append(Write(s))
             else:
                 for net in s:
-                    assert isinstance(net, Net)
+                    assert isinstance(net, Net), f"The folowing element is not a Net: {net}"
                     nodes.append(Write(net))
 
         dw, self._variables = compile_to_instruction_list(nodes, self.sdb)
@@ -487,10 +501,9 @@ class Target():
         dw.write_com(binw.Command.END_COM)
         assert coparun(dw.get_data()) > 0
 
-    def read_value(self, net: Net) -> float | int:
+    def read_value(self, net: Net) -> float | int | bool:
         assert net in self._variables, f"Variable {net} not found"
         addr, lengths, var_type = self._variables[net]
-        print('read_value', addr, lengths)
         assert lengths > 0
         data = read_data_mem(addr, lengths)
         assert data is not None and len(data) == lengths, f"Failed to read variable {net}"
@@ -505,12 +518,13 @@ class Target():
             assert isinstance(value, float)
             return value
         elif var_type == 'int':
-            if lengths in (1, 2, 4, 8):
-                value = int.from_bytes(data, byteorder=self.sdb.byteorder, signed=True)
-                assert isinstance(value, int)
-                return value
-            else:
-                raise ValueError(f"Unsupported int length: {lengths} bytes")
+            assert lengths in (1, 2, 4, 8), f"Unsupported int length: {lengths} bytes"
+            value = int.from_bytes(data, byteorder=self.sdb.byteorder, signed=True)
+            return value
+        elif var_type == 'bool':
+            assert lengths in (1, 2, 4, 8), f"Unsupported int length: {lengths} bytes"
+            value = bool.from_bytes(data, byteorder=self.sdb.byteorder, signed=True)
+            return value
         else:
             raise ValueError(f"Unsupported variable type: {var_type}")
 

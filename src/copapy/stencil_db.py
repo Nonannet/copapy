@@ -149,6 +149,7 @@ class stencil_database():
         name_set: set[str] = set()
         for name in names:
             if name not in name_set:
+                # assert name in self.elf.symbols, f"Stencil {name} not found" <-- see: https://github.com/Nonannet/pelfy/issues/1
                 func = self.elf.symbols[name]
                 for r in func.relocations:
                     if r.symbol.info == 'STT_FUNC':
