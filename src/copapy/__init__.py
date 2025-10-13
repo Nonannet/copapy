@@ -24,7 +24,7 @@ def stencil_db_from_package(arch: str = 'native', optimization: str = 'O3') -> s
 
 generic_sdb = stencil_db_from_package()
 
-def transl_type(t: str):
+def transl_type(t: str) -> str:
     return {'bool': 'int'}.get(t, t)
 
 
@@ -89,13 +89,13 @@ class Net:
     def __eq__(self, other: Any) -> 'Net':  # type: ignore
         return _add_op('eq', [self, other], True)
     
-    def __req__(self, other: Any) -> 'Net':  # type: ignore
+    def __req__(self, other: Any) -> 'Net':
         return _add_op('eq', [self, other], True)
 
     def __ne__(self, other: Any) -> 'Net':  # type: ignore
         return _add_op('ne', [self, other], True)
     
-    def __rne__(self, other: Any) -> 'Net':  # type: ignore
+    def __rne__(self, other: Any) -> 'Net':
         return _add_op('ne', [self, other], True)
 
     def __mod__(self, other: Any) -> 'Net':
