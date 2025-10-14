@@ -3,9 +3,13 @@ from pytest import approx
 
 
 def function(c1):
-    r1 = c1 / 2
+    i1 = c1 / 4 + c1 / -4 - c1 // 4 * c1 // -4 + (c1 * -1) // 4
 
-    return [r1]
+    r1 = i1 / 32.4 + 54 * c1
+    r2 = 65 * c1 + 8
+    r3 = c1 > r2
+
+    return [r1, r2, r3]
 
 
 def test_compile():

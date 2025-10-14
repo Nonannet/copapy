@@ -36,7 +36,6 @@ def test_example():
 def function(c1, c2):
     i1 = c1 // 3.3 + 5
     i2 = c2 * 5 + c1
-    #r1 = i1 + i2 * 55 / 4
     r1 = i1 + i2 * 55 / 4
     r2 = 4 * i2 + 5
 
@@ -48,8 +47,8 @@ def test_compile():
     c1 = CPVariable(4)
     c2 = CPVariable(2)
 
-    #ret = function(c1, c2)
-    ret = [c1 // 3.3 + 5]
+    ret = function(c1, c2)
+    #ret = [c1 // 3.3 + 5]
 
     out = [Write(r) for r in ret]
 
@@ -58,8 +57,8 @@ def test_compile():
     # run program command
     il.write_com(binwrite.Command.RUN_PROG)
 
-    #for net in ret:
-    #    copapy.add_read_command(il, variables, net)
+    for net in ret:
+        copapy.add_read_command(il, variables, net)
 
     il.write_com(binwrite.Command.END_COM)
 

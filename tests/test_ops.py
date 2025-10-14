@@ -29,8 +29,8 @@ def test_compile():
     c_f = CPVariable(1.111)
     c_b = CPVariable(True)
 
-    ret_test = function1(c_i) + function1(c_f) #+ function2(c_i) + function2(c_f) + function3(c_i) + function4(c_i) + function5(c_b) + [CPVariable(9) % 2]
-    ret_ref = function1(9) + function1(1.111) #+ function2(9) + function2(1.111) + function3(9) + function4(9) + function5(True) + [9 % 2]
+    ret_test = function1(c_i) + function1(c_f) + function2(c_i) + function2(c_f) + function3(c_i) + function4(c_i) + function5(c_b) + [CPVariable(9) % 2]
+    ret_ref = function1(9) + function1(1.111) + function2(9) + function2(1.111) + function3(9) + function4(9) + function5(True) + [9 % 2]
 
     print(ret_test)
 
