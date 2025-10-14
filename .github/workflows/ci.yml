@@ -17,25 +17,10 @@ jobs:
       - name: Build object files
         run: bash tools/crosscompile.sh
 
-      - name: Generate debug asm files
-        run: |
-          bash tools/inspect.sh
-          echo '<p>test.copapy.asm</p><pre>' >> $GITHUB_STEP_SUMMARY
-          echo bin/test.copapy.asm >> $GITHUB_STEP_SUMMARY
-          echo '</pre>' >> $GITHUB_STEP_SUMMARY
-          echo '<p>stencils_x86_64_O3.asm</p><pre>' >> $GITHUB_STEP_SUMMARY
-          echo bin/stencils_x86_64_O3.asm >> $GITHUB_STEP_SUMMARY
-          echo '</pre>' >> $GITHUB_STEP_SUMMARY
-
       - uses: actions/upload-artifact@v4
         with:
           name: stencil-object-files
           path: src/copapy/obj/*.o
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: inspect-asm-files
-          path: bin/*.asm
 
   build-ubuntu:
     needs: [build_stencils]
@@ -66,6 +51,20 @@ jobs:
       run: |
         mkdir -p bin
         gcc -O3 -Wall -Wextra -Wconversion -Wsign-conversion -Wshadow -Wstrict-overflow -Werror -g src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c -o bin/coparun
+
+    - name: Generate debug asm files
+      if: strategy.job-index == 0
+      run: |
+        objdump -d -x src/copapy/obj/stencils_x86_64_O3.o > bin/stencils_x86_64_O3.asm
+        echo '<p>stencils_x86_64_O3.asm</p><pre>' >> $GITHUB_STEP_SUMMARY
+        echo bin/stencils_x86_64_O3.asm >> $GITHUB_STEP_SUMMARY
+        echo '</pre>' >> $GITHUB_STEP_SUMMARY
+        python tools/make_example.py
+        python tools/extract_code.py "bin/test.copapy" "bin/test.copapy.bin"
+        objdump -D -b binary -m i386:x86-64 --adjust-vma=0x1000 bin/test.copapy.bin > bin/test.copapy.asm
+        echo '<p>test.copapy.asm</p><pre>' >> $GITHUB_STEP_SUMMARY
+        echo bin/test.copapy.asm >> $GITHUB_STEP_SUMMARY
+        echo '</pre>' >> $GITHUB_STEP_SUMMARY
 
     - name: Run tests with pytest
       run: pytest
