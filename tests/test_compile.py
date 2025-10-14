@@ -49,7 +49,7 @@ def test_compile():
     c2 = CPVariable(2)
 
     #ret = function(c1, c2)
-    ret = [c1 / 4 + 3 * 3.6]
+    ret = [c1 // 4]
 
     out = [Write(r) for r in ret]
 
