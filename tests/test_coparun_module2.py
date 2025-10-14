@@ -14,14 +14,13 @@ def test_compile():
     r2 = i1 + 9
     out = [Write(r1), Write(r2), Write(c2)]
 
-    il, _ = copapy.compile_to_instruction_list(out, copapy.generic_sdb)
+    il, variables = copapy.compile_to_instruction_list(out, copapy.generic_sdb)
 
     # run program command
     il.write_com(binwrite.Command.RUN_PROG)
 
-    il.write_com(binwrite.Command.READ_DATA)
-    il.write_int(0)
-    il.write_int(36)
+    for net in [c1, c2, i1, r1, r2]:
+        copapy.add_read_command(il, variables, net)
 
     # run program command
     il.write_com(binwrite.Command.END_COM)
