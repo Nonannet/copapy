@@ -58,8 +58,8 @@ def test_compile():
     # run program command
     il.write_com(binwrite.Command.RUN_PROG)
 
-    for net in ret:
-        copapy.add_read_command(il, variables, net)
+    #for net in ret:
+    #    copapy.add_read_command(il, variables, net)
 
     il.write_com(binwrite.Command.END_COM)
 
