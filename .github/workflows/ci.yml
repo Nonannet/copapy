@@ -17,10 +17,25 @@ jobs:
       - name: Build object files
         run: bash tools/crosscompile.sh
 
+      - name: Generate debug asm files
+        run: |
+          bash tools/inspect.sh
+          echo '<p>test.copapy.asm</p><pre>' >> $GITHUB_STEP_SUMMARY
+          echo bin/test.copapy.asm >> $GITHUB_STEP_SUMMARY
+          echo '</pre>' >> $GITHUB_STEP_SUMMARY
+          echo '<p>stencils_x86_64_O3.asm</p><pre>' >> $GITHUB_STEP_SUMMARY
+          echo bin/stencils_x86_64_O3.asm >> $GITHUB_STEP_SUMMARY
+          echo '</pre>' >> $GITHUB_STEP_SUMMARY
+
       - uses: actions/upload-artifact@v4
         with:
           name: stencil-object-files
           path: src/copapy/obj/*.o
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inspect-asm-files
+          path: bin/*.asm
 
   build-ubuntu:
     needs: [build_stencils]

@@ -6,9 +6,10 @@ SRC=bin/stencils.c
 DEST=src/copapy/obj
 python tools/generate_stencils.py $SRC
 mkdir -p $DEST
-gcc -c $SRC -O0 -o $DEST/stencils_x86_64_O0.o
-gcc -c $SRC -O1 -o $DEST/stencils_x86_64_O1.o
-gcc -c $SRC -O2 -o $DEST/stencils_x86_64_O2.o
+gcc --version
+#gcc -c $SRC -O0 -o $DEST/stencils_x86_64_O0.o
+#gcc -c $SRC -O1 -o $DEST/stencils_x86_64_O1.o
+#gcc -c $SRC -O2 -o $DEST/stencils_x86_64_O2.o
 gcc -c $SRC -O3 -o $DEST/stencils_x86_64_O3.o
 
 mkdir bin -p
