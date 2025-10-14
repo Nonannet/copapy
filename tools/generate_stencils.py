@@ -7,10 +7,13 @@ op_signs = {'add': '+', 'sub': '-', 'mul': '*', 'div': '/',
 entry_func_prefix = ''
 stencil_func_prefix = '__attribute__((naked)) '  # Remove callee prolog
 
+stack_size = 64
+
 def get_aux_funcs() -> str:
     return f"""
     {entry_func_prefix}int entry_function_shell(){{
-        volatile char stack_place_holder[64];
+        volatile char stack_place_holder[{stack_size}];
+        stack_place_holder[0] = 0;
         result_int(0);
         return 1;
     }}
