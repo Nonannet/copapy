@@ -529,7 +529,7 @@ class Target():
         else:
             raise ValueError(f"Unsupported variable type: {var_type}")
 
-    def read_variable_remote(self, net: Net) -> None:
+    def read_value_remote(self, net: Net) -> None:
         dw = binw.data_writer(self.sdb.byteorder)
         add_read_command(dw, self._variables, net)
         assert coparun(dw.get_data()) > 0

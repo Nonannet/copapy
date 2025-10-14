@@ -7,6 +7,7 @@ from copapy import binwrite
 
 def run_command(command: list[str]) -> str:
     result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf8', check=False)
+    assert result.returncode != 11, f"SIGSEGV (segmentation fault)\n -Error occurred: {result.stderr}\n -Output: {result.stdout}"
     assert result.returncode == 0, f"\n -Error occurred: {result.stderr}\n -Output: {result.stdout}"
     return result.stdout
 
@@ -51,14 +52,13 @@ def test_compile():
 
     out = [Write(r) for r in ret]
 
-    il, _ = copapy.compile_to_instruction_list(out, copapy.generic_sdb)
+    il, variables = copapy.compile_to_instruction_list(out, copapy.generic_sdb)
 
     # run program command
     il.write_com(binwrite.Command.RUN_PROG)
 
-    il.write_com(binwrite.Command.READ_DATA)
-    il.write_int(0)
-    il.write_int(36)
+    for net in ret:
+        copapy.add_read_command(il, variables, net)
 
     il.write_com(binwrite.Command.END_COM)
 
