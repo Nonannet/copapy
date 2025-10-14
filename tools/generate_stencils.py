@@ -49,11 +49,18 @@ def get_op_code_float(op: str, type1: str, type2: str) -> str:
 
 
 def get_floordiv(op: str, type1: str, type2: str) -> str:
-    return f"""
-    {stencil_func_prefix}void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        result_int_{type2}(floor_div((float)arg1, (float)arg2), arg2);
-    }}
-    """
+    if type1 == 'int' and type2 == 'int':
+        return f"""
+        {stencil_func_prefix}void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
+            result_int_{type2}(floor_div((float)arg1, (float)arg2), arg2);
+        }}
+        """
+    else:
+        return f"""
+        {stencil_func_prefix}void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
+            result_float_{type2}((float)floor_div((float)arg1, (float)arg2), arg2);
+        }}
+        """
 
 
 def get_result_stubs1(type1: str) -> str:

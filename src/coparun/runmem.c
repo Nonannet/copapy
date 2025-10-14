@@ -113,7 +113,7 @@ int parse_commands(uint8_t *bytes) {
                 break;
             
             case RUN_PROG:
-                printf("RUN_PROG");
+                printf("RUN_PROG\n");
                 int ret = entr_point();
                 printf("Return value: %i\n", ret);
                 break;

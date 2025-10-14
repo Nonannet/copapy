@@ -6,7 +6,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("input_file", type=str, help="Input file path with copapy commands")
     parser.add_argument("output_file", type=str, help="Output file with patched code")
-    parser.add_argument("--data_section_offset", type=int, default=0x2000, help="Offset for data relative to code section")
+    parser.add_argument("--data_section_offset", type=int, default=0x3000, help="Offset for data relative to code section")
     parser.add_argument("--byteorder", type=str, choices=['little', 'big'], default='little', help="Select byteorder")
     args = parser.parse_args()
 

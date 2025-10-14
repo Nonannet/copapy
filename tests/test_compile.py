@@ -6,10 +6,10 @@ from copapy import binwrite
 
 
 def run_command(command: list[str], encoding: str = 'utf8') -> str:
-    process = subprocess.Popen(command, stdout=subprocess.PIPE)
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     output, error = process.communicate()
 
-    assert error is None, f"Error occurred: {error.decode(encoding)}"
+    assert not error, f"\n -Error occurred: {error.decode(encoding)}\n -Output: {output.decode(encoding)}"
     return output.decode(encoding)
 
 
@@ -35,7 +35,7 @@ def test_example():
 
 
 def function(c1, c2):
-    i1 = c1 * 3.3 + 5
+    i1 = c1 // 3.3 + 5
     i2 = c2 * 5 + c1
     #r1 = i1 + i2 * 55 / 4
     r1 = i1 + i2 * 55 / 4
@@ -57,7 +57,6 @@ def test_compile():
 
     # run program command
     il.write_com(binwrite.Command.RUN_PROG)
-    il.write_int(0)
 
     il.write_com(binwrite.Command.READ_DATA)
     il.write_int(0)
@@ -71,8 +70,9 @@ def test_compile():
     il.to_file('bin/test.copapy')
 
     result = run_command(['bin/coparun', 'bin/test.copapy'])
-    print('* Output from runner:')
+    print('* Output from runner:\n--')
     print(result)
+    print('--')
 
     assert 'Return value: 1' in result
 

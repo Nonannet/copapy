@@ -143,7 +143,7 @@ def _add_op(op: str, args: list[Any], commutative: bool = False) -> Net:
     if typed_op not in generic_sdb.stencil_definitions:
         raise ValueError(f"Unsupported operand type(s) for {op}: {' and '.join([a.dtype for a in arg_nets])}")
 
-    if op in {'eq', 'ne', 'ge'}:
+    if op in {'eq', 'ne', 'gt'}:
         result_type = 'bool'
     else:
         result_type = generic_sdb.stencil_definitions[typed_op].split('_')[0]
@@ -411,7 +411,7 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
     # Prepare program code and relocations
     object_addr_lookup = {net: offs for net, offs, _ in variable_mem_layout}
     data_list: list[bytes] = []
-    patch_list: list[tuple[int, int, int]] = []
+    patch_list: list[tuple[int, int, int, binw.Command]] = []
     offset = aux_function_lengths  # offset in generated code chunk
 
     # assemble stencils to main program
@@ -429,13 +429,14 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
             if patch.target_symbol_info == 'STT_OBJECT':
                 assert associated_net, f"Relocation found but no net defined for operation {node.name}"
                 addr = object_addr_lookup[associated_net]
+                patch_value = addr + patch.addend - (offset + patch.addr)
+                patch_list.append((patch.type.value, offset + patch.addr, patch_value, binw.Command.PATCH_OBJECT))
             elif patch.target_symbol_info == 'STT_FUNC':
                 addr = aux_func_addr_lookup[patch.target_symbol_name]
+                patch_value = addr + patch.addend - (offset + patch.addr)
+                patch_list.append((patch.type.value, offset + patch.addr, patch_value, binw.Command.PATCH_FUNC))
             else:
                 raise ValueError(f"Unsupported: {node.name} {patch.target_symbol_info} {patch.target_symbol_name}")
-            
-            patch_value = addr + patch.addend - (offset + patch.addr)
-            patch_list.append((patch.type.value, offset + patch.addr, patch_value))
 
         offset += len(data)
 
@@ -462,8 +463,8 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
     dw.write_bytes(b''.join(data_list))
 
     # write relocations
-    for patch_type, patch_addr, addr in patch_list:
-        dw.write_com(binw.Command.PATCH_OBJECT)
+    for patch_type, patch_addr, addr, patch_command in patch_list:
+        dw.write_com(patch_command)
         dw.write_int(patch_addr)
         dw.write_int(patch_type)
         dw.write_int(addr, signed=True)
