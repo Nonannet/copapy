@@ -8,7 +8,8 @@ def test_compile() -> None:
     c1 = CPVariable(9)
 
     #ret = [c1 / 4, c1 / -4, c1 // 4, c1 // -4, (c1 * -1) // 4]
-    ret = [c1 // 4]
+    #ret = [c1 // 4]
+    ret = [c1 / 4 + 3 * 3.6]
 
     out = [Write(r) for r in ret]
 
