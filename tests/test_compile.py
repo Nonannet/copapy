@@ -5,12 +5,10 @@ import struct
 from copapy import binwrite
 
 
-def run_command(command: list[str], encoding: str = 'utf8') -> str:
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    output, error = process.communicate()
-
-    assert not error, f"\n -Error occurred: {error.decode(encoding)}\n -Output: {output.decode(encoding)}"
-    return output.decode(encoding)
+def run_command(command: list[str]) -> str:
+    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf8', check=False)
+    assert result.returncode == 0, f"\n -Error occurred: {result.stderr}\n -Output: {result.stdout}"
+    return result.stdout
 
 
 def test_example():
