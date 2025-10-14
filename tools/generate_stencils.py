@@ -10,7 +10,7 @@ stencil_func_prefix = '__attribute__((naked)) '  # Remove callee prolog
 def get_aux_funcs() -> str:
     return f"""
     {entry_func_prefix}int entry_function_shell(){{
-        void *p = alloca(64);
+        volatile char stack_place_holder[64];
         result_int(0);
         return 1;
     }}
@@ -123,8 +123,6 @@ if __name__ == "__main__":
     code = """
     // Auto-generated stencils for copapy
     // Do not edit manually
-
-    include <alloca.h>
 
     volatile int dummy_int = 1337;
     volatile float dummy_float = 1337;
