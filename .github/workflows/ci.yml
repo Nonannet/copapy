@@ -55,17 +55,16 @@ jobs:
     - name: Generate debug asm files
       if: strategy.job-index == 0
       run: |
-        pip install ansi2html
         python tools/make_example.py
         python tools/extract_code.py "bin/test.copapy" "bin/test.copapy.bin"
         objdump --disassembler-color=on -D -b binary -m i386:x86-64 --adjust-vma=0x1000 bin/test.copapy.bin > bin/test.copapy.asm
-        echo '<p>test.copapy.asm</p><code>' >> $GITHUB_STEP_SUMMARY
-        cat bin/test.copapy.asm | ansi2html -i >> $GITHUB_STEP_SUMMARY
-        echo '</code>' >> $GITHUB_STEP_SUMMARY
+        echo '<p>test.copapy.asm</p><pre>' >> $GITHUB_STEP_SUMMARY
+        cat bin/test.copapy.asm >> $GITHUB_STEP_SUMMARY
+        echo '</pre>' >> $GITHUB_STEP_SUMMARY
         objdump --disassembler-color=on -d -j .text src/copapy/obj/stencils_x86_64_O3.o > bin/stencils_x86_64_O3.asm
-        echo '<p>stencils_x86_64_O3.asm</p><code>' >> $GITHUB_STEP_SUMMARY
-        cat bin/stencils_x86_64_O3.asm | ansi2html -i >> $GITHUB_STEP_SUMMARY
-        echo '</code>' >> $GITHUB_STEP_SUMMARY
+        echo '<p>stencils_x86_64_O3.asm</p><pre>' >> $GITHUB_STEP_SUMMARY
+        cat bin/stencils_x86_64_O3.asm >> $GITHUB_STEP_SUMMARY
+        echo '</pre>' >> $GITHUB_STEP_SUMMARY
 
     - name: Run tests with pytest
       run: pytest
