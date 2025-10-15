@@ -7,7 +7,7 @@ def main() -> None:
     args = parser.parse_args()
 
     regex = r"(\:\n)(.*?)(^[^\n]+\n[^\n]+result_.*?\n\n)"
-    subst = "\\g<1><b>\\g<2></b><span style=\"color:grey\">\\g<3></span>"
+    subst = "\\g<1><em>\\g<2></em><i>\\g<3></i>"
 
     with open(args.path, 'rt') as f:
         text = f.read()
