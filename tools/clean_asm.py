@@ -7,7 +7,7 @@ def main() -> None:
     args = parser.parse_args()
 
     regex = r"(\:\n)(.*?)(^[^\n]+\n[^\n]+result_.*?\n\n)"
-    subst = "\\g<1><em>\\g<2></em><i>\\g<3></i>"
+    subst = "\\g<1><b>\\g<2></b><i>\\g<3></i>"
 
     with open(args.path, 'rt') as f:
         text = f.read()
@@ -20,7 +20,7 @@ def main() -> None:
 
     text = re.sub(regex, subst, text, 0, re.MULTILINE | re.DOTALL)
 
-    text = re.sub(r"  +", "&nbsp;", text, 0, re.MULTILINE | re.DOTALL)
+    text = re.sub(r"(?<= ) ", "&nbsp;", text, 0, re.MULTILINE | re.DOTALL)
 
     print('<code>')
     for line in text.splitlines():
