@@ -12,6 +12,7 @@
     #define BLOG(...) printf(__VA_ARGS__)
 #else
     #define LOG(...)
+    #define BLOG(...)
 #endif
 
 /* Globals declared extern in runmem.h */
