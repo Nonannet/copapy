@@ -1,7 +1,6 @@
-from copapy import Write, CPVariable
+from copapy import Write, cpvalue, NumLike
 import copapy
 import subprocess
-import struct
 from copapy import binwrite
 
 
@@ -12,14 +11,15 @@ def run_command(command: list[str], encoding: str = 'utf8') -> str:
     assert error is None, f"Error occurred: {error.decode(encoding)}"
     return output.decode(encoding)
 
-def function(c1):
-    r1 = c1 / 2
 
+def function(c1: NumLike) -> list[NumLike]:
+    r1 = c1 / 2
     return [r1]
+
 
 def test_compile():
 
-    c1 = CPVariable(16)
+    c1 = cpvalue(16)
 
     ret = function(c1)
 

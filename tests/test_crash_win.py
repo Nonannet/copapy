@@ -1,4 +1,4 @@
-from copapy import Write, CPVariable
+from copapy import NumLike, Write, cpvalue, Net
 import copapy
 import subprocess
 from copapy import binwrite
@@ -12,7 +12,7 @@ def run_command(command: list[str], encoding: str = 'utf8') -> str:
     return output.decode(encoding)
 
 
-def function(c1, c2):
+def function(c1: NumLike, c2: NumLike) -> tuple[NumLike, ...]:
     i1 = c1 * 3.3 + 5
     i2 = c2 * 5 + c1
     r1 = i1 + i2 * 55 / 4
@@ -23,8 +23,8 @@ def function(c1, c2):
 
 def test_compile():
 
-    c1 = CPVariable(4)
-    c2 = CPVariable(2)
+    c1 = cpvalue(4)
+    c2 = cpvalue(2)
 
     ret = function(c1, c2)
 
@@ -39,6 +39,7 @@ def test_compile():
 
     for net, name in zip(ret, ['i1', 'i2', 'r1', 'r2']):
         print('+', name)
+        assert isinstance(net, Net)
         copapy.add_read_command(dw, variable_list, net)
 
     dw.write_com(binwrite.Command.END_COM)

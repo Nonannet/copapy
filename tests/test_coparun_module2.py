@@ -1,13 +1,13 @@
 from coparun_module import coparun
-from copapy import Write, CPVariable
+from copapy import Write, cpvalue
 import copapy
 from copapy import binwrite
 
 
 def test_compile():
 
-    c1 = CPVariable(4)
-    c2 = CPVariable(2) * 4
+    c1 = cpvalue(4)
+    c2 = cpvalue(2) * 4
 
     i1 = c2 * 2
     r1 = i1 + 7 + (c1 + 7 * 9)
@@ -19,7 +19,7 @@ def test_compile():
     # run program command
     il.write_com(binwrite.Command.RUN_PROG)
 
-    for net in [c1, c2, i1, r1, r2]:
+    for net in (c1, c2, i1, r1, r2):
         copapy.add_read_command(il, variables, net)
 
     # run program command

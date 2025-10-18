@@ -1,4 +1,4 @@
-from copapy import Write, CPVariable
+from copapy import Write, cpvalue, NumLike
 import copapy
 import subprocess
 import struct
@@ -27,13 +27,8 @@ def test_example():
     data = struct.pack(en + 'i', r2)
     print("example r2 " + ' '.join(f'{b:02X}' for b in data))
 
-    # assert False
-    #example r1 42 A0 00 00
-    #example r2 41 88 00 00
 
-
-
-def function(c1, c2):
+def function(c1: NumLike, c2: NumLike) -> tuple[NumLike, ...]:
     i1 = c1 // 3.3 + 5
     i2 = c2 * 5 + c1
     r1 = i1 + i2 * 55 / 4
@@ -44,8 +39,8 @@ def function(c1, c2):
 
 def test_compile():
 
-    c1 = CPVariable(4)
-    c2 = CPVariable(2)
+    c1 = cpvalue(4)
+    c2 = cpvalue(2)
 
     ret = function(c1, c2)
     #ret = [c1 // 3.3 + 5]
@@ -58,6 +53,7 @@ def test_compile():
     il.write_com(binwrite.Command.RUN_PROG)
 
     for net in ret:
+        assert isinstance(net, copapy.Net)
         copapy.add_read_command(il, variables, net)
 
     il.write_com(binwrite.Command.END_COM)

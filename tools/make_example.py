@@ -1,11 +1,10 @@
-from copapy import CPVariable, Target, Write, binwrite
+from copapy import cpvalue, Write, binwrite
 import copapy
-from pytest import approx
 
 
 def test_compile() -> None:
 
-    c1 = CPVariable(9)
+    c1 = cpvalue(9)
 
     #ret = [c1 / 4, c1 / -4, c1 // 4, c1 // -4, (c1 * -1) // 4]
     ret = [c1 // 3.3 + 5]

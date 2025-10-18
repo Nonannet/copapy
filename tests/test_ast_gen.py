@@ -1,4 +1,4 @@
-from copapy import Write, CPVariable
+from copapy import Write, cpvalue
 import copapy as rc
 
 
@@ -20,8 +20,8 @@ def test_ast_generation():
     #r2 = i1 + 9
     #out = [Write(r1), Write(r2)]
 
-    c1 = CPVariable(4)
-    c2 = CPVariable(2)
+    c1 = cpvalue(4)
+    c2 = cpvalue(2)
     #i1 = c1 * 2
     #r1 = i1 + 7 + (c2 + 7 * 9)
     #r2 = i1 + 9

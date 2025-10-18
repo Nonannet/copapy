@@ -4,6 +4,7 @@ import platform
 arch = platform.machine()
 sdb = stencil_database(f'src/copapy/obj/stencils_{arch}_O3.o')
 
+
 def test_list_symbols():
     print('----')
     #print(sdb.function_definitions)
@@ -17,7 +18,7 @@ def test_start_end_function():
         symbol = sdb.elf.symbols[sym_name]
 
         if symbol.relocations and symbol.relocations[-1].symbol.info == 'STT_NOTYPE':
-        
+
             print('-', sym_name, stencil_db.get_stencil_position(symbol), len(symbol.data))
 
             start, end = stencil_db.get_stencil_position(symbol)
@@ -31,7 +32,6 @@ def test_aux_functions():
         for reloc in symbol.relocations:
             if reloc.symbol.info != "STT_NOTYPE":
                 print(reloc.symbol.name, reloc.symbol.info)
-
 
 
 if __name__ == "__main__":
