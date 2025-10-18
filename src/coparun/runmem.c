@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include "runmem.h"
 #include "mem_man.h"
 
@@ -114,6 +115,9 @@ int parse_commands(uint8_t *bytes) {
                 LOG("PATCH_OBJECT patch_offs=%i reloc_type=%i value=%i\n",
                     offs, reloc_type, value);
                 patch(executable_memory + offs, reloc_type, value + data_offs);
+                break;
+
+            case PATCH_MATH_POW:
                 break;
 
             case ENTRY_POINT:

@@ -1,7 +1,7 @@
 from typing import Generator
 import argparse
 
-op_signs = {'add': '+', 'sub': '-', 'mul': '*', 'div': '/',
+op_signs = {'add': '+', 'sub': '-', 'mul': '*', 'div': '/', 'pow': '**',
             'gt': '>', 'eq': '==', 'ne': '!=', 'mod': '%'}
 
 entry_func_prefix = ''
@@ -37,6 +37,14 @@ def get_op_code(op: str, type1: str, type2: str, type_out: str) -> str:
     """
 
 
+def get_cast(type1: str, type2: str, type_out: str) -> str:
+    return f"""
+    {stencil_func_prefix}void cast_{type_out}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
+        result_{type_out}_{type2}(({type1})arg1, arg2);
+    }}
+    """
+
+
 def get_conv_code(type1: str, type2: str, type_out: str) -> str:
     return f"""
     {stencil_func_prefix}void conv_{type1}_{type2}({type1} arg1, {type2} arg2) {{
@@ -49,6 +57,15 @@ def get_op_code_float(op: str, type1: str, type2: str) -> str:
     return f"""
     {stencil_func_prefix}void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         result_float_{type2}((float)arg1 {op_signs[op]} (float)arg2, arg2);
+    }}
+    """
+
+
+def get_pow(type1: str, type2: str) -> str:
+    return f"""
+    {stencil_func_prefix}void pow_{type1}_{type2}({type1} arg1, {type2} arg2) {{
+        ret = math_pow((double)arg1, (double)arg2);
+        result_float_{type2}((float)ret);
     }}
     """
 
@@ -128,16 +145,22 @@ if __name__ == "__main__":
     // Auto-generated stencils for copapy
     // Do not edit manually
 
+    void math_pow(double arg1, double arg2);
+
     volatile int dummy_int = 1337;
     volatile float dummy_float = 1337;
     """
 
     # Scalar arithmetic:
     types = ['int', 'float']
-    ops = ['add', 'sub', 'mul', 'div', 'floordiv', 'gt', 'eq', 'ne']
+    ops = ['add', 'sub', 'mul', 'div', 'floordiv', 'gt', 'eq', 'ne', 'pow']
 
     for t1 in types:
         code += get_result_stubs1(t1)
+
+    for t1, t2 in permutate(types, types):
+        t_out = 'int' if t1 == 'float' else 'float'
+        code += get_cast(t1, t2, t_out)
 
     for t1, t2 in permutate(types, types):
         code += get_result_stubs2(t1, t2)
@@ -150,6 +173,8 @@ if __name__ == "__main__":
             code += get_floordiv('floordiv', t1, t2)
         elif op == 'div':
             code += get_op_code_float(op, t1, t2)
+        elif op == 'pow':
+            code += get_pow(t1, t2)
         elif op == 'gt' or op == 'eq' or op == 'ne':
             code += get_op_code(op, t1, t2, 'int')
         else:

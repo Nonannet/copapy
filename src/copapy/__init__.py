@@ -295,9 +295,11 @@ class cpint(CPNumber):
 
 
 class cpfloat(CPNumber):
-    def __init__(self, source: float | Node):
+    def __init__(self, source: float | Node | CPNumber):
         if isinstance(source, Node):
             self.source = source
+        elif isinstance(source, CPNumber):
+            self.source = _add_op('cast_float', [source]).source
         else:
             self.source = InitVar(float(source))
         self.dtype = 'float'
@@ -373,7 +375,7 @@ def _add_op(op: str, args: list[CPNumber | int | float], commutative: bool = Fal
 
 
 @overload
-def cpvalue(value: bool) -> cpbool:
+def cpvalue(value: bool) -> cpbool:  # pyright: ignore[reportOverlappingOverload]
     ...
 
 
@@ -653,7 +655,6 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
     data = sdb.get_function_code('entry_function_shell', 'end')
     data_list.append(data)
     offset += len(data)
-    # print('function_end', offset, data)
 
     # allocate program data
     dw.write_com(binw.Command.ALLOCATE_CODE)
