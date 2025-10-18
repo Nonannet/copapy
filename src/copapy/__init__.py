@@ -9,7 +9,6 @@ from coparun_module import coparun, read_data_mem
 import struct
 import platform
 
-#CPNumLike: TypeAlias = 'cpint | cpfloat | cpbool'
 NumLike: TypeAlias = 'cpint | cpfloat | cpbool | int | float| bool'
 NumLikeAndNet: TypeAlias = 'cpint | cpfloat | cpbool | int | float | bool | Net'
 NetAndNum: TypeAlias = 'Net | int | float'
@@ -46,7 +45,6 @@ class Node:
         self.name: str = ''
 
     def __repr__(self) -> str:
-        #return f"Node:{self.name}({', '.join(str(a) for a in self.args) if self.args else self.value})"
         return f"Node:{self.name}({', '.join(str(a) for a in self.args) if self.args else (self.value if isinstance(self, InitVar) else '')})"
 
 
@@ -364,23 +362,14 @@ def _add_op(op: str, args: list[CPNumber | int | float], commutative: bool = Fal
     typed_op = '_'.join([op] + [transl_type(a.dtype) for a in arg_nets])
 
     if typed_op not in generic_sdb.stencil_definitions:
-        #raise ValueError(f"Unsupported operand type(s) for {op}: {' and '.join([a.dtype for a in arg_nets])}")
         raise NotImplementedError(f"Operation {op} not implemented for {' and '.join([a.dtype for a in arg_nets])}")
 
     result_type = generic_sdb.stencil_definitions[typed_op].split('_')[0]
 
-    #if op in {'eq', 'ne', 'gt'}:
-    #    assert result_type == 'int'
-    #    result_type = 'bool'
-
     if result_type == 'int':
         return cpint(Op(typed_op, arg_nets))
-    #elif result_type == 'float':
     else:
         return cpfloat(Op(typed_op, arg_nets))
-    #else:
-    #    return cpbool(result_type, Op(typed_op, arg_nets))
-    #return CPNumber(result_type, Op(typed_op, arg_nets))
 
 
 @overload

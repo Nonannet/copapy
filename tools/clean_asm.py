@@ -1,6 +1,7 @@
 import argparse
 import re
 
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("path", type=str, help="Input file path")
@@ -29,8 +30,9 @@ def main() -> None:
 
         if "Disassembly of section .text:" in line:
             outp_flag = True
-            
+
     print('</code>')
+
 
 if __name__ == "__main__":
     main()
