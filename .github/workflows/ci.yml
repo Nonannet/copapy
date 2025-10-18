@@ -114,7 +114,7 @@ jobs:
       run: |
         mkdir bin
         call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=amd64
-        cl /O2 src\coparun\runmem.c src\coparun\coparun.c src\coparun\mem_man.c /Fe:bin\coparun.exe
+        cl /DENABLE_BASIC_LOGGING /O2 src\coparun\runmem.c src\coparun\coparun.c src\coparun\mem_man.c /Fe:bin\coparun.exe
 
     - name: Run tests with pytest
       run: pytest
