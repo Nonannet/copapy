@@ -4,6 +4,16 @@
 #include "runmem.h"
 #include "mem_man.h"
 
+#ifdef ENABLE_LOGGING
+    #define LOG(...) printf(__VA_ARGS__)
+    #define BLOG(...) printf(__VA_ARGS__)
+#elif ENABLE_BASIC_LOGGING
+    #define LOG(...)
+    #define BLOG(...) printf(__VA_ARGS__)
+#else
+    #define LOG(...)
+#endif
+
 /* Globals declared extern in runmem.h */
 uint8_t *data_memory = NULL;
 uint32_t data_memory_len = 0;
@@ -21,7 +31,7 @@ int patch(uint8_t *patch_addr, uint32_t reloc_type, int32_t value) {
     if (reloc_type == PATCH_RELATIVE_32) {
         patch_mem_32(patch_addr, value);
     }else{
-        printf("Not implemented");
+        LOG("Not implemented");
         return 0;
     }
     return 1;
@@ -60,14 +70,14 @@ int parse_commands(uint8_t *bytes) {
                 size = *(uint32_t*)bytes; bytes += 4;
                 data_memory = allocate_data_memory(size);
                 data_memory_len = size;
-                printf("ALLOCATE_DATA size=%i mem_addr=%p\n", size, (void*)data_memory);
+                LOG("ALLOCATE_DATA size=%i mem_addr=%p\n", size, (void*)data_memory);
                 if (!update_data_offs()) end_flag = -4;
                 break;
             
             case COPY_DATA:
                 offs = *(uint32_t*)bytes; bytes += 4;
                 size = *(uint32_t*)bytes; bytes += 4;
-                printf("COPY_DATA offs=%i size=%i\n", offs, size);
+                LOG("COPY_DATA offs=%i size=%i\n", offs, size);
                 memcpy(data_memory + offs, bytes, size); bytes += size;
                 break;
             
@@ -75,15 +85,15 @@ int parse_commands(uint8_t *bytes) {
                 size = *(uint32_t*)bytes; bytes += 4;
                 executable_memory = allocate_executable_memory(size);
                 executable_memory_len = size;
-                printf("ALLOCATE_CODE size=%i mem_addr=%p\n", size, (void*)executable_memory);
-                //printf("# d %i  c %i  off %i\n", data_memory, executable_memory, data_offs);
+                LOG("ALLOCATE_CODE size=%i mem_addr=%p\n", size, (void*)executable_memory);
+                //LOG("# d %i  c %i  off %i\n", data_memory, executable_memory, data_offs);
                 if (!update_data_offs()) end_flag = -4;
                 break;
             
             case COPY_CODE:
                 offs = *(uint32_t*)bytes; bytes += 4;
                 size = *(uint32_t*)bytes; bytes += 4;
-                printf("COPY_CODE offs=%i size=%i\n", offs, size);
+                LOG("COPY_CODE offs=%i size=%i\n", offs, size);
                 memcpy(executable_memory + offs, bytes, size); bytes += size;
                 break;
             
@@ -91,7 +101,7 @@ int parse_commands(uint8_t *bytes) {
                 offs = *(uint32_t*)bytes; bytes += 4;
                 reloc_type = *(uint32_t*)bytes; bytes += 4;
                 value = *(int32_t*)bytes; bytes += 4;
-                printf("PATCH_FUNC patch_offs=%i reloc_type=%i value=%i\n",
+                LOG("PATCH_FUNC patch_offs=%i reloc_type=%i value=%i\n",
                     offs, reloc_type, value);
                 patch(executable_memory + offs, reloc_type, value);
                 break;
@@ -100,28 +110,28 @@ int parse_commands(uint8_t *bytes) {
                 offs = *(uint32_t*)bytes; bytes += 4;
                 reloc_type = *(uint32_t*)bytes; bytes += 4;
                 value = *(int32_t*)bytes; bytes += 4;
-                printf("PATCH_OBJECT patch_offs=%i reloc_type=%i value=%i\n",
+                LOG("PATCH_OBJECT patch_offs=%i reloc_type=%i value=%i\n",
                     offs, reloc_type, value);
                 patch(executable_memory + offs, reloc_type, value + data_offs);
                 break;
 
             case ENTRY_POINT:
-                printf("ENTRY_POINT rel_entr_point=%i\n", rel_entr_point);
+                LOG("ENTRY_POINT rel_entr_point=%i\n", rel_entr_point);
                 rel_entr_point = *(uint32_t*)bytes; bytes += 4;
                 entr_point = (entry_point_t)(executable_memory + rel_entr_point);  
                 mark_mem_executable(executable_memory, executable_memory_len);
                 break;
             
             case RUN_PROG:
-                printf("RUN_PROG\n");
+                LOG("RUN_PROG\n");
                 int ret = entr_point();
-                printf("Return value: %i\n", ret);
+                BLOG("Return value: %i\n", ret);
                 break;
             
             case READ_DATA:
                 offs = *(uint32_t*)bytes; bytes += 4;
                 size = *(uint32_t*)bytes; bytes += 4;
-                printf("READ_DATA offs=%i size=%i data=", offs, size);
+                BLOG("READ_DATA offs=%i size=%i data=", offs, size);
                 for (uint32_t i = 0; i < size; i++) {
                     printf("%02X ", data_memory[offs + i]);
                 }
@@ -133,12 +143,12 @@ int parse_commands(uint8_t *bytes) {
                 break;
 
             case END_COM:
-                printf("END_COM\n");
+                LOG("END_COM\n");
                 end_flag = 1;
                 break;
             
             default:
-                printf("Unknown command\n");
+                LOG("Unknown command\n");
                 end_flag = -1;
                 break;
         }
