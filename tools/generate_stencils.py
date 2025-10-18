@@ -9,6 +9,7 @@ stencil_func_prefix = '__attribute__((naked)) '  # Remove callee prolog
 
 stack_size = 64
 
+
 def get_aux_funcs() -> str:
     return f"""
     {entry_func_prefix}int entry_function_shell(){{
@@ -17,8 +18,8 @@ def get_aux_funcs() -> str:
         result_int(0);
         return 1;
     }}
-    """ + \
-    """
+
+    """ + """
     __attribute__((noinline)) int floor_div(float arg1, float arg2) {
         float x = arg1 / arg2;
         int i = (int)x;

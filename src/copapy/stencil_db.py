@@ -62,9 +62,11 @@ def get_last_call_in_function(func: elf_symbol) -> int:
     assert reloc, f'No call function in stencil function {func.name}.'
     return reloc.fields['r_offset'] - func.fields['st_value'] - reloc.fields['r_addend'] - LENGTH_CALL_INSTRUCTION
 
+
 def symbol_is_stencil(sym: elf_symbol) -> bool:
     return (sym.info == 'STT_FUNC' and len(sym.relocations) > 0 and
             sym.relocations[-1].symbol.info == 'STT_NOTYPE')
+
 
 class stencil_database():
     """A class for loading and querying a stencil database from an ELF object file
@@ -90,7 +92,7 @@ class stencil_database():
         self.stencil_definitions = {s.name: get_return_function_type(s)
                                     for s in self.elf.symbols
                                     if s.info == 'STT_FUNC'}
-        
+
         #self.data = {s.name: strip_function(s)
         #             for s in self.elf.symbols
         #             if s.info == 'STT_FUNC'}
@@ -136,7 +138,7 @@ class stencil_database():
 
     def get_stencil_code(self, name: str) -> bytes:
         """Return the striped function code for a provided function name
-        
+
         Args:
             name: function name
 
@@ -144,7 +146,7 @@ class stencil_database():
             Striped function code
         """
         return strip_function(self.elf.symbols[name])
-    
+
     def get_sub_functions(self, names: Iterable[str]) -> set[str]:
         name_set: set[str] = set()
         for name in names:
