@@ -188,5 +188,6 @@ if __name__ == "__main__":
     for t1 in types:
         code += get_write_code(t1)
 
+    print(f"Write file {args.path}...")
     with open(args.path, 'w') as f:
         f.write(code)

@@ -60,9 +60,14 @@ jobs:
         objdump -D -b binary -m i386:x86-64 --adjust-vma=0x1000 bin/test.copapy.bin > bin/test.copapy.asm
         echo '<p>test.copapy.asm</p>' >> $GITHUB_STEP_SUMMARY
         python tools/clean_asm.py bin/test.copapy.asm >> $GITHUB_STEP_SUMMARY
+
         objdump -d -x src/copapy/obj/stencils_x86_64_O3.o > bin/stencils_x86_64_O3.asm
         echo '<p>stencils_x86_64_O3.asm</p>' >> $GITHUB_STEP_SUMMARY
         python tools/clean_asm.py bin/stencils_x86_64_O3.asm >> $GITHUB_STEP_SUMMARY
+
+        objdump -d -x src/copapy/obj/stencils_arm64_O3.o > bin/stencils_arm64_O3.asm
+        echo '<p>stencils_arm64_O3.asm</p>' >> $GITHUB_STEP_SUMMARY
+        python tools/clean_asm.py bin/stencils_arm64_O3.asm >> $GITHUB_STEP_SUMMARY
 
     - name: Run tests with pytest
       run: pytest
