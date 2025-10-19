@@ -744,6 +744,22 @@ class Target():
         dw.write_com(binw.Command.END_COM)
         assert coparun(dw.get_data()) > 0
 
+    @overload
+    def read_value(self, net: cpbool) -> bool:
+        ...
+
+    @overload
+    def read_value(self, net: cpfloat) -> float:
+        ...
+
+    @overload
+    def read_value(self, net: cpint) -> int:
+        ...
+
+    @overload
+    def read_value(self, net: NumLike) -> float | int | bool:
+        ...
+
     def read_value(self, net: NumLike) -> float | int | bool:
         assert isinstance(net, Net), "Variable must be a copapy variable object"
         assert net in self._variables, f"Variable {net} not found"
