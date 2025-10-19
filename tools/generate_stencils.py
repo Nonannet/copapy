@@ -144,7 +144,7 @@ if __name__ == "__main__":
     // Auto-generated stencils for copapy
     // Do not edit manually
 
-    double math_pow(double arg1, double arg2);
+    double (*math_pow)(double, double);
 
     volatile int dummy_int = 1337;
     volatile float dummy_float = 1337;

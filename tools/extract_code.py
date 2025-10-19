@@ -1,5 +1,5 @@
-from copapy.binwrite import data_reader, Command, ByteOrder
-from copapy.stencil_db import RelocationType
+from copapy._binwrite import data_reader, Command, ByteOrder
+from copapy._stencils import RelocationType
 import argparse
 
 if __name__ == "__main__":

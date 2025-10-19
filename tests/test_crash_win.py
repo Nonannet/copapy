@@ -1,7 +1,8 @@
-from copapy import NumLike, Write, cpvalue, Net
+from copapy import NumLike, cpvalue
+from copapy.backend import Write, Net, compile_to_instruction_list, add_read_command
 import copapy
 import subprocess
-from copapy import binwrite
+from copapy import _binwrite
 
 
 def run_command(command: list[str], encoding: str = 'utf8') -> str:
@@ -28,21 +29,21 @@ def test_compile():
 
     ret = function(c1, c2)
 
-    dw, variable_list = copapy.compile_to_instruction_list([Write(net) for net in ret], copapy.generic_sdb)
+    dw, variable_list = compile_to_instruction_list([Write(net) for net in ret], copapy.generic_sdb)
 
     # run program command
-    dw.write_com(binwrite.Command.RUN_PROG)
+    dw.write_com(_binwrite.Command.RUN_PROG)
 
-    dw.write_com(binwrite.Command.READ_DATA)
+    dw.write_com(_binwrite.Command.READ_DATA)
     dw.write_int(0)
     dw.write_int(36)
 
     for net, name in zip(ret, ['i1', 'i2', 'r1', 'r2']):
         print('+', name)
         assert isinstance(net, Net)
-        copapy.add_read_command(dw, variable_list, net)
+        add_read_command(dw, variable_list, net)
 
-    dw.write_com(binwrite.Command.END_COM)
+    dw.write_com(_binwrite.Command.END_COM)
 
     dw.to_file('bin/test.copapy')
     result = run_command(['bin/coparun', 'bin/test.copapy'])

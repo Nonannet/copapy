@@ -1,7 +1,8 @@
 from coparun_module import coparun
-from copapy import Write, cpvalue
+from copapy import cpvalue
+from copapy.backend import Write, compile_to_instruction_list, add_read_command
 import copapy
-from copapy import binwrite
+from copapy import _binwrite
 
 
 def test_compile():
@@ -14,16 +15,16 @@ def test_compile():
     r2 = i1 + 9
     out = [Write(r1), Write(r2), Write(c2)]
 
-    il, variables = copapy.compile_to_instruction_list(out, copapy.generic_sdb)
+    il, variables = compile_to_instruction_list(out, copapy.generic_sdb)
 
     # run program command
-    il.write_com(binwrite.Command.RUN_PROG)
+    il.write_com(_binwrite.Command.RUN_PROG)
 
     for net in (c1, c2, i1, r1, r2):
-        copapy.add_read_command(il, variables, net)
+        add_read_command(il, variables, net)
 
     # run program command
-    il.write_com(binwrite.Command.END_COM)
+    il.write_com(_binwrite.Command.END_COM)
 
     #print('* Data to runner:')
     #il.print()

@@ -1,8 +1,10 @@
-from copapy import Write, cpvalue, NumLike
+from copapy import cpvalue, NumLike
+from copapy.backend import Write, compile_to_instruction_list, add_read_command
 import copapy
 import subprocess
 import struct
-from copapy import binwrite
+from copapy import _binwrite
+import copapy.backend
 
 
 def run_command(command: list[str]) -> str:
@@ -47,16 +49,16 @@ def test_compile():
 
     out = [Write(r) for r in ret]
 
-    il, variables = copapy.compile_to_instruction_list(out, copapy.generic_sdb)
+    il, variables = compile_to_instruction_list(out, copapy.generic_sdb)
 
     # run program command
-    il.write_com(binwrite.Command.RUN_PROG)
+    il.write_com(_binwrite.Command.RUN_PROG)
 
     for net in ret:
-        assert isinstance(net, copapy.Net)
-        copapy.add_read_command(il, variables, net)
+        assert isinstance(net, copapy.backend.Net)
+        add_read_command(il, variables, net)
 
-    il.write_com(binwrite.Command.END_COM)
+    il.write_com(_binwrite.Command.END_COM)
 
     print('* Data to runner:')
     il.print()

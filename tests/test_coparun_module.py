@@ -31,7 +31,7 @@ def test_compile():
     for test, ref, name in zip(ret, ret_ref, ['i1', 'i2', 'r1', 'r2']):
         val = tg.read_value(test)
         print('+', name, val, ref)
-        assert val == pytest.approx(ref, 1e-5), name
+        assert val == pytest.approx(ref, 1e-5), name  # pyright: ignore[reportUnknownMemberType]
 
 
 if __name__ == "__main__":

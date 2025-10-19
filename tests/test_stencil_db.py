@@ -1,4 +1,4 @@
-from copapy import stencil_database, stencil_db
+from copapy._stencils import stencil_database, get_stencil_position
 import platform
 
 arch = platform.machine()
@@ -19,9 +19,9 @@ def test_start_end_function():
 
         if symbol.relocations and symbol.relocations[-1].symbol.info == 'STT_NOTYPE':
 
-            print('-', sym_name, stencil_db.get_stencil_position(symbol), len(symbol.data))
+            print('-', sym_name, get_stencil_position(symbol), len(symbol.data))
 
-            start, end = stencil_db.get_stencil_position(symbol)
+            start, end = get_stencil_position(symbol)
 
             assert start >= 0 and end >= start and end <= len(symbol.data)
 

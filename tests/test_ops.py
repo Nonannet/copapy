@@ -1,5 +1,6 @@
-from copapy import cpvalue, Target, NumLike, Net, iif, cpint
-from pytest import approx
+from copapy import cpvalue, Target, NumLike, iif, cpint
+import pytest
+import copapy
 
 
 def function1(c1: NumLike) -> list[NumLike]:
@@ -56,12 +57,12 @@ def test_compile():
     print('* finished')
 
     for test, ref in zip(ret_test, ret_ref):
-        assert isinstance(test, Net)
+        assert isinstance(test, copapy.CPNumber)
         val = tg.read_value(test)
         print('+', val, ref, test.dtype)
-        for t in [int, float, bool]:
+        for t in (int, float, bool):
             assert isinstance(val, t) == isinstance(ref, t), f"Result type does not match for {val} and {ref}"
-        assert val == approx(ref, 1e-5), f"Result does not match: {val} and reference: {ref}"
+        assert val == pytest.approx(ref, 1e-5), f"Result does not match: {val} and reference: {ref}"  # pyright: ignore[reportUnknownMemberType]
 
 
 if __name__ == "__main__":
