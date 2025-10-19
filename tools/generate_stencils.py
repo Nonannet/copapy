@@ -64,8 +64,7 @@ def get_op_code_float(op: str, type1: str, type2: str) -> str:
 def get_pow(type1: str, type2: str) -> str:
     return f"""
     {stencil_func_prefix}void pow_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        ret = math_pow((double)arg1, (double)arg2);
-        result_float_{type2}((float)ret);
+        result_float_{type2}((float)math_pow((double)arg1, (double)arg2), arg2);
     }}
     """
 
@@ -145,7 +144,7 @@ if __name__ == "__main__":
     // Auto-generated stencils for copapy
     // Do not edit manually
 
-    void math_pow(double arg1, double arg2);
+    double math_pow(double arg1, double arg2);
 
     volatile int dummy_int = 1337;
     volatile float dummy_float = 1337;
@@ -159,13 +158,13 @@ if __name__ == "__main__":
         code += get_result_stubs1(t1)
 
     for t1, t2 in permutate(types, types):
-        t_out = 'int' if t1 == 'float' else 'float'
-        code += get_cast(t1, t2, t_out)
-
-    for t1, t2 in permutate(types, types):
         code += get_result_stubs2(t1, t2)
 
     code += get_aux_funcs()
+
+    for t1, t2 in permutate(types, types):
+        t_out = 'int' if t1 == 'float' else 'float'
+        code += get_cast(t1, t2, t_out)
 
     for op, t1, t2 in permutate(ops, types, types):
         t_out = t1 if t1 == t2 else 'float'
