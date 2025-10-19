@@ -18,6 +18,7 @@ uniint: TypeAlias = 'cpint | int'
 unibool: TypeAlias = 'cpbool | bool'
 
 TNumber = TypeVar("TNumber", bound='CPNumber')
+T = TypeVar("T")
 
 
 def get_var_name(var: Any, scope: dict[str, Any] = globals()) -> list[str]:
@@ -353,6 +354,36 @@ class Op(Node):
 def net_from_value(value: Any) -> Net:
     vi = InitVar(value)
     return Net(vi.dtype, vi)
+
+
+@overload
+def iif(expression: CPNumber, true_result: unibool, false_result: unibool) -> cpbool:  # pyright: ignore[reportOverlappingOverload]
+    ...
+
+
+@overload
+def iif(expression: CPNumber, true_result: uniint, false_result: uniint) -> cpint:
+    ...
+
+
+@overload
+def iif(expression: CPNumber, true_result: unifloat, false_result: unifloat) -> cpfloat:
+    ...
+
+
+@overload
+def iif(expression: NumLike, true_result: T, false_result: T) -> T:
+    ...
+
+
+def iif(expression: Any, true_result: Any, false_result: Any) -> Any:
+    # TODO: check that input types are matching
+    alowed_type = cpint | cpfloat | cpbool | int | float | bool
+    assert isinstance(true_result, alowed_type) and isinstance(false_result, alowed_type), "Result type not supported"
+    if isinstance(expression, CPNumber):
+        return (expression != 0) * true_result + (expression == 0) * false_result
+    else:
+        return true_result if expression else false_result
 
 
 def _add_op(op: str, args: list[CPNumber | int | float], commutative: bool = False) -> CPNumber:

@@ -1,4 +1,4 @@
-from copapy import cpvalue, Target, NumLike, Net, cpint
+from copapy import cpvalue, Target, NumLike, Net, iif, cpint
 from pytest import approx
 
 
@@ -32,14 +32,21 @@ def function6(c1: NumLike) -> list[NumLike]:
     return [c1 == True]
 
 
-def test_compile():
+def iiftests(c1: NumLike) -> list[NumLike]:
+    return [iif(c1 > 5, 8, 9),
+            iif(c1 < 5, 8.5, 9.5),
+            iif(1 > 5, 3.3, 8.8) + c1,
+            iif(1 < 5, c1 * 3.3, 8.8),
+            iif(c1 < 5, c1 * 3.3, 8.8)]
 
+
+def test_compile():
     c_i = cpvalue(9)
     c_f = cpvalue(1.111)
     c_b = cpvalue(True)
 
-    ret_test = function1(c_i) + function1(c_f) + function2(c_i) + function2(c_f) + function3(c_i) + function4(c_i) + function5(c_b) + [cpint(9) % 2]
-    ret_ref = function1(9) + function1(1.111) + function2(9) + function2(1.111) + function3(9) + function4(9) + function5(True) + [9 % 2]
+    ret_test = function1(c_i) + function1(c_f) + function2(c_i) + function2(c_f) + function3(c_i) + function4(c_i) + function5(c_b) + [cpint(9) % 2] + iiftests(c_i) + iiftests(c_f)
+    ret_ref = function1(9) + function1(1.111) + function2(9) + function2(1.111) + function3(9) + function4(9) + function5(True) + [9 % 2] + iiftests(9) + iiftests(1.111)
 
     tg = Target()
     print('* compile and copy ...')
