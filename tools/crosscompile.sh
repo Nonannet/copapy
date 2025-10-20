@@ -47,7 +47,7 @@ mips-linux-gnu-gcc-13 -$OPT -c $SRC -o $DEST/stencils_mips_$OPT.o
 mipsel-linux-gnu-gcc-13 -$OPT -c $SRC -o $DEST/stencils_mipsel_$OPT.o
 
 # RISCV 32 Bit
-riscv64-linux-gnu-gcc-13 -$OPT -march=rv32imac -mabi=ilp32 -c $SRC -o $DEST/stencils_riscv32_$OPT.o
+# riscv64-linux-gnu-gcc-13 -$OPT -march=rv32imac -mabi=ilp32 -c $SRC -o $DEST/stencils_riscv32_$OPT.o
 
 # RISCV 64 Bit
 riscv64-linux-gnu-gcc-13 -$OPT -c $SRC -o $DEST/stencils_riscv64_$OPT.o

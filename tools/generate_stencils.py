@@ -26,6 +26,19 @@ def get_aux_funcs() -> str:
         if (x < 0 && x != (float)i) i -= 1;
         return i;
     }
+
+    float fast_pow_float(float base, float exponent) {
+        union {
+            float f;
+            uint32_t i;
+        } u;
+
+        u.f = base;
+        int32_t x = u.i;
+        int32_t y = (int32_t)(exponent * (x - 1072632447) + 1072632447);
+        u.i = (uint32_t)y;
+        return u.f;
+    }
     """
 
 
@@ -64,7 +77,8 @@ def get_op_code_float(op: str, type1: str, type2: str) -> str:
 def get_pow(type1: str, type2: str) -> str:
     return f"""
     {stencil_func_prefix}void pow_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        result_float_{type2}((float)math_pow((double)arg1, (double)arg2), arg2);
+        //result_float_{type2}((float)math_pow((double)arg1, (double)arg2), arg2);
+        result_float_{type2}(fast_pow_float((float)arg1, (float)arg2), arg2);
     }}
     """
 
@@ -143,6 +157,8 @@ if __name__ == "__main__":
     code = """
     // Auto-generated stencils for copapy
     // Do not edit manually
+
+    #include <stdint.h>
 
     double (*math_pow)(double, double);
 

@@ -1,4 +1,4 @@
-from typing import overload
+from typing import Iterable, overload
 from . import _binwrite as binw
 from coparun_module import coparun, read_data_mem
 import struct
@@ -20,10 +20,10 @@ class Target():
         self.sdb = stencil_db_from_package(arch, optimization)
         self._variables: dict[Net, tuple[int, int, str]] = dict()
 
-    def compile(self, *variables: int | float | cpint | cpfloat | cpbool | list[int | float | cpint | cpfloat | cpbool]) -> None:
+    def compile(self, *variables: int | float | cpint | cpfloat | cpbool | Iterable[int | float | cpint | cpfloat | cpbool]) -> None:
         nodes: list[Node] = []
         for s in variables:
-            if isinstance(s, list):
+            if isinstance(s, Iterable):
                 for net in s:
                     assert isinstance(net, Net), f"The folowing element is not a Net: {net}"
                     nodes.append(Write(net))
