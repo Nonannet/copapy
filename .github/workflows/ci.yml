@@ -52,6 +52,9 @@ jobs:
         mkdir -p bin
         gcc -DENABLE_BASIC_LOGGING -O3 -Wall -Wextra -Wconversion -Wsign-conversion -Wshadow -Wstrict-overflow -Werror -g src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c -o bin/coparun
 
+    - name: Install ARM binutils
+      run: sudo apt-get update && sudo apt-get install -y binutils-aarch64-linux-gnu
+
     - name: Generate debug asm files
       if: strategy.job-index == 0
       run: |
@@ -65,7 +68,7 @@ jobs:
         echo '<p>stencils_x86_64_O3.asm</p>' >> $GITHUB_STEP_SUMMARY
         python tools/clean_asm.py bin/stencils_x86_64_O3.asm >> $GITHUB_STEP_SUMMARY
 
-        objdump -d -x src/copapy/obj/stencils_arm64_O3.o > bin/stencils_arm64_O3.asm
+        aarch64-linux-gnu-objdump -d -x src/copapy/obj/stencils_arm64_O3.o > bin/stencils_arm64_O3.asm
         echo '<p>stencils_arm64_O3.asm</p>' >> $GITHUB_STEP_SUMMARY
         python tools/clean_asm.py bin/stencils_arm64_O3.asm >> $GITHUB_STEP_SUMMARY
 
