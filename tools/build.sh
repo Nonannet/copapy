@@ -4,7 +4,7 @@ set -v
 mkdir -p bin
 SRC=bin/stencils.c
 DEST=src/copapy/obj
-python3 tools/generate_stencils.py $SRC
+python3 stencils/generate_stencils.py $SRC
 mkdir -p $DEST
 gcc --version
 #gcc -c $SRC -O0 -o $DEST/stencils_x86_64_O0.o

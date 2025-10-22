@@ -1,5 +1,7 @@
-from typing import Generator
+from typing import Generator, Callable
 import argparse
+from pathlib import Path
+import os
 
 op_signs = {'add': '+', 'sub': '-', 'mul': '*', 'div': '/', 'pow': '**',
             'gt': '>', 'eq': '==', 'ne': '!=', 'mod': '%'}
@@ -9,8 +11,44 @@ stencil_func_prefix = '__attribute__((naked)) '  # Remove callee prolog
 
 stack_size = 64
 
+includes = ['aux_functions.c']
 
-def get_aux_funcs() -> str:
+def read_files(files: list[str]) -> str:
+    ret = ''
+    script_dir = Path(__file__).parent
+    for file_name in files:
+        file_path = script_dir / file_name
+        if not os.path.exists(file_path):
+            file_path = Path(file_name)
+        with open(file_path) as f:
+            ret += f.read().strip(' \n') + '\n\n'
+    return ret
+
+
+def normalize_indent(text: str) -> str:
+    text_lines = text.splitlines()
+    if len(text_lines) > 1 and not text_lines[0].strip():
+        text_lines = text_lines[1:]
+
+    if not text_lines:
+        return ''
+
+    if len(text_lines) > 1 and text_lines[0] and text_lines[0][0] != ' ':
+        indent_amount = len(text_lines[1]) - len(text_lines[1].lstrip())
+    else:
+        indent_amount = len(text_lines[0]) - len(text_lines[0].lstrip())
+
+    return '\n' + '\n'.join(
+        [' ' * max(0, len(line) - len(line.strip()) - indent_amount) + line.strip()
+         for line in text_lines])
+
+
+def norm_indent(f: Callable[..., str]) -> Callable[..., str]:
+    return lambda *x: normalize_indent(f(*x))
+
+
+@norm_indent
+def get_entry_function_shell() -> str:
     return f"""
     {entry_func_prefix}int entry_function_shell(){{
         volatile char stack_place_holder[{stack_size}];
@@ -18,30 +56,10 @@ def get_aux_funcs() -> str:
         result_int(0);
         return 1;
     }}
-
-    """ + """
-    __attribute__((noinline)) int floor_div(float arg1, float arg2) {
-        float x = arg1 / arg2;
-        int i = (int)x;
-        if (x < 0 && x != (float)i) i -= 1;
-        return i;
-    }
-
-    float fast_pow_float(float base, float exponent) {
-        union {
-            float f;
-            uint32_t i;
-        } u;
-
-        u.f = base;
-        int32_t x = u.i;
-        int32_t y = (int32_t)(exponent * (x - 1072632447) + 1072632447);
-        u.i = (uint32_t)y;
-        return u.f;
-    }
     """
 
 
+@norm_indent
 def get_op_code(op: str, type1: str, type2: str, type_out: str) -> str:
     return f"""
     {stencil_func_prefix}void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
@@ -50,6 +68,7 @@ def get_op_code(op: str, type1: str, type2: str, type_out: str) -> str:
     """
 
 
+@norm_indent
 def get_cast(type1: str, type2: str, type_out: str) -> str:
     return f"""
     {stencil_func_prefix}void cast_{type_out}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
@@ -58,6 +77,7 @@ def get_cast(type1: str, type2: str, type_out: str) -> str:
     """
 
 
+@norm_indent
 def get_conv_code(type1: str, type2: str, type_out: str) -> str:
     return f"""
     {stencil_func_prefix}void conv_{type1}_{type2}({type1} arg1, {type2} arg2) {{
@@ -66,6 +86,7 @@ def get_conv_code(type1: str, type2: str, type_out: str) -> str:
     """
 
 
+@norm_indent
 def get_op_code_float(op: str, type1: str, type2: str) -> str:
     return f"""
     {stencil_func_prefix}void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
@@ -74,6 +95,7 @@ def get_op_code_float(op: str, type1: str, type2: str) -> str:
     """
 
 
+@norm_indent
 def get_pow(type1: str, type2: str) -> str:
     return f"""
     {stencil_func_prefix}void pow_{type1}_{type2}({type1} arg1, {type2} arg2) {{
@@ -83,6 +105,7 @@ def get_pow(type1: str, type2: str) -> str:
     """
 
 
+@norm_indent
 def get_floordiv(op: str, type1: str, type2: str) -> str:
     if type1 == 'int' and type2 == 'int':
         return f"""
@@ -98,18 +121,21 @@ def get_floordiv(op: str, type1: str, type2: str) -> str:
         """
 
 
+@norm_indent
 def get_result_stubs1(type1: str) -> str:
     return f"""
     void result_{type1}({type1} arg1);
     """
 
 
+@norm_indent
 def get_result_stubs2(type1: str, type2: str) -> str:
     return f"""
     void result_{type1}_{type2}({type1} arg1, {type2} arg2);
     """
 
 
+@norm_indent
 def get_read_reg0_code(type1: str, type2: str, type_out: str) -> str:
     return f"""
     {stencil_func_prefix}void read_{type_out}_reg0_{type1}_{type2}({type1} arg1, {type2} arg2) {{
@@ -118,6 +144,7 @@ def get_read_reg0_code(type1: str, type2: str, type_out: str) -> str:
     """
 
 
+@norm_indent
 def get_read_reg1_code(type1: str, type2: str, type_out: str) -> str:
     return f"""
     {stencil_func_prefix}void read_{type_out}_reg1_{type1}_{type2}({type1} arg1, {type2} arg2) {{
@@ -126,6 +153,7 @@ def get_read_reg1_code(type1: str, type2: str, type_out: str) -> str:
     """
 
 
+@norm_indent
 def get_write_code(type1: str) -> str:
     return f"""
     {stencil_func_prefix}void write_{type1}({type1} arg1) {{
@@ -154,17 +182,9 @@ if __name__ == "__main__":
     if args.abi:
         entry_func_prefix = f"__attribute__(({args.abi}_abi)) "
 
-    code = """
-    // Auto-generated stencils for copapy
-    // Do not edit manually
+    code = "// Auto-generated stencils for copapy - Do not edit manually\n\n"
 
-    #include <stdint.h>
-
-    double (*math_pow)(double, double);
-
-    volatile int dummy_int = 1337;
-    volatile float dummy_float = 1337;
-    """
+    code += read_files(includes)
 
     # Scalar arithmetic:
     types = ['int', 'float']
@@ -176,7 +196,7 @@ if __name__ == "__main__":
     for t1, t2 in permutate(types, types):
         code += get_result_stubs2(t1, t2)
 
-    code += get_aux_funcs()
+    code += get_entry_function_shell()
 
     for t1, t2 in permutate(types, types):
         t_out = 'int' if t1 == 'float' else 'float'

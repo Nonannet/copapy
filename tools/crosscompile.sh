@@ -11,7 +11,7 @@ OPT=O3
 mkdir -p $DEST
 
 # Windows x86_64 (ARM64)
-python3 tools/generate_stencils.py --abi ms $SRC
+python3 stencils/generate_stencils.py --abi ms $SRC
 gcc-13 -$OPT -c $SRC -o $DEST/stencils_AMD64_$OPT.o
 
 # Windows x86
@@ -19,7 +19,7 @@ gcc-13 -m32 -$OPT -c $SRC -o $DEST/stencils_x86_$OPT.o
 
 
 # Native x86_64
-python3 tools/generate_stencils.py $SRC
+python3 stencils/generate_stencils.py $SRC
 gcc-13 -$OPT -c $SRC -o $DEST/stencils_x86_64_$OPT.o
 
 # Native i686
