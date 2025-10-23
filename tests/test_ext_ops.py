@@ -1,12 +1,12 @@
-from copapy import cpvalue, Target
+from copapy import variable, Target
 import pytest
 import copapy
 
 
 def test_compile():
-    c_i = cpvalue(9)
-    c_f = cpvalue(2.5)
-    # c_b = cpvalue(True)
+    c_i = variable(9)
+    c_f = variable(2.5)
+    # c_b = variable(True)
 
     ret_test = (c_f ** c_f, c_i ** c_i)
     ret_ref = (2.5 ** 2.5, 9 ** 9)

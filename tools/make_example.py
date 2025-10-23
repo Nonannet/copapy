@@ -1,11 +1,11 @@
-from copapy import _binwrite, cpvalue
+from copapy import _binwrite, variable
 from copapy.backend import Write, compile_to_instruction_list
 import copapy
 
 
 def test_compile() -> None:
 
-    c1 = cpvalue(9)
+    c1 = variable(9)
 
     #ret = [c1 / 4, c1 / -4, c1 // 4, c1 // -4, (c1 * -1) // 4]
     ret = [c1 // 3.3 + 5]

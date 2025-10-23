@@ -1,5 +1,5 @@
 from coparun_module import coparun
-from copapy import cpvalue
+from copapy import variable
 from copapy.backend import Write, compile_to_instruction_list, add_read_command
 import copapy
 from copapy import _binwrite
@@ -7,8 +7,8 @@ from copapy import _binwrite
 
 def test_compile():
 
-    c1 = cpvalue(4)
-    c2 = cpvalue(2) * 4
+    c1 = variable(4)
+    c2 = variable(2) * 4
 
     i1 = c2 * 2
     r1 = i1 + 7 + (c1 + 7 * 9)

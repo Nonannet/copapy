@@ -3,7 +3,7 @@ from . import _binwrite as binw
 from coparun_module import coparun, read_data_mem
 import struct
 from ._basic_types import stencil_db_from_package
-from ._basic_types import cpbool, cpint, cpfloat, Net, Node, Write, NumLike
+from ._basic_types import variable, Net, Node, Write, NumLike
 from ._compiler import compile_to_instruction_list
 
 
@@ -20,7 +20,7 @@ class Target():
         self.sdb = stencil_db_from_package(arch, optimization)
         self._variables: dict[Net, tuple[int, int, str]] = dict()
 
-    def compile(self, *variables: int | float | cpint | cpfloat | cpbool | Iterable[int | float | cpint | cpfloat | cpbool]) -> None:
+    def compile(self, *variables: int | float | variable[int] | variable[float] | variable[bool] | Iterable[int | float | variable[int] | variable[float] | variable[bool]]) -> None:
         nodes: list[Node] = []
         for s in variables:
             if isinstance(s, Iterable):
@@ -42,15 +42,15 @@ class Target():
         assert coparun(dw.get_data()) > 0
 
     @overload
-    def read_value(self, net: cpbool) -> bool:
+    def read_value(self, net: variable[bool]) -> bool:
         ...
 
     @overload
-    def read_value(self, net: cpfloat) -> float:
+    def read_value(self, net: variable[float]) -> float:
         ...
 
     @overload
-    def read_value(self, net: cpint) -> int:
+    def read_value(self, net: variable[int]) -> int:
         ...
 
     @overload
@@ -61,6 +61,7 @@ class Target():
         assert isinstance(net, Net), "Variable must be a copapy variable object"
         assert net in self._variables, f"Variable {net} not found"
         addr, lengths, var_type = self._variables[net]
+        print('...', self._variables[net], net.dtype)
         assert lengths > 0
         data = read_data_mem(addr, lengths)
         assert data is not None and len(data) == lengths, f"Failed to read variable {net}"

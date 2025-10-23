@@ -2,7 +2,7 @@ from typing import Generator, Iterable, Any
 from . import _binwrite as binw
 from ._stencils import stencil_database, patch_entry
 from collections import defaultdict, deque
-from ._basic_types import Net, Node, Write, InitVar, Op, transl_type
+from ._basic_types import Net, Node, Write, CPConstant, Op, transl_type
 
 
 def stable_toposort(edges: Iterable[tuple[Node, Node]]) -> list[Node]:
@@ -76,7 +76,7 @@ def get_const_nets(nodes: list[Node]) -> list[Net]:
         List of nets whose source node is a Const
     """
     net_lookup = {net.source: net for node in nodes for net in node.args}
-    return [net_lookup[node] for node in nodes if isinstance(node, InitVar)]
+    return [net_lookup[node] for node in nodes if isinstance(node, CPConstant)]
 
 
 def add_read_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], None, None]:
@@ -97,7 +97,7 @@ def add_read_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], No
     net_lookup = {net.source: net for node in node_list for net in node.args}
 
     for node in node_list:
-        if not isinstance(node, InitVar):
+        if not isinstance(node, CPConstant):
             for i, net in enumerate(node.args):
                 if id(net) != id(registers[i]):
                     #if net in registers:
@@ -230,7 +230,7 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
     # Heap variables
     for net, out_offs, lengths in variable_mem_layout:
         variables[net] = (out_offs, lengths, net.dtype)
-        if isinstance(net.source, InitVar):
+        if isinstance(net.source, CPConstant):
             dw.write_com(binw.Command.COPY_DATA)
             dw.write_int(out_offs)
             dw.write_int(lengths)

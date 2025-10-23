@@ -1,15 +1,15 @@
 import pkgutil
-from typing import Any, TypeVar, overload, TypeAlias
+from typing import Any, TypeVar, overload, TypeAlias, Generic, cast
 from ._stencils import stencil_database
 import platform
 
-NumLike: TypeAlias = 'cpint | cpfloat | cpbool | int | float| bool'
-NumLikeAndNet: TypeAlias = 'cpint | cpfloat | cpbool | int | float | bool | Net'
+NumLike: TypeAlias = 'variable[int] | variable[float] | variable[bool] | int | float | bool'
+NumLikeAndNet: TypeAlias = 'variable[int] | variable[float] | variable[bool] | int | float | bool | Net'
 NetAndNum: TypeAlias = 'Net | int | float'
 
-unifloat: TypeAlias = 'cpfloat | float'
-uniint: TypeAlias = 'cpint | int'
-unibool: TypeAlias = 'cpbool | bool'
+unifloat: TypeAlias = 'variable[float] | float'
+uniint: TypeAlias = 'variable[int] | int'
+unibool: TypeAlias = 'variable[bool] | bool'
 
 TNumber = TypeVar("TNumber", bound='CPNumber')
 T = TypeVar("T")
@@ -40,7 +40,7 @@ class Node:
         self.name: str = ''
 
     def __repr__(self) -> str:
-        return f"Node:{self.name}({', '.join(str(a) for a in self.args) if self.args else (self.value if isinstance(self, InitVar) else '')})"
+        return f"Node:{self.name}({', '.join(str(a) for a in self.args) if self.args else (self.value if isinstance(self, CPConstant) else '')})"
 
 
 class Device():
@@ -70,7 +70,7 @@ class CPNumber(Net):
         ...
 
     @overload
-    def __mul__(self, other: unifloat) -> 'cpfloat':
+    def __mul__(self, other: unifloat) -> 'variable[float]':
         ...
 
     def __mul__(self, other: NumLike) -> 'CPNumber':
@@ -81,7 +81,7 @@ class CPNumber(Net):
         ...
 
     @overload
-    def __rmul__(self, other: unifloat) -> 'cpfloat':
+    def __rmul__(self, other: unifloat) -> 'variable[float]':
         ...
 
     def __rmul__(self, other: NumLike) -> 'CPNumber':
@@ -92,7 +92,7 @@ class CPNumber(Net):
         ...
 
     @overload
-    def __add__(self, other: unifloat) -> 'cpfloat':
+    def __add__(self, other: unifloat) -> 'variable[float]':
         ...
 
     def __add__(self, other: NumLike) -> 'CPNumber':
@@ -103,7 +103,7 @@ class CPNumber(Net):
         ...
 
     @overload
-    def __radd__(self, other: unifloat) -> 'cpfloat':
+    def __radd__(self, other: unifloat) -> 'variable[float]':
         ...
 
     def __radd__(self, other: NumLike) -> 'CPNumber':
@@ -114,7 +114,7 @@ class CPNumber(Net):
         ...
 
     @overload
-    def __sub__(self, other: unifloat) -> 'cpfloat':
+    def __sub__(self, other: unifloat) -> 'variable[float]':
         ...
 
     def __sub__(self, other: NumLike) -> 'CPNumber':
@@ -125,28 +125,24 @@ class CPNumber(Net):
         ...
 
     @overload
-    def __rsub__(self, other: unifloat) -> 'cpfloat':
+    def __rsub__(self, other: unifloat) -> 'variable[float]':
         ...
 
     def __rsub__(self, other: NumLike) -> 'CPNumber':
         return _add_op('sub', [other, self])
 
-    def __truediv__(self, other: NumLike) -> 'cpfloat':
-        ret = _add_op('div', [self, other])
-        assert isinstance(ret, cpfloat)
-        return ret
+    def __truediv__(self, other: NumLike) -> 'variable[float]':
+        return _add_op('div', [self, other])
 
-    def __rtruediv__(self, other: NumLike) -> 'cpfloat':
-        ret = _add_op('div', [other, self])
-        assert isinstance(ret, cpfloat)
-        return ret
+    def __rtruediv__(self, other: NumLike) -> 'variable[float]':
+        return _add_op('div', [other, self])
 
     @overload
     def __floordiv__(self: TNumber, other: uniint) -> TNumber:
         ...
 
     @overload
-    def __floordiv__(self, other: unifloat) -> 'cpfloat':
+    def __floordiv__(self, other: unifloat) -> 'variable[float]':
         ...
 
     def __floordiv__(self, other: NumLike) -> 'CPNumber':
@@ -157,39 +153,38 @@ class CPNumber(Net):
         ...
 
     @overload
-    def __rfloordiv__(self, other: unifloat) -> 'cpfloat':
+    def __rfloordiv__(self, other: unifloat) -> 'variable[float]':
         ...
 
     def __rfloordiv__(self, other: NumLike) -> 'CPNumber':
         return _add_op('floordiv', [other, self])
 
     def __neg__(self: TNumber) -> TNumber:
-        ret = _add_op('sub', [cpvalue(0), self])
-        assert isinstance(ret, type(self))
-        return ret
+        assert isinstance(T, variable)
+        return cast(TNumber, _add_op('sub', [variable(0), self]))
 
-    def __gt__(self, other: NumLike) -> 'cpbool':
+    def __gt__(self, other: NumLike) -> 'variable[bool]':
         ret = _add_op('gt', [self, other])
-        return cpbool(ret.source)
+        return variable(ret.source, dtype='bool')
 
-    def __lt__(self, other: NumLike) -> 'cpbool':
+    def __lt__(self, other: NumLike) -> 'variable[bool]':
         ret = _add_op('gt', [other, self])
-        return cpbool(ret.source)
+        return variable(ret.source, dtype='bool')
 
-    def __eq__(self, other: NumLike) -> 'cpbool':  # type: ignore
+    def __eq__(self, other: NumLike) -> 'variable[bool]':  # type: ignore
         ret = _add_op('eq', [self, other], True)
-        return cpbool(ret.source)
+        return variable(ret.source, dtype='bool')
 
-    def __ne__(self, other: NumLike) -> 'cpbool':  # type: ignore
+    def __ne__(self, other: NumLike) -> 'variable[bool]':  # type: ignore
         ret = _add_op('ne', [self, other], True)
-        return cpbool(ret.source)
+        return variable(ret.source, dtype='bool')
 
     @overload
     def __mod__(self: TNumber, other: uniint) -> TNumber:
         ...
 
     @overload
-    def __mod__(self, other: unifloat) -> 'cpfloat':
+    def __mod__(self, other: unifloat) -> 'variable[float]':
         ...
 
     def __mod__(self, other: NumLike) -> 'CPNumber':
@@ -200,7 +195,7 @@ class CPNumber(Net):
         ...
 
     @overload
-    def __rmod__(self, other: unifloat) -> 'cpfloat':
+    def __rmod__(self, other: unifloat) -> 'variable[float]':
         ...
 
     def __rmod__(self, other: NumLike) -> 'CPNumber':
@@ -211,7 +206,7 @@ class CPNumber(Net):
         ...
 
     @overload
-    def __pow__(self, other: unifloat) -> 'cpfloat':
+    def __pow__(self, other: unifloat) -> 'variable[float]':
         ...
 
     def __pow__(self, other: NumLike) -> 'CPNumber':
@@ -222,7 +217,7 @@ class CPNumber(Net):
         ...
 
     @overload
-    def __rpow__(self, other: unifloat) -> 'cpfloat':
+    def __rpow__(self, other: unifloat) -> 'variable[float]':
         ...
 
     def __rpow__(self, other: NumLike) -> 'CPNumber':
@@ -232,86 +227,57 @@ class CPNumber(Net):
         return super().__hash__()
 
 
-class cpint(CPNumber):
-    def __init__(self, source: int | Node):
+class variable(Generic[T], CPNumber):
+    def __init__(self, source: T | Node, dtype: str | None = None):
         if isinstance(source, Node):
             self.source = source
+            assert dtype, 'For source type Node a dtype argument is required.'
+            self.dtype = dtype
+        elif isinstance(source, bool):
+            self.source = CPConstant(source)
+            self.dtype = 'bool'
+        elif isinstance(source, int):
+            self.source = CPConstant(source)
+            self.dtype = 'int'
+        elif isinstance(source, float):
+            self.source = CPConstant(source)
+            self.dtype = 'float'
         else:
-            self.source = InitVar(int(source))
-        self.dtype = 'int'
+            raise ValueError(f'Non supported data type: {type(source).__name__}')
 
-    def __lshift__(self, other: uniint) -> 'cpint':
-        ret = _add_op('lshift', [self, other])
-        assert isinstance(ret, cpint)
-        return ret
+    # Bitwise and shift operations for cp[int]
+    def __lshift__(self, other: uniint) -> 'variable[int]':
+        return _add_op('lshift', [self, other])
 
-    def __rlshift__(self, other: uniint) -> 'cpint':
-        ret = _add_op('lshift', [other, self])
-        assert isinstance(ret, cpint)
-        return ret
+    def __rlshift__(self, other: uniint) -> 'variable[int]':
+        return _add_op('lshift', [other, self])
 
-    def __rshift__(self, other: uniint) -> 'cpint':
-        ret = _add_op('rshift', [self, other])
-        assert isinstance(ret, cpint)
-        return ret
+    def __rshift__(self, other: uniint) -> 'variable[int]':
+        return _add_op('rshift', [self, other])
 
-    def __rrshift__(self, other: uniint) -> 'cpint':
-        ret = _add_op('rshift', [other, self])
-        assert isinstance(ret, cpint)
-        return ret
+    def __rrshift__(self, other: uniint) -> 'variable[int]':
+        return _add_op('rshift', [other, self])
 
-    def __and__(self, other: uniint) -> 'cpint':
-        ret = _add_op('bwand', [self, other], True)
-        assert isinstance(ret, cpint)
-        return ret
+    def __and__(self, other: uniint) -> 'variable[int]':
+        return _add_op('bwand', [self, other], True)
 
-    def __rand__(self, other: uniint) -> 'cpint':
-        ret = _add_op('rwand', [other, self], True)
-        assert isinstance(ret, cpint)
-        return ret
+    def __rand__(self, other: uniint) -> 'variable[int]':
+        return _add_op('rwand', [other, self], True)
 
-    def __or__(self, other: uniint) -> 'cpint':
-        ret = _add_op('bwor', [self, other], True)
-        assert isinstance(ret, cpint)
-        return ret
+    def __or__(self, other: uniint) -> 'variable[int]':
+        return _add_op('bwor', [self, other], True)
 
-    def __ror__(self, other: uniint) -> 'cpint':
-        ret = _add_op('bwor', [other, self], True)
-        assert isinstance(ret, cpint)
-        return ret
+    def __ror__(self, other: uniint) -> 'variable[int]':
+        return _add_op('bwor', [other, self], True)
 
-    def __xor__(self, other: uniint) -> 'cpint':
-        ret = _add_op('bwxor', [self, other], True)
-        assert isinstance(ret, cpint)
-        return ret
+    def __xor__(self, other: uniint) -> 'variable[int]':
+        return _add_op('bwxor', [self, other], True)
 
-    def __rxor__(self, other: uniint) -> 'cpint':
-        ret = _add_op('bwxor', [other, self], True)
-        assert isinstance(ret, cpint)
-        return ret
+    def __rxor__(self, other: uniint) -> 'variable[int]':
+        return _add_op('bwxor', [other, self], True)
 
 
-class cpfloat(CPNumber):
-    def __init__(self, source: float | Node | CPNumber):
-        if isinstance(source, Node):
-            self.source = source
-        elif isinstance(source, CPNumber):
-            self.source = _add_op('cast_float', [source]).source
-        else:
-            self.source = InitVar(float(source))
-        self.dtype = 'float'
-
-
-class cpbool(cpint):
-    def __init__(self, source: bool | Node):
-        if isinstance(source, Node):
-            self.source = source
-        else:
-            self.source = InitVar(bool(source))
-        self.dtype = 'bool'
-
-
-class InitVar(Node):
+class CPConstant(Node):
     def __init__(self, value: int | float):
         self.dtype, self.value = _get_data_and_dtype(value)
         self.name = 'const_' + self.dtype
@@ -323,7 +289,7 @@ class Write(Node):
         if isinstance(input, Net):
             net = input
         else:
-            node = InitVar(input)
+            node = CPConstant(input)
             net = Net(node.dtype, node)
 
         self.name = 'write_' + transl_type(net.dtype)
@@ -338,22 +304,22 @@ class Op(Node):
 
 
 def net_from_value(value: Any) -> Net:
-    vi = InitVar(value)
+    vi = CPConstant(value)
     return Net(vi.dtype, vi)
 
 
 @overload
-def iif(expression: CPNumber, true_result: unibool, false_result: unibool) -> cpbool:  # pyright: ignore[reportOverlappingOverload]
+def iif(expression: CPNumber, true_result: unibool, false_result: unibool) -> variable[bool]:  # pyright: ignore[reportOverlappingOverload]
     ...
 
 
 @overload
-def iif(expression: CPNumber, true_result: uniint, false_result: uniint) -> cpint:
+def iif(expression: CPNumber, true_result: uniint, false_result: uniint) -> variable[int]:
     ...
 
 
 @overload
-def iif(expression: CPNumber, true_result: unifloat, false_result: unifloat) -> cpfloat:
+def iif(expression: CPNumber, true_result: unifloat, false_result: unifloat) -> variable[float]:
     ...
 
 
@@ -363,16 +329,15 @@ def iif(expression: NumLike, true_result: T, false_result: T) -> T:
 
 
 def iif(expression: Any, true_result: Any, false_result: Any) -> Any:
-    # TODO: check that input types are matching
-    alowed_type = cpint | cpfloat | cpbool | int | float | bool
-    assert isinstance(true_result, alowed_type) and isinstance(false_result, alowed_type), "Result type not supported"
+    allowed_type = (variable, int, float, bool)
+    assert isinstance(true_result, allowed_type) and isinstance(false_result, allowed_type), "Result type not supported"
     if isinstance(expression, CPNumber):
         return (expression != 0) * true_result + (expression == 0) * false_result
     else:
         return true_result if expression else false_result
 
 
-def _add_op(op: str, args: list[CPNumber | int | float], commutative: bool = False) -> CPNumber:
+def _add_op(op: str, args: list[CPNumber | int | float], commutative: bool = False) -> variable[Any]:
     arg_nets = [a if isinstance(a, Net) else net_from_value(a) for a in args]
 
     if commutative:
@@ -386,35 +351,9 @@ def _add_op(op: str, args: list[CPNumber | int | float], commutative: bool = Fal
     result_type = generic_sdb.stencil_definitions[typed_op].split('_')[0]
 
     if result_type == 'int':
-        return cpint(Op(typed_op, arg_nets))
+        return variable[int](Op(typed_op, arg_nets), result_type)
     else:
-        return cpfloat(Op(typed_op, arg_nets))
-
-
-@overload
-def cpvalue(value: bool) -> cpbool:  # pyright: ignore[reportOverlappingOverload]
-    ...
-
-
-@overload
-def cpvalue(value: int) -> cpint:
-    ...
-
-
-@overload
-def cpvalue(value: float) -> cpfloat:
-    ...
-
-
-def cpvalue(value: bool | int | float) -> cpbool | cpint | cpfloat:
-    vi = InitVar(value)
-
-    if isinstance(value, bool):
-        return cpbool(vi)
-    elif isinstance(value, float):
-        return cpfloat(vi)
-    else:
-        return cpint(vi)
+        return variable[float](Op(typed_op, arg_nets), result_type)
 
 
 def _get_data_and_dtype(value: Any) -> tuple[str, float | int]:

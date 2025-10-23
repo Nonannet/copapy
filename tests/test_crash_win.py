@@ -1,4 +1,4 @@
-from copapy import NumLike, cpvalue
+from copapy import NumLike, variable
 from copapy.backend import Write, Net, compile_to_instruction_list, add_read_command
 import copapy
 import subprocess
@@ -24,8 +24,8 @@ def function(c1: NumLike, c2: NumLike) -> tuple[NumLike, ...]:
 
 def test_compile():
 
-    c1 = cpvalue(4)
-    c2 = cpvalue(2)
+    c1 = variable(4)
+    c2 = variable(2)
 
     ret = function(c1, c2)
 
