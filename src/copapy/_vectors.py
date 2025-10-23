@@ -1,8 +1,5 @@
-from numpy import isin
-from copapy import NumLike, CPNumber, variable
+from copapy import CPNumber, variable
 from typing import Generic, TypeVar, Iterable, Any, overload
-
-from copapy._basic_types import TNum
 
 T = TypeVar("T", int, float, bool)
 T2 = TypeVar("T2", bound=CPNumber)

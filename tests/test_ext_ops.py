@@ -8,8 +8,8 @@ def test_compile():
     c_f = variable(2.5)
     # c_b = variable(True)
 
-    ret_test = (c_f ** c_f, c_i ** c_i)
-    ret_ref = (2.5 ** 2.5, 9 ** 9)
+    ret_test = (c_f ** c_f, c_i ** c_i)#, c_i & 3)
+    ret_ref = (2.5 ** 2.5, 9 ** 9)#, 9 & 3)
 
     tg = Target()
     print('* compile and copy ...')
