@@ -25,6 +25,7 @@ class patch_entry:
     addend: int
     target_symbol_name: str
     target_symbol_info: str
+    target_symbol_section_index: int
 
 
 def translate_relocation(relocation_addr: int, reloc_type: str, bits: int, r_addend: int) -> RelocationType:
@@ -58,8 +59,8 @@ def get_stencil_position(func: elf_symbol) -> tuple[int, int]:
 
 def get_last_call_in_function(func: elf_symbol) -> int:
     # Find last relocation in function
+    assert func.relocations, f'No call function in stencil function {func.name}.'
     reloc = func.relocations[-1]
-    assert reloc, f'No call function in stencil function {func.name}.'
     return reloc.fields['r_offset'] - func.fields['st_value'] - reloc.fields['r_addend'] - LENGTH_CALL_INSTRUCTION
 
 
@@ -107,6 +108,17 @@ class stencil_database():
         #    sym.relocations
         #    self.elf.symbols[name].data
 
+    def const_sections_from_functions(self, symbol_names: Iterable[str]) -> list[int]:
+        ret: set[int] = set()
+
+        for name in symbol_names:
+            for reloc in self.elf.symbols[name].relocations:
+                sym = reloc.symbol
+                if sym.section and sym.section.type == 'SHT_PROGBITS' and \
+                   sym.info != 'STT_FUNC' and not sym.name.startswith('dummy_'):
+                    ret.add(sym.section.index)
+        return list(ret)
+
     def get_patch_positions(self, symbol_name: str) -> Generator[patch_entry, None, None]:
         """Return patch positions for a provided symbol (function or object)
 
@@ -130,7 +142,11 @@ class stencil_database():
                 reloc.bits,
                 reloc.fields['r_addend'])
 
-            patch = patch_entry(rtype, patch_offset, reloc.fields['r_addend'], reloc.symbol.name, reloc.symbol.info)
+            patch = patch_entry(rtype, patch_offset,
+                                reloc.fields['r_addend'],
+                                reloc.symbol.name,
+                                reloc.symbol.info,
+                                reloc.symbol.fields['st_shndx'])
 
             # Exclude the call to the result_* function
             if patch.addr < end_index - start_index:
@@ -161,6 +177,12 @@ class stencil_database():
 
     def get_symbol_size(self, name: str) -> int:
         return self.elf.symbols[name].fields['st_size']
+
+    def get_section_size(self, id: int) -> int:
+        return self.elf.sections[id].fields['sh_size']
+
+    def get_section_data(self, id: int) -> bytes:
+        return self.elf.sections[id].data
 
     def get_function_code(self, name: str, part: Literal['full', 'start', 'end'] = 'full') -> bytes:
         """Returns machine code for a specified function name"""
