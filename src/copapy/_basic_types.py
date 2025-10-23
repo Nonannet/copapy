@@ -311,16 +311,6 @@ class cpbool(cpint):
         self.dtype = 'bool'
 
 
-class cpvector:
-    def __init__(self, *value: NumLike):
-        self.value = value
-
-    def __add__(self, other: 'cpvector') -> 'cpvector':
-        assert len(self.value) == len(other.value)
-        tup = (a + b for a, b in zip(self.value, other.value))
-        return cpvector(*(v for v in tup if isinstance(v, CPNumber)))
-
-
 class InitVar(Node):
     def __init__(self, value: int | float):
         self.dtype, self.value = _get_data_and_dtype(value)
