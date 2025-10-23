@@ -13,6 +13,7 @@ stack_size = 64
 
 includes = ['aux_functions.c']
 
+
 def read_files(files: list[str]) -> str:
     ret = ''
     script_dir = Path(__file__).parent
