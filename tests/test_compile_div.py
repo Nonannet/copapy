@@ -1,4 +1,4 @@
-from copapy import cpvalue, NumLike
+from copapy import variable, NumLike
 from copapy.backend import Write, compile_to_instruction_list
 import copapy
 import subprocess
@@ -20,7 +20,7 @@ def function(c1: NumLike) -> list[NumLike]:
 
 def test_compile():
 
-    c1 = cpvalue(16)
+    c1 = variable(16)
 
     ret = function(c1)
 

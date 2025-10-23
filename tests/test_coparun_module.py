@@ -1,4 +1,4 @@
-from copapy import cpvalue, Target, NumLike
+from copapy import variable, Target, NumLike
 import pytest
 
 
@@ -14,7 +14,7 @@ def function(c1: NumLike) -> list[NumLike]:
 
 def test_compile():
 
-    c1 = cpvalue(16)
+    c1 = variable(16)
 
     ret = function(c1)
 

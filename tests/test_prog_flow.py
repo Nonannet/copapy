@@ -1,12 +1,12 @@
-from copapy import cpvalue, Target, iif
+from copapy import variable, Target, iif
 import pytest
 import copapy
 
 
 def test_compile():
-    c_i = cpvalue(9)
-    c_f = cpvalue(2.5)
-    # c_b = cpvalue(True)
+    c_i = variable(9)
+    c_f = variable(2.5)
+    # c_b = variable(True)
 
     ret_test = (iif(c_f > 5, c_f, -1), iif(c_i > 5, c_f, 8.8), iif(c_i > 2, c_i, 1))
     ret_ref = (iif(2.5 > 5, 2.5, -1), iif(9 > 5, 2.5, 8.8), iif(9 > 2, 9, 1))

@@ -1,4 +1,4 @@
-from copapy import cpvalue, Target, NumLike, iif, cpint
+from copapy import variable, Target, NumLike, iif
 import pytest
 import copapy
 
@@ -42,11 +42,11 @@ def iiftests(c1: NumLike) -> list[NumLike]:
 
 
 def test_compile():
-    c_i = cpvalue(9)
-    c_f = cpvalue(1.111)
-    c_b = cpvalue(True)
+    c_i = variable(9)
+    c_f = variable(1.111)
+    c_b = variable(True)
 
-    ret_test = function1(c_i) + function1(c_f) + function2(c_i) + function2(c_f) + function3(c_i) + function4(c_i) + function5(c_b) + [cpint(9) % 2] + iiftests(c_i) + iiftests(c_f)
+    ret_test = function1(c_i) + function1(c_f) + function2(c_i) + function2(c_f) + function3(c_i) + function4(c_i) + function5(c_b) + [variable(9) % 2] + iiftests(c_i) + iiftests(c_f)
     ret_ref = function1(9) + function1(1.111) + function2(9) + function2(1.111) + function3(9) + function4(9) + function5(True) + [9 % 2] + iiftests(9) + iiftests(1.111)
 
     tg = Target()
