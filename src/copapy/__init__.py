@@ -1,14 +1,16 @@
 from ._target import Target
 from ._basic_types import NumLike, variable, \
-    CPNumber, generic_sdb, iif
+     generic_sdb, iif
 from ._vectors import vector
+from ._math import sqrt, abs
 
 __all__ = [
     "Target",
     "NumLike",
     "variable",
-    "CPNumber",
     "generic_sdb",
     "iif",
-    "vector"
+    "vector",
+    "sqrt",
+    "abs",
 ]

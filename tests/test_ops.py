@@ -57,7 +57,7 @@ def test_compile():
     print('* finished')
 
     for test, ref in zip(ret_test, ret_ref):
-        assert isinstance(test, copapy.CPNumber)
+        assert isinstance(test, copapy.variable)
         val = tg.read_value(test)
         print('+', val, ref, test.dtype)
         for t in (int, float, bool):

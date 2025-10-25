@@ -8,7 +8,7 @@ unifloat: TypeAlias = 'variable[float] | float'
 uniint: TypeAlias = 'variable[int] | int'
 unibool: TypeAlias = 'variable[bool] | bool'
 
-TCPNum = TypeVar("TCPNum", bound='CPNumber')
+TCPNum = TypeVar("TCPNum", bound='variable[Any]')
 TNum = TypeVar("TNum", int, bool, float)
 
 
@@ -57,173 +57,7 @@ class Net:
         return id(self)
 
 
-class CPNumber(Net):
-    def __init__(self, dtype: str, source: Node):
-        self.dtype = dtype
-        self.source = source
-
-    @overload
-    def __mul__(self: TCPNum, other: uniint) -> TCPNum:
-        ...
-
-    @overload
-    def __mul__(self, other: unifloat) -> 'variable[float]':
-        ...
-
-    def __mul__(self, other: NumLike) -> 'CPNumber':
-        return _add_op('mul', [self, other], True)
-
-    @overload
-    def __rmul__(self: TCPNum, other: uniint) -> TCPNum:
-        ...
-
-    @overload
-    def __rmul__(self, other: unifloat) -> 'variable[float]':
-        ...
-
-    def __rmul__(self, other: NumLike) -> 'CPNumber':
-        return _add_op('mul', [self, other], True)
-
-    @overload
-    def __add__(self: TCPNum, other: uniint) -> TCPNum:
-        ...
-
-    @overload
-    def __add__(self, other: unifloat) -> 'variable[float]':
-        ...
-
-    def __add__(self, other: NumLike) -> 'CPNumber':
-        return _add_op('add', [self, other], True)
-
-    @overload
-    def __radd__(self: TCPNum, other: uniint) -> TCPNum:
-        ...
-
-    @overload
-    def __radd__(self, other: unifloat) -> 'variable[float]':
-        ...
-
-    def __radd__(self, other: NumLike) -> 'CPNumber':
-        return _add_op('add', [self, other], True)
-
-    @overload
-    def __sub__(self: TCPNum, other: uniint) -> TCPNum:
-        ...
-
-    @overload
-    def __sub__(self, other: unifloat) -> 'variable[float]':
-        ...
-
-    def __sub__(self, other: NumLike) -> 'CPNumber':
-        return _add_op('sub', [self, other])
-
-    @overload
-    def __rsub__(self: TCPNum, other: uniint) -> TCPNum:
-        ...
-
-    @overload
-    def __rsub__(self, other: unifloat) -> 'variable[float]':
-        ...
-
-    def __rsub__(self, other: NumLike) -> 'CPNumber':
-        return _add_op('sub', [other, self])
-
-    def __truediv__(self, other: NumLike) -> 'variable[float]':
-        return _add_op('div', [self, other])
-
-    def __rtruediv__(self, other: NumLike) -> 'variable[float]':
-        return _add_op('div', [other, self])
-
-    @overload
-    def __floordiv__(self: TCPNum, other: uniint) -> TCPNum:
-        ...
-
-    @overload
-    def __floordiv__(self, other: unifloat) -> 'variable[float]':
-        ...
-
-    def __floordiv__(self, other: NumLike) -> 'CPNumber':
-        return _add_op('floordiv', [self, other])
-
-    @overload
-    def __rfloordiv__(self: TCPNum, other: uniint) -> TCPNum:
-        ...
-
-    @overload
-    def __rfloordiv__(self, other: unifloat) -> 'variable[float]':
-        ...
-
-    def __rfloordiv__(self, other: NumLike) -> 'CPNumber':
-        return _add_op('floordiv', [other, self])
-
-    def __neg__(self: TCPNum) -> TCPNum:
-        return cast(TCPNum, _add_op('sub', [variable(0), self]))
-
-    def __gt__(self, other: NumLike) -> 'variable[bool]':
-        ret = _add_op('gt', [self, other])
-        return variable(ret.source, dtype='bool')
-
-    def __lt__(self, other: NumLike) -> 'variable[bool]':
-        ret = _add_op('gt', [other, self])
-        return variable(ret.source, dtype='bool')
-
-    def __eq__(self, other: NumLike) -> 'variable[bool]':  # type: ignore
-        ret = _add_op('eq', [self, other], True)
-        return variable(ret.source, dtype='bool')
-
-    def __ne__(self, other: NumLike) -> 'variable[bool]':  # type: ignore
-        ret = _add_op('ne', [self, other], True)
-        return variable(ret.source, dtype='bool')
-
-    @overload
-    def __mod__(self: TCPNum, other: uniint) -> TCPNum:
-        ...
-
-    @overload
-    def __mod__(self, other: unifloat) -> 'variable[float]':
-        ...
-
-    def __mod__(self, other: NumLike) -> 'CPNumber':
-        return _add_op('mod', [self, other])
-
-    @overload
-    def __rmod__(self: TCPNum, other: uniint) -> TCPNum:
-        ...
-
-    @overload
-    def __rmod__(self, other: unifloat) -> 'variable[float]':
-        ...
-
-    def __rmod__(self, other: NumLike) -> 'CPNumber':
-        return _add_op('mod', [other, self])
-
-    @overload
-    def __pow__(self: TCPNum, other: uniint) -> TCPNum:
-        ...
-
-    @overload
-    def __pow__(self, other: unifloat) -> 'variable[float]':
-        ...
-
-    def __pow__(self, other: NumLike) -> 'CPNumber':
-        return _add_op('pow', [other, self])
-
-    @overload
-    def __rpow__(self: TCPNum, other: uniint) -> TCPNum:
-        ...
-
-    @overload
-    def __rpow__(self, other: unifloat) -> 'variable[float]':
-        ...
-
-    def __rpow__(self, other: NumLike) -> 'CPNumber':
-        return _add_op('rpow', [self, other])
-
-    def __hash__(self) -> int:
-        return super().__hash__()
-
-
-class variable(Generic[TNum], CPNumber):
+class variable(Generic[TNum], Net):
     def __init__(self, source: TNum | Node, dtype: str | None = None):
         if isinstance(source, Node):
             self.source = source
@@ -239,36 +73,185 @@ class variable(Generic[TNum], CPNumber):
             self.source = CPConstant(source)
             self.dtype = 'int'
 
+    @overload
+    def __add__(self, other: TCPNum) -> TCPNum: ...
+    @overload
+    def __add__(self: TCPNum, other: uniint) -> TCPNum: ...
+    @overload
+    def __add__(self, other: unifloat) -> 'variable[float]': ...
+    @overload
+    def __add__(self, other: NumLike) -> 'variable[float] | variable[int]': ...
+    def __add__(self, other: NumLike) -> Any:
+        return add_op('add', [self, other], True)
+
+    @overload
+    def __radd__(self: TCPNum, other: int) -> TCPNum: ...
+    @overload
+    def __radd__(self, other: float) -> 'variable[float]': ...
+    def __radd__(self, other: NumLike) -> Any:
+        return add_op('add', [self, other], True)
+
+    @overload
+    def __sub__(self, other: TCPNum) -> TCPNum: ...
+    @overload
+    def __sub__(self: TCPNum, other: uniint) -> TCPNum: ...
+    @overload
+    def __sub__(self, other: unifloat) -> 'variable[float]': ...
+    @overload
+    def __sub__(self, other: NumLike) -> 'variable[float] | variable[int]': ...
+    def __sub__(self, other: NumLike) -> Any:
+        return add_op('sub', [self, other])
+
+    @overload
+    def __rsub__(self: TCPNum, other: int) -> TCPNum: ...
+    @overload
+    def __rsub__(self, other: float) -> 'variable[float]': ...
+    def __rsub__(self, other: NumLike) -> Any:
+        return add_op('sub', [other, self])
+
+    @overload
+    def __mul__(self, other: TCPNum) -> TCPNum: ...
+    @overload
+    def __mul__(self: TCPNum, other: uniint) -> TCPNum: ...
+    @overload
+    def __mul__(self, other: unifloat) -> 'variable[float]': ...
+    @overload
+    def __mul__(self, other: NumLike) -> 'variable[float] | variable[int]': ...
+    def __mul__(self, other: NumLike) -> Any:
+        return add_op('mul', [self, other], True)
+
+    @overload
+    def __rmul__(self: TCPNum, other: int) -> TCPNum: ...
+    @overload
+    def __rmul__(self, other: float) -> 'variable[float]': ...
+    def __rmul__(self, other: NumLike) -> Any:
+        return add_op('mul', [self, other], True)
+
+    def __truediv__(self, other: NumLike) -> 'variable[float]':
+        return add_op('div', [self, other])
+
+    def __rtruediv__(self, other: NumLike) -> 'variable[float]':
+        return add_op('div', [other, self])
+
+    @overload
+    def __floordiv__(self, other: TCPNum) -> TCPNum: ...
+    @overload
+    def __floordiv__(self: TCPNum, other: uniint) -> TCPNum: ...
+    @overload
+    def __floordiv__(self, other: unifloat) -> 'variable[float]': ...
+    @overload
+    def __floordiv__(self, other: NumLike) -> 'variable[float] | variable[int]': ...
+    def __floordiv__(self, other: NumLike) -> Any:
+        return add_op('floordiv', [self, other])
+
+    @overload
+    def __rfloordiv__(self: TCPNum, other: int) -> TCPNum: ...
+    @overload
+    def __rfloordiv__(self, other: float) -> 'variable[float]': ...
+    def __rfloordiv__(self, other: NumLike) -> Any:
+        return add_op('floordiv', [other, self])
+
+    def __neg__(self: TCPNum) -> TCPNum:
+        return cast(TCPNum, add_op('sub', [variable(0), self]))
+
+    def __gt__(self, other: NumLike) -> 'variable[bool]':
+        ret = add_op('gt', [self, other])
+        return variable(ret.source, dtype='bool')
+
+    def __lt__(self, other: NumLike) -> 'variable[bool]':
+        ret = add_op('gt', [other, self])
+        return variable(ret.source, dtype='bool')
+    
+    def __ge__(self, other: NumLike) -> 'variable[bool]':
+        ret = add_op('ge', [self, other])
+        return variable(ret.source, dtype='bool')
+    
+    def __le__(self, other: NumLike) -> 'variable[bool]':
+        ret = add_op('ge', [other, self])
+        return variable(ret.source, dtype='bool')
+
+    def __eq__(self, other: NumLike) -> 'variable[bool]':  # type: ignore
+        ret = add_op('eq', [self, other], True)
+        return variable(ret.source, dtype='bool')
+
+    def __ne__(self, other: NumLike) -> 'variable[bool]':  # type: ignore
+        ret = add_op('ne', [self, other], True)
+        return variable(ret.source, dtype='bool')
+
+    @overload
+    def __mod__(self, other: TCPNum) -> TCPNum: ...
+    @overload
+    def __mod__(self: TCPNum, other: uniint) -> TCPNum: ...
+    @overload
+    def __mod__(self, other: unifloat) -> 'variable[float]': ...
+    @overload
+    def __mod__(self, other: NumLike) -> 'variable[float] | variable[int]': ...
+    def __mod__(self, other: NumLike) -> Any:
+        return add_op('mod', [self, other])
+
+    @overload
+    def __rmod__(self: TCPNum, other: int) -> TCPNum: ...
+    @overload
+    def __rmod__(self, other: float) -> 'variable[float]': ...
+    def __rmod__(self, other: NumLike) -> Any:
+        return add_op('mod', [other, self])
+
+    @overload
+    def __pow__(self, other: TCPNum) -> TCPNum: ...
+    @overload
+    def __pow__(self: TCPNum, other: uniint) -> TCPNum: ...
+    @overload
+    def __pow__(self, other: unifloat) -> 'variable[float]': ...
+    @overload
+    def __pow__(self, other: NumLike) -> 'variable[float] | variable[int]': ...
+    def __pow__(self, other: NumLike) -> Any:
+        if not isinstance(other, variable):
+            if other == 2:
+                return self * self
+            if other == -1:
+                return 1 / self
+        return add_op('pow', [self, other])
+
+    @overload
+    def __rpow__(self: TCPNum, other: int) -> TCPNum: ...
+    @overload
+    def __rpow__(self, other: float) -> 'variable[float]': ...
+    def __rpow__(self, other: NumLike) -> Any:
+        return add_op('rpow', [other, self])
+
+    def __hash__(self) -> int:
+        return super().__hash__()
+
     # Bitwise and shift operations for cp[int]
     def __lshift__(self, other: uniint) -> 'variable[int]':
-        return _add_op('lshift', [self, other])
+        return add_op('lshift', [self, other])
 
     def __rlshift__(self, other: uniint) -> 'variable[int]':
-        return _add_op('lshift', [other, self])
+        return add_op('lshift', [other, self])
 
     def __rshift__(self, other: uniint) -> 'variable[int]':
-        return _add_op('rshift', [self, other])
+        return add_op('rshift', [self, other])
 
     def __rrshift__(self, other: uniint) -> 'variable[int]':
-        return _add_op('rshift', [other, self])
+        return add_op('rshift', [other, self])
 
     def __and__(self, other: uniint) -> 'variable[int]':
-        return _add_op('bwand', [self, other], True)
+        return add_op('bwand', [self, other], True)
 
     def __rand__(self, other: uniint) -> 'variable[int]':
-        return _add_op('rwand', [other, self], True)
+        return add_op('rwand', [other, self], True)
 
     def __or__(self, other: uniint) -> 'variable[int]':
-        return _add_op('bwor', [self, other], True)
+        return add_op('bwor', [self, other], True)
 
     def __ror__(self, other: uniint) -> 'variable[int]':
-        return _add_op('bwor', [other, self], True)
+        return add_op('bwor', [other, self], True)
 
     def __xor__(self, other: uniint) -> 'variable[int]':
-        return _add_op('bwxor', [self, other], True)
+        return add_op('bwxor', [self, other], True)
 
     def __rxor__(self, other: uniint) -> 'variable[int]':
-        return _add_op('bwxor', [other, self], True)
+        return add_op('bwxor', [other, self], True)
 
 
 class CPConstant(Node):
@@ -303,42 +286,24 @@ def net_from_value(value: Any) -> Net:
 
 
 @overload
-def iif(expression: CPNumber, true_result: unibool, false_result: unibool) -> variable[bool]:  # pyright: ignore[reportOverlappingOverload]
-    ...
-
-
+def iif(expression: variable[Any], true_result: unibool, false_result: unibool) -> variable[bool]:  ... # pyright: ignore[reportOverlappingOverload]
 @overload
-def iif(expression: CPNumber, true_result: uniint, false_result: uniint) -> variable[int]:
-    ...
-
-
+def iif(expression: variable[Any], true_result: uniint, false_result: uniint) -> variable[int]: ...
 @overload
-def iif(expression: CPNumber, true_result: unifloat, false_result: unifloat) -> variable[float]:
-    ...
-
-
+def iif(expression: variable[Any], true_result: unifloat, false_result: unifloat) -> variable[float]: ...
 @overload
-def iif(expression: float | int, true_result: TNum, false_result: TNum) -> TNum:
-    ...
-
-
+def iif(expression: float | int, true_result: TNum, false_result: TNum) -> TNum: ...
 @overload
-def iif(expression: float | int, true_result: TNum, false_result: variable[TNum]) -> variable[TNum]:
-    ...
-
-
+def iif(expression: float | int, true_result: TNum, false_result: variable[TNum]) -> variable[TNum]: ...
 @overload
-def iif(expression: float | int, true_result: variable[TNum], false_result: TNum | variable[TNum]) -> variable[TNum]:
-    ...
-
-
+def iif(expression: float | int, true_result: variable[TNum], false_result: TNum | variable[TNum]) -> variable[TNum]: ...
 def iif(expression: Any, true_result: Any, false_result: Any) -> Any:
     allowed_type = (variable, int, float, bool)
     assert isinstance(true_result, allowed_type) and isinstance(false_result, allowed_type), "Result type not supported"
     return (expression != 0) * true_result + (expression == 0) * false_result
 
 
-def _add_op(op: str, args: list[CPNumber | int | float], commutative: bool = False) -> variable[Any]:
+def add_op(op: str, args: list[variable[Any] | int | float], commutative: bool = False) -> variable[Any]:
     arg_nets = [a if isinstance(a, Net) else net_from_value(a) for a in args]
 
     if commutative:
@@ -351,10 +316,10 @@ def _add_op(op: str, args: list[CPNumber | int | float], commutative: bool = Fal
 
     result_type = generic_sdb.stencil_definitions[typed_op].split('_')[0]
 
-    if result_type == 'int':
-        return variable[int](Op(typed_op, arg_nets), result_type)
-    else:
+    if result_type == 'float':
         return variable[float](Op(typed_op, arg_nets), result_type)
+    else:
+        return variable[int](Op(typed_op, arg_nets), result_type)
 
 
 def _get_data_and_dtype(value: Any) -> tuple[str, float | int]:

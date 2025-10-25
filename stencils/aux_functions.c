@@ -12,6 +12,19 @@ __attribute__((noinline)) int floor_div(float arg1, float arg2) {
     return i;
 }
 
+float fast_sqrt(float n) {
+    if (n < 0) return -1;
+
+    float x = n;             // initial guess
+    float epsilon = 0.00001; // desired accuracy
+
+    while ((x - n / x) > epsilon || (x - n / x) < -epsilon) {
+        x = 0.5 * (x + n / x);
+    }
+
+    return x;
+}
+
 float fast_pow_float(float base, float exponent) {
     union {
         float f;
