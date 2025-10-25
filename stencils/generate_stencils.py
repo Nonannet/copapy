@@ -4,7 +4,7 @@ from pathlib import Path
 import os
 
 op_signs = {'add': '+', 'sub': '-', 'mul': '*', 'div': '/', 'pow': '**',
-            'gt': '>', 'eq': '==', 'ne': '!=', 'mod': '%'}
+            'gt': '>', 'eq': '==', 'ge': '>=', 'ne': '!=', 'mod': '%'}
 
 entry_func_prefix = ''
 stencil_func_prefix = '__attribute__((naked)) '  # Remove callee prolog
@@ -74,6 +74,15 @@ def get_cast(type1: str, type2: str, type_out: str) -> str:
     return f"""
     {stencil_func_prefix}void cast_{type_out}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         result_{type_out}_{type2}(({type1})arg1, arg2);
+    }}
+    """
+
+
+@norm_indent
+def get_sqrt(type1: str, type2: str) -> str:
+    return f"""
+    {stencil_func_prefix}void sqrt_{type1}_{type2}({type1} arg1, {type2} arg2) {{
+        result_float_{type2}(fast_sqrt((float)arg1), arg2);
     }}
     """
 
@@ -189,7 +198,7 @@ if __name__ == "__main__":
 
     # Scalar arithmetic:
     types = ['int', 'float']
-    ops = ['add', 'sub', 'mul', 'div', 'floordiv', 'gt', 'eq', 'ne', 'pow']
+    ops = ['add', 'sub', 'mul', 'div', 'floordiv', 'gt', 'ge', 'eq', 'ne', 'pow']
 
     for t1 in types:
         code += get_result_stubs1(t1)
@@ -203,6 +212,9 @@ if __name__ == "__main__":
         t_out = 'int' if t1 == 'float' else 'float'
         code += get_cast(t1, t2, t_out)
 
+    for t1, t2 in permutate(types, types):
+        code += get_sqrt(t1, t2)
+
     for op, t1, t2 in permutate(ops, types, types):
         t_out = t1 if t1 == t2 else 'float'
         if op == 'floordiv':
@@ -211,7 +223,7 @@ if __name__ == "__main__":
             code += get_op_code_float(op, t1, t2)
         elif op == 'pow':
             code += get_pow(t1, t2)
-        elif op == 'gt' or op == 'eq' or op == 'ne':
+        elif op in {'gt', 'eq', 'ge', 'ne'}:
             code += get_op_code(op, t1, t2, 'int')
         else:
             code += get_op_code(op, t1, t2, t_out)
