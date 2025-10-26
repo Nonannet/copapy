@@ -119,7 +119,7 @@ class stencil_database():
                     ret.add(sym.section.index)
         return list(ret)
 
-    def get_patch_positions(self, symbol_name: str) -> Generator[patch_entry, None, None]:
+    def get_patch_positions(self, symbol_name: str, stencil: bool = False) -> Generator[patch_entry, None, None]:
         """Return patch positions for a provided symbol (function or object)
 
         Args:
@@ -129,7 +129,11 @@ class stencil_database():
             patch_entry: every relocation for the symbol
         """
         symbol = self.elf.symbols[symbol_name]
-        start_index, end_index = get_stencil_position(symbol)
+        if stencil:
+            start_index, end_index = get_stencil_position(symbol)
+        else:
+            start_index = 0
+            end_index = symbol.fields['st_size']
 
         for reloc in symbol.relocations:
 
