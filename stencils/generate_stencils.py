@@ -82,7 +82,7 @@ def get_cast(type1: str, type2: str, type_out: str) -> str:
 def get_func2(func_name: str, type1: str, type2: str) -> str:
     return f"""
     {stencil_func_prefix}void {func_name}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        result_float_{type2}({func_name}((float)arg1), arg2);
+        result_float_{type2}(aux_{func_name}((float)arg1), arg2);
     }}
     """
 
