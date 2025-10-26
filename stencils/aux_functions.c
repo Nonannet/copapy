@@ -12,7 +12,7 @@ __attribute__((noinline)) int floor_div(float arg1, float arg2) {
     return i;
 }
 
-float fast_sqrt(float n) {
+__attribute__((noinline)) float fast_sqrt(float n) {
     if (n < 0) return -1;
 
     float x = n;             // initial guess
