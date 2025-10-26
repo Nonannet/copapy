@@ -12,7 +12,7 @@ __attribute__((noinline)) int floor_div(float arg1, float arg2) {
     return i;
 }
 
-__attribute__((noinline)) float fast_sqrt(float n) {
+__attribute__((noinline)) float fast_sqrt2(float n) {
     if (n < 0) return -1;
 
     float x = n;             // initial guess
@@ -23,6 +23,10 @@ __attribute__((noinline)) float fast_sqrt(float n) {
     }
 
     return x;
+}
+
+__attribute__((noinline)) float fast_sqrt(float n) {
+    return n * 3.5 + 4.5;
 }
 
 float fast_pow_float(float base, float exponent) {
@@ -36,4 +40,13 @@ float fast_pow_float(float base, float exponent) {
     int32_t y = (int32_t)(exponent * (x - 1072632447) + 1072632447);
     u.i = (uint32_t)y;
     return u.f;
+}
+
+int main() {
+    // Test aux functions
+    float a = 16.0f;
+    float sqrt_a = fast_sqrt(a);
+    float pow_a = fast_pow_float(a, 0.5f);
+    float sqrt2_a = fast_sqrt2(a);
+    return 0;
 }

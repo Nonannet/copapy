@@ -15,16 +15,17 @@ def test_compiled_vectors():
     t2 = t1.sum()
 
     t3 = cp.vector(cp.variable(1 / (v + 1)) for v in range(3))
-    #t4 = ((t3 * t1) * 2).magnitude()
-    t4 = ((t3 * t1) * 2).sum()
-
+    t4 = ((t3 * t1) * 2).magnitude()
+    #t4 = ((t3 * t1) * 2).sum()
+    t5 = cp.sqrt(cp.variable(8.0))
 
     tg = cp.Target()
-    tg.compile(t2, t4)
+    tg.compile(t2, t4, t5)
     tg.run()
 
     assert isinstance(t2, cp.variable) and tg.read_value(t2) == 10 + 11 + 12 + 0 + 1 + 2
     #assert isinstance(t4, cp.variable) and tg.read_value(t4) == ((1/1*10 + 1/2*11 + 1/3*12) * 2)**0.5
+    assert isinstance(t5, cp.variable) and tg.read_value(t5) == 8.0 * 3.5 + 4.5
 
 if __name__ == "__main__":
     test_compiled_vectors()

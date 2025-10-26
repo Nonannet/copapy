@@ -318,7 +318,7 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
             else:
                 raise ValueError(f"Unsupported: {name} {patch.target_symbol_info} {patch.target_symbol_name}")
 
-    assert False, aux_function_mem_layout
+    #assert False, aux_function_mem_layout
 
     # write entry function code
     dw.write_com(binw.Command.COPY_CODE)
