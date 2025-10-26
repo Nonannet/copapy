@@ -12,7 +12,7 @@ __attribute__((noinline)) int floor_div(float arg1, float arg2) {
     return i;
 }
 
-__attribute__((noinline)) float fast_sqrt2(float n) {
+__attribute__((noinline)) float sqrt(float n) {
     if (n < 0) return -1;
 
     float x = n;             // initial guess
@@ -25,8 +25,12 @@ __attribute__((noinline)) float fast_sqrt2(float n) {
     return x;
 }
 
-__attribute__((noinline)) float fast_sqrt(float n) {
-    return n * 3.5 + 4.5;
+__attribute__((noinline)) float sqrt2(float n) {
+    return n * 20.5 + 4.5;
+}
+
+__attribute__((noinline)) float get_42(float n) {
+    return n * + 42.0;
 }
 
 float fast_pow_float(float base, float exponent) {

@@ -16,6 +16,22 @@ def sqrt(x: NumLike) -> variable[float] | float:
     return float(x ** 0.5)
 
 
+@overload
+def sqrt2(x: float | int) -> float: ...
+@overload
+def sqrt2(x: variable[Any]) -> variable[float]: ...
+def sqrt2(x: NumLike) -> variable[float] | float:
+    """Square root function"""
+    if isinstance(x, variable):
+        return add_op('sqrt2', [x, x])  # TODO: fix 2. dummy argument
+    return float(x ** 0.5)
+
+
+def get_42() -> variable[float]:
+    """Returns the variable representing the constant 42"""
+    return add_op('get_42', [0.0, 0.0])
+
+
 def abs(x: T) -> T:
     """Absolute value function"""
     ret = (x < 0) * -x + (x >= 0) * x

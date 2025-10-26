@@ -79,10 +79,10 @@ def get_cast(type1: str, type2: str, type_out: str) -> str:
 
 
 @norm_indent
-def get_sqrt(type1: str, type2: str) -> str:
+def get_func2(func_name: str, type1: str, type2: str) -> str:
     return f"""
-    {stencil_func_prefix}void sqrt_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        result_float_{type2}(fast_sqrt((float)arg1), arg2);
+    {stencil_func_prefix}void {func_name}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
+        result_float_{type2}({func_name}((float)arg1), arg2);
     }}
     """
 
@@ -213,7 +213,9 @@ if __name__ == "__main__":
         code += get_cast(t1, t2, t_out)
 
     for t1, t2 in permutate(types, types):
-        code += get_sqrt(t1, t2)
+        code += get_func2('sqrt', t1, t2)
+        code += get_func2('sqrt2', t1, t2)
+        code += get_func2('get_42', t1, t2)
 
     for op, t1, t2 in permutate(ops, types, types):
         t_out = t1 if t1 == t2 else 'float'
