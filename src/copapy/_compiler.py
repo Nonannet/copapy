@@ -1,6 +1,6 @@
 from typing import Generator, Iterable, Any
 from . import _binwrite as binw
-from ._stencils import stencil_database, patch_entry
+from ._stencils import stencil_database
 from collections import defaultdict, deque
 from ._basic_types import Net, Node, Write, CPConstant, Op, transl_type
 
@@ -244,12 +244,11 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
     # Prepare program code and relocations
     object_addr_lookup = {net: offs for net, offs, _ in variable_mem_layout}
     section_addr_lookup = {id: offs for id, offs, _ in section_mem_layout}
-    offset = aux_function_lengths  # offset in generated code chunk
 
     # assemble stencils to main program and patch stencils
     data = sdb.get_function_code('entry_function_shell', 'start')
     data_list.append(data)
-    offset += len(data)
+    offset = aux_function_lengths + len(data)
 
     for associated_net, node in extended_output_ops:
         assert node.name in sdb.stencil_definitions, f"- Warning: {node.name} stencil not found"
@@ -273,11 +272,13 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
                     addr = section_addr_lookup[patch.target_symbol_section_index]
                     patch_value = addr + patch.addend - (offset + patch.addr)
                 patch_list.append((patch.type.value, offset + patch.addr, patch_value, binw.Command.PATCH_OBJECT))
+                print(patch.type, patch.addr, binw.Command.PATCH_OBJECT, node.name)
 
             elif patch.target_symbol_info == 'STT_FUNC':
                 addr = aux_func_addr_lookup[patch.target_symbol_name]
                 patch_value = addr + patch.addend - (offset + patch.addr)
                 patch_list.append((patch.type.value, offset + patch.addr, patch_value, binw.Command.PATCH_FUNC))
+                print(patch.type, patch.addr, binw.Command.PATCH_FUNC, node.name, '->', patch.target_symbol_name)
             else:
                 raise ValueError(f"Unsupported: {node.name} {patch.target_symbol_info} {patch.target_symbol_name}")
 
@@ -303,16 +304,21 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
         for patch in sdb.get_patch_positions(name):
             if patch.target_symbol_info in {'STT_OBJECT', 'STT_NOTYPE'}:
                 # Patch constants/variable addresses on heap
-                addr = section_addr_lookup[patch.target_symbol_section_index]
-                patch_value = addr + patch.addend - (start + patch.addr)
+                section_addr = section_addr_lookup[patch.target_symbol_section_index]
+                patch_value = section_addr + patch.addend - (start + patch.addr)
                 patch_list.append((patch.type.value, start + patch.addr, patch_value, binw.Command.PATCH_OBJECT))
+                print(patch.type, patch.addr, section_addr, binw.Command.PATCH_OBJECT, name)
+                #print(patch.type, start + patch.addr, patch_value, binw.Command.PATCH_OBJECT)
 
             elif patch.target_symbol_info == 'STT_FUNC':
-                addr = aux_func_addr_lookup[patch.target_symbol_name]
-                patch_value = addr + patch.addend - (start + patch.addr)
+                aux_func_addr = aux_func_addr_lookup[patch.target_symbol_name]
+                patch_value = aux_func_addr + patch.addend - (start + patch.addr)
                 patch_list.append((patch.type.value, start + patch.addr, patch_value, binw.Command.PATCH_FUNC))
+
             else:
                 raise ValueError(f"Unsupported: {name} {patch.target_symbol_info} {patch.target_symbol_name}")
+
+    assert False, aux_function_mem_layout
 
     # write entry function code
     dw.write_com(binw.Command.COPY_CODE)

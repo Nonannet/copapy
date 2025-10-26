@@ -1,18 +1,19 @@
 from copapy import _binwrite, variable
 from copapy.backend import Write, compile_to_instruction_list
-import copapy
+import copapy as cp
 
 
 def test_compile() -> None:
 
-    c1 = variable(9)
+    c1 = variable(9.0)
 
     #ret = [c1 / 4, c1 / -4, c1 // 4, c1 // -4, (c1 * -1) // 4]
-    ret = [c1 // 3.3 + 5]
+    #ret = [c1 // 3.3 + 5]
+    ret = [cp.sqrt(c1)]
 
     out = [Write(r) for r in ret]
 
-    il, _ = compile_to_instruction_list(out, copapy.generic_sdb)
+    il, _ = compile_to_instruction_list(out, cp.generic_sdb)
 
     # run program command
     il.write_com(_binwrite.Command.RUN_PROG)
