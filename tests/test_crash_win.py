@@ -1,5 +1,5 @@
 from copapy import NumLike, variable
-from copapy.backend import Write, Net, compile_to_instruction_list, add_read_command
+from copapy.backend import Write, Net, compile_to_dag, add_read_command
 import copapy
 import subprocess
 from copapy import _binwrite
@@ -29,7 +29,7 @@ def test_compile():
 
     ret = function(c1, c2)
 
-    dw, variable_list = compile_to_instruction_list([Write(net) for net in ret], copapy.generic_sdb)
+    dw, variable_list = compile_to_dag([Write(net) for net in ret], copapy.generic_sdb)
 
     # run program command
     dw.write_com(_binwrite.Command.RUN_PROG)

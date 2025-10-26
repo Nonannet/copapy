@@ -1,33 +1,43 @@
-from copapy import _binwrite, variable
-from copapy.backend import Write, compile_to_instruction_list
+from copapy import variable
+from copapy.backend import Write, compile_to_dag
 import copapy as cp
+from copapy._binwrite import Command
 
 
 def test_compile() -> None:
-
+    """Test compilation of a simple program."""
     c1 = variable(9.0)
 
     #ret = [c1 / 4, c1 / -4, c1 // 4, c1 // -4, (c1 * -1) // 4]
-    #ret = [c1 // 3.3 + 5]
-    ret = [cp.sqrt(c1)]
+    ret = [c1 // 3.3 + 5]
+    #ret = [cp.sqrt(c1)]
+    #c2 = cp._math.get_42()
+    #ret = [c2]
 
     out = [Write(r) for r in ret]
 
-    il, _ = compile_to_instruction_list(out, cp.generic_sdb)
+    dw, vars = compile_to_dag(out, cp.generic_sdb)
 
     # run program command
-    il.write_com(_binwrite.Command.RUN_PROG)
+    dw.write_com(Command.RUN_PROG)
 
-    il.write_com(_binwrite.Command.READ_DATA)
-    il.write_int(0)
-    il.write_int(36)
+    # read first 32 byte
+    dw.write_com(Command.READ_DATA)
+    dw.write_int(0)
+    dw.write_int(32)
 
-    il.write_com(_binwrite.Command.END_COM)
+    # read variables
+    for addr, lengths, _ in vars.values():
+        dw.write_com(Command.READ_DATA)
+        dw.write_int(addr)
+        dw.write_int(lengths)
+
+    dw.write_com(Command.END_COM)
 
     print('* Data to runner:')
-    il.print()
+    dw.print()
 
-    il.to_file('bin/test.copapy')
+    dw.to_file('bin/test.copapy')
 
 
 if __name__ == "__main__":

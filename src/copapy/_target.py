@@ -4,7 +4,7 @@ from coparun_module import coparun, read_data_mem
 import struct
 from ._basic_types import stencil_db_from_package
 from ._basic_types import variable, Net, Node, Write, NumLike
-from ._compiler import compile_to_instruction_list
+from ._compiler import compile_to_dag
 
 
 def add_read_command(dw: binw.data_writer, variables: dict[Net, tuple[int, int, str]], net: Net) -> None:
@@ -18,7 +18,7 @@ def add_read_command(dw: binw.data_writer, variables: dict[Net, tuple[int, int, 
 class Target():
     def __init__(self, arch: str = 'native', optimization: str = 'O3') -> None:
         self.sdb = stencil_db_from_package(arch, optimization)
-        self._variables: dict[Net, tuple[int, int, str]] = dict()
+        self._variables: dict[Net, tuple[int, int, str]] = {}
 
     def compile(self, *variables: int | float | variable[int] | variable[float] | variable[bool] | Iterable[int | float | variable[int] | variable[float] | variable[bool]]) -> None:
         nodes: list[Node] = []
@@ -30,7 +30,7 @@ class Target():
             else:
                 nodes.append(Write(s))
 
-        dw, self._variables = compile_to_instruction_list(nodes, self.sdb)
+        dw, self._variables = compile_to_dag(nodes, self.sdb)
         dw.write_com(binw.Command.END_COM)
         assert coparun(dw.get_data()) > 0
 

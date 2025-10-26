@@ -161,11 +161,11 @@ class variable(Generic[TNum], Net):
     def __lt__(self, other: NumLike) -> 'variable[bool]':
         ret = add_op('gt', [other, self])
         return variable(ret.source, dtype='bool')
-    
+
     def __ge__(self, other: NumLike) -> 'variable[bool]':
         ret = add_op('ge', [self, other])
         return variable(ret.source, dtype='bool')
-    
+
     def __le__(self, other: NumLike) -> 'variable[bool]':
         ret = add_op('ge', [other, self])
         return variable(ret.source, dtype='bool')

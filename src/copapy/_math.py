@@ -37,4 +37,3 @@ def abs(x: T) -> T:
     ret = (x < 0) * -x + (x >= 0) * x
     return ret  # pyright: ignore[reportReturnType]
 
-    
