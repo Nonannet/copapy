@@ -14,7 +14,7 @@ COMMAND_SIZE = 4
 
 class data_writer():
     def __init__(self, byteorder: ByteOrder):
-        self._data: list[tuple[str, bytes, int]] = list()
+        self._data: list[tuple[str, bytes, int]] = []
         self.byteorder: ByteOrder = byteorder
 
     def write_int(self, value: int, num_bytes: int = 4, signed: bool = False) -> None:

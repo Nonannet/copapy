@@ -1,5 +1,5 @@
 from copapy import variable, NumLike
-from copapy.backend import Write, compile_to_instruction_list, add_read_command
+from copapy.backend import Write, compile_to_dag, add_read_command
 import copapy
 import subprocess
 import struct
@@ -49,7 +49,7 @@ def test_compile():
 
     out = [Write(r) for r in ret]
 
-    il, variables = compile_to_instruction_list(out, copapy.generic_sdb)
+    il, variables = compile_to_dag(out, copapy.generic_sdb)
 
     # run program command
     il.write_com(_binwrite.Command.RUN_PROG)

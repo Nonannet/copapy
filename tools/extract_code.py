@@ -47,6 +47,8 @@ if __name__ == "__main__":
             offs = dr.read_int()
             reloc_type = dr.read_int()
             value = dr.read_int(signed=True)
+            assert reloc_type == RelocationType.RELOC_RELATIVE_32.value
+            program_data[offs:offs + 4] = value.to_bytes(4, byteorder, signed=True)
             print(f"PATCH_FUNC patch_offs={offs} reloc_type={reloc_type} value={value}")
         elif com == Command.PATCH_OBJECT:
             offs = dr.read_int()

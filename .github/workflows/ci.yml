@@ -14,6 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Build & test aux functions
+        run: bash tools/test_stencil_aux.sh
+
       - name: Build object files
         run: bash tools/crosscompile.sh
 
@@ -24,7 +27,7 @@ jobs:
 
   build-ubuntu:
     needs: [build_stencils]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     strategy:
       matrix:
@@ -53,7 +56,10 @@ jobs:
         gcc -DENABLE_BASIC_LOGGING -O3 -Wall -Wextra -Wconversion -Wsign-conversion -Wshadow -Wstrict-overflow -Werror -g src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c -o bin/coparun
 
     - name: Install ARM binutils
-      run: sudo apt-get update && sudo apt-get install -y binutils-aarch64-linux-gnu
+      run: |
+        which aarch64-linux-gnu-objdump || echo "Not found: aarch64-linux-gnu-objdump"
+        sudo apt-get install --no-install-recommends -y binutils-aarch64-linux-gnu
+      
 
     - name: Generate debug asm files
       if: strategy.job-index == 0

@@ -1,6 +1,6 @@
 from coparun_module import coparun
 from copapy import variable
-from copapy.backend import Write, compile_to_instruction_list, add_read_command
+from copapy.backend import Write, compile_to_dag, add_read_command
 import copapy
 from copapy import _binwrite
 
@@ -15,7 +15,7 @@ def test_compile():
     r2 = i1 + 9
     out = [Write(r1), Write(r2), Write(c2)]
 
-    il, variables = compile_to_instruction_list(out, copapy.generic_sdb)
+    il, variables = compile_to_dag(out, copapy.generic_sdb)
 
     # run program command
     il.write_com(_binwrite.Command.RUN_PROG)
