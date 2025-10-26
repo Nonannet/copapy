@@ -1,15 +1,17 @@
 from copapy import variable, Target
 import pytest
-import copapy
+import copapy as cp
 
 
 def test_corse():
-    c_i = variable(9)
-    c_f = variable(2.5)
+    a_i = 9
+    a_f = 2.5
+    c_i = variable(a_i)
+    c_f = variable(a_f)
     # c_b = variable(True)
 
-    ret_test = (c_f ** c_f, c_i ** c_i)#, c_i & 3)
-    ret_ref = (2.5 ** 2.5, 9 ** 9)#, 9 & 3)
+    ret_test = (c_f ** c_f, c_i ** c_i) # , c_i & 3)
+    ret_refe = (a_f ** a_f, a_i ** a_i) # , a_i & 3)
 
     tg = Target()
     print('* compile and copy ...')
@@ -18,8 +20,8 @@ def test_corse():
     tg.run()
     print('* finished')
 
-    for test, ref in zip(ret_test, ret_ref):
-        assert isinstance(test, copapy.variable)
+    for test, ref in zip(ret_test, ret_refe):
+        assert isinstance(test, cp.variable)
         val = tg.read_value(test)
         print('+', val, ref, type(val), test.dtype)
         #for t in (int, float, bool):
@@ -28,12 +30,14 @@ def test_corse():
 
 
 def test_fine():
-    c_i = variable(9)
-    c_f = variable(2.5)
+    a_i = 9
+    a_f = 2.5
+    c_i = variable(a_i)
+    c_f = variable(a_f)
     # c_b = variable(True)
 
-    ret_test = (c_f ** 2, c_i ** -1)#, c_i & 3)
-    ret_ref = (2.5 ** 2, 9 ** -1)#, 9 & 3)
+    ret_test = (c_f ** 2, c_i ** -1, cp.sqrt(c_i), cp.sqrt(c_f))  # , c_i & 3)
+    ret_refe = (a_f ** 2, a_i ** -1, cp.sqrt(a_i), cp.sqrt(a_f))  # , a_i & 3)
 
     tg = Target()
     print('* compile and copy ...')
@@ -42,8 +46,8 @@ def test_fine():
     tg.run()
     print('* finished')
 
-    for test, ref in zip(ret_test, ret_ref):
-        assert isinstance(test, copapy.variable)
+    for test, ref in zip(ret_test, ret_refe):
+        assert isinstance(test, cp.variable)
         val = tg.read_value(test)
         print('+', val, ref, type(val), test.dtype)
         #for t in (int, float, bool):

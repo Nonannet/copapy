@@ -7,7 +7,7 @@ VecIntLike: TypeAlias = 'vector[int] | variable[int] | int'
 VecFloatLike: TypeAlias = 'vector[float] | variable[float] | float'
 T = TypeVar("T", int, float)
 
-epsilon = 1e-10
+epsilon = 1e-20
 
 
 class vector(Generic[T]):
@@ -153,6 +153,6 @@ class vector(Generic[T]):
     def normalize(self) -> 'vector[float]':
         mag = self.magnitude() + epsilon
         return self / mag
-    
+
     def __iter__(self) -> Iterable[variable[T] | T]:
-        return iter(self.values)    
+        return iter(self.values)

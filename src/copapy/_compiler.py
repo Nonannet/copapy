@@ -192,8 +192,8 @@ def get_aux_function_mem_layout(function_names: Iterable[str], sdb: stencil_data
     return function_list, offset
 
 
-def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database) -> tuple[binw.data_writer, dict[Net, tuple[int, int, str]]]:
-    variables: dict[Net, tuple[int, int, str]] = dict()
+def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[binw.data_writer, dict[Net, tuple[int, int, str]]]:
+    variables: dict[Net, tuple[int, int, str]] = {}
     data_list: list[bytes] = []
     patch_list: list[tuple[int, int, int, binw.Command]] = []
 
@@ -263,22 +263,23 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
                     assert associated_net, f"Relocation found but no net defined for operation {node.name}"
                     #print(f"Patch for write and read addresses to/from heap variables: {node.name} {patch.target_symbol_info} {patch.target_symbol_name}")
                     addr = object_addr_lookup[associated_net]
-                    patch_value = addr + patch.addend - (offset + patch.addr)
+                    patch_value = addr + patch.addend - (offset + patch.patch_address)
                 elif patch.target_symbol_name.startswith('result_'):
                     raise Exception(f"Stencil {node.name} seams to branch to multiple result_* calls.")
                 else:
                     # Patch constants addresses on heap
-                    print('##', section_addr_lookup, node.name, patch)
-                    addr = section_addr_lookup[patch.target_symbol_section_index]
-                    patch_value = addr + patch.addend - (offset + patch.addr)
-                patch_list.append((patch.type.value, offset + patch.addr, patch_value, binw.Command.PATCH_OBJECT))
-                print(patch.type, patch.addr, binw.Command.PATCH_OBJECT, node.name)
+                    section_addr = section_addr_lookup[patch.target_symbol_section_index]
+                    obj_addr = section_addr + patch.target_symbol_address
+                    patch_value = obj_addr + patch.addend - (offset + patch.patch_address)
+                    #print('* constants stancils', patch.type, patch.patch_address, binw.Command.PATCH_OBJECT, node.name)
+                patch_list.append((patch.type.value, offset + patch.patch_address, patch_value, binw.Command.PATCH_OBJECT))
+                #print(patch.type, patch.addr, binw.Command.PATCH_OBJECT, node.name)
 
             elif patch.target_symbol_info == 'STT_FUNC':
                 addr = aux_func_addr_lookup[patch.target_symbol_name]
-                patch_value = addr + patch.addend - (offset + patch.addr)
-                patch_list.append((patch.type.value, offset + patch.addr, patch_value, binw.Command.PATCH_FUNC))
-                print(patch.type, patch.addr, binw.Command.PATCH_FUNC, node.name, '->', patch.target_symbol_name)
+                patch_value = addr + patch.addend - (offset + patch.patch_address)
+                patch_list.append((patch.type.value, offset + patch.patch_address, patch_value, binw.Command.PATCH_FUNC))
+                #print(patch.type, patch.addr, binw.Command.PATCH_FUNC, node.name, '->', patch.target_symbol_name)
             else:
                 raise ValueError(f"Unsupported: {node.name} {patch.target_symbol_info} {patch.target_symbol_name}")
 
@@ -305,15 +306,15 @@ def compile_to_instruction_list(node_list: Iterable[Node], sdb: stencil_database
             if patch.target_symbol_info in {'STT_OBJECT', 'STT_NOTYPE'}:
                 # Patch constants/variable addresses on heap
                 section_addr = section_addr_lookup[patch.target_symbol_section_index]
-                patch_value = section_addr + patch.addend - (start + patch.addr)
-                patch_list.append((patch.type.value, start + patch.addr, patch_value, binw.Command.PATCH_OBJECT))
-                print(patch.type, patch.addr, section_addr, binw.Command.PATCH_OBJECT, name)
-                #print(patch.type, start + patch.addr, patch_value, binw.Command.PATCH_OBJECT)
+                obj_addr = section_addr + patch.target_symbol_address
+                patch_value = obj_addr + patch.addend - (start + patch.patch_address)
+                patch_list.append((patch.type.value, start + patch.patch_address, patch_value, binw.Command.PATCH_OBJECT))
+                #print('* constants aux', patch.type, patch.patch_address, obj_addr, binw.Command.PATCH_OBJECT, name)
 
             elif patch.target_symbol_info == 'STT_FUNC':
                 aux_func_addr = aux_func_addr_lookup[patch.target_symbol_name]
-                patch_value = aux_func_addr + patch.addend - (start + patch.addr)
-                patch_list.append((patch.type.value, start + patch.addr, patch_value, binw.Command.PATCH_FUNC))
+                patch_value = aux_func_addr + patch.addend - (start + patch.patch_address)
+                patch_list.append((patch.type.value, start + patch.patch_address, patch_value, binw.Command.PATCH_FUNC))
 
             else:
                 raise ValueError(f"Unsupported: {name} {patch.target_symbol_info} {patch.target_symbol_name}")

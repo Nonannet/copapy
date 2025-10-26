@@ -21,11 +21,12 @@ class patch_entry:
         type (RelocationType): relocation type"""
 
     type: RelocationType
-    addr: int
+    patch_address: int
     addend: int
     target_symbol_name: str
     target_symbol_info: str
     target_symbol_section_index: int
+    target_symbol_address: int
 
 
 def translate_relocation(relocation_addr: int, reloc_type: str, bits: int, r_addend: int) -> RelocationType:
@@ -150,10 +151,11 @@ class stencil_database():
                                 reloc.fields['r_addend'],
                                 reloc.symbol.name,
                                 reloc.symbol.info,
-                                reloc.symbol.fields['st_shndx'])
+                                reloc.symbol.fields['st_shndx'],
+                                reloc.symbol.fields['st_value'])
 
             # Exclude the call to the result_* function
-            if patch.addr < end_index - start_index:
+            if patch.patch_address < end_index - start_index:
                 yield patch
 
     def get_stencil_code(self, name: str) -> bytes:
@@ -189,7 +191,7 @@ class stencil_database():
         return self.elf.sections[id].data
 
     def get_function_code(self, name: str, part: Literal['full', 'start', 'end'] = 'full') -> bytes:
-        """Returns machine code for a specified function name"""
+        """Returns machine code for a specified function name."""
         func = self.elf.symbols[name]
         assert func.info == 'STT_FUNC', f"{name} is not a function"
 
