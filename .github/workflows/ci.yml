@@ -58,7 +58,7 @@ jobs:
     - name: Install ARM binutils
       run: |
         sudo apt-get download binutils-aarch64-linux-gnu
-        sudo dpkg -i binutils-aarch64-linux-gnu_*.deb
+        sudo dpkg -i -o Dpkg::Options::="--no-triggers" binutils-aarch64-linux-gnu_*.deb
 
     - name: Generate debug asm files
       if: strategy.job-index == 0
