@@ -57,8 +57,10 @@ jobs:
 
     - name: Install ARM binutils
       run: |
+        echo "set man-db/auto-update false" | sudo debconf-communicate
+        sudo dpkg-reconfigure man-db
         sudo apt-get download binutils-aarch64-linux-gnu
-        sudo dpkg -i -o Dpkg::Options::="--no-triggers" binutils-aarch64-linux-gnu_*.deb
+        sudo dpkg -i binutils-aarch64-linux-gnu_*.deb
 
     - name: Generate debug asm files
       if: strategy.job-index == 0
