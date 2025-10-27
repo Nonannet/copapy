@@ -25,9 +25,51 @@ jobs:
           name: stencil-object-files
           path: src/copapy/obj/*.o
 
+  release-stencils:
+    needs: [build_stencils]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            pyproject.toml
+            tools/get_tag.sh
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: stencil-object-files
+          path: src/copapy/obj
+
+      - name: Get version tag name
+        id: version
+        run: bash tools/get_tag.sh
+
+      - name: Release stencils
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -v
+          TAG="${{ steps.version.outputs.version }}"
+
+          if ! gh release view "$TAG" &>/dev/null; then
+            echo "Creating new stencil release $TAG"
+            gh release create "$TAG" src/copapy/obj/*.o \
+              --prerelease \
+              --title "$TAG" \
+              --notes "Automated release stencil for $TAG"
+          else
+            echo "Updating existing release for $TAG"
+            gh release upload "$TAG" src/copapy/obj/*.o --clobber
+          fi
+  
   build-ubuntu:
     needs: [build_stencils]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     strategy:
       matrix:
