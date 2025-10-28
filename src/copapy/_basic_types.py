@@ -32,6 +32,14 @@ def transl_type(t: str) -> str:
 
 
 class Node:
+    """A Node represents an computational operation like ADD or other operations 
+    like read and write from or to the memory or IOs. In the computation graph
+    Nodes are connected via Nets.
+
+    Attributes:
+        args (list[Net]): The input Nets to this Node.
+        name (str): The name of the operation this Node represents.
+    """
     def __init__(self) -> None:
         self.args: list[Net] = []
         self.name: str = ''
@@ -40,11 +48,14 @@ class Node:
         return f"Node:{self.name}({', '.join(str(a) for a in self.args) if self.args else (self.value if isinstance(self, CPConstant) else '')})"
 
 
-class Device():
-    pass
-
-
 class Net:
+    """A Net represents a variable in the computation graph - or more generally it
+    connects Nodes together.
+
+    Attributes:
+        dtype (str): The data type of this Net.
+        source (Node): The Node that produces the value for this Net.
+    """
     def __init__(self, dtype: str, source: Node):
         self.dtype = dtype
         self.source = source
@@ -58,7 +69,19 @@ class Net:
 
 
 class variable(Generic[TNum], Net):
+    """A "variable" represents a typed variable. It supports arithmetic and
+    comparison operations.
+
+    Attributes:
+        dtype (str): Data type of this variable.
+    """
     def __init__(self, source: TNum | Node, dtype: str | None = None):
+        """Instance a variable.
+
+        Args:
+            source: A numeric value or Node object.
+            dtype: Data type of this variable. Required if source is a Node.
+        """
         if isinstance(source, Node):
             self.source = source
             assert dtype, 'For source type Node a dtype argument is required.'

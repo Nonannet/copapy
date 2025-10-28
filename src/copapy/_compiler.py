@@ -144,6 +144,8 @@ def add_write_ops(net_node_list: list[tuple[Net | None, Node]], const_nets: list
 
 
 def get_nets(*inputs: Iterable[Iterable[Any]]) -> list[Net]:
+    """Get all unique nets from the provided inputs
+    """
     nets: set[Net] = set()
 
     for input in inputs:
@@ -156,6 +158,16 @@ def get_nets(*inputs: Iterable[Iterable[Any]]) -> list[Net]:
 
 
 def get_data_layout(variable_list: Iterable[Net], sdb: stencil_database, offset: int = 0) -> tuple[list[tuple[Net, int, int]], int]:
+    """Get memory layout for the provided variables
+    
+    Arguments:
+        variable_list: Variables to layout
+        sdb: Stencil database for size lookup
+        offset: Starting offset for layout
+
+    Returns:
+        Tuple of list of (variable, start_offset, length) and total length"""
+
     object_list: list[tuple[Net, int, int]] = []
 
     for variable in variable_list:
@@ -171,17 +183,37 @@ def get_data_layout(variable_list: Iterable[Net], sdb: stencil_database, offset:
 
 
 def get_section_layout(section_indexes: Iterable[int], sdb: stencil_database, offset: int = 0) -> tuple[list[tuple[int, int, int]], int]:
+    """Get memory layout for the provided sections
+    
+    Arguments:
+        section_indexes: Sections (by index) to layout
+        sdb: Stencil database for size lookup
+        offset: Starting offset for layout
+
+    Returns:
+        Tuple of list of (section_id, start_offset, length) and total length
+    """
     section_list: list[tuple[int, int, int]] = []
 
-    for id in section_indexes:
-        lengths = sdb.get_section_size(id)
-        section_list.append((id, offset, lengths))
+    for index in section_indexes:
+        lengths = sdb.get_section_size(index)
+        section_list.append((index, offset, lengths))
         offset += (lengths + 3) // 4 * 4
 
     return section_list, offset
 
 
 def get_aux_function_mem_layout(function_names: Iterable[str], sdb: stencil_database, offset: int = 0) -> tuple[list[tuple[str, int, int]], int]:
+    """Get memory layout for the provided auxiliary functions
+
+    Arguments:
+        function_names: Function names to layout
+        sdb: Stencil database for size lookup
+        offset: Starting offset for layout
+    
+    Returns:
+        Tuple of list of (function_name, start_offset, length) and total length
+    """
     function_list: list[tuple[str, int, int]] = []
 
     for name in function_names:
@@ -193,6 +225,15 @@ def get_aux_function_mem_layout(function_names: Iterable[str], sdb: stencil_data
 
 
 def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[binw.data_writer, dict[Net, tuple[int, int, str]]]:
+    """Compiles a DAG identified by provided end nodes to binary code
+
+    Arguments:
+        node_list: List of end nodes of the DAG to compile
+        sdb: Stencil database
+
+    Returns:
+        Tuple of data writer with binary code and variable layout dictionary
+    """
     variables: dict[Net, tuple[int, int, str]] = {}
     data_list: list[bytes] = []
     patch_list: list[tuple[int, int, int, binw.Command]] = []

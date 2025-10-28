@@ -11,11 +11,16 @@ epsilon = 1e-20
 
 
 class vector(Generic[T]):
-    """Type-safe vector supporting numeric promotion between vector types."""
+    """Mathematical vector class supporting basic operations and interactions with variables.
+    """
     def __init__(self, values: Iterable[T | variable[T]]):
+        """Create a vector with given values and variables.
+
+        Args:
+            values: iterable of constant values and variables
+        """
         self.values: tuple[variable[T] | T, ...] = tuple(values)
 
-    # ---------- Basic dunder methods ----------
     def __repr__(self) -> str:
         return f"vector({self.values})"
 
@@ -143,14 +148,17 @@ class vector(Generic[T]):
     @overload
     def sum(self: 'vector[float]') -> float | variable[float]: ...
     def sum(self) -> Any:
+        """Sum of all vector elements."""
         return sum(a for a in self.values if isinstance(a, variable)) +\
                sum(a for a in self.values if not isinstance(a, variable))
 
     def magnitude(self) -> 'float | variable[float]':
+        """Magnitude (length) of the vector."""
         s = sum(a * a for a in self.values)
         return sqrt(s) if isinstance(s, variable) else sqrt(s)
 
     def normalize(self) -> 'vector[float]':
+        """Returns a normalized (unit length) version of the vector."""
         mag = self.magnitude() + epsilon
         return self / mag
 

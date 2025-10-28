@@ -16,11 +16,24 @@ def add_read_command(dw: binw.data_writer, variables: dict[Net, tuple[int, int, 
 
 
 class Target():
+    """Target device for compiling for and running on copapy code.
+    """
     def __init__(self, arch: str = 'native', optimization: str = 'O3') -> None:
+        """Initialize Target object
+        
+        Arguments:
+            arch: Target architecture
+            optimization: Optimization level
+        """
         self.sdb = stencil_db_from_package(arch, optimization)
         self._variables: dict[Net, tuple[int, int, str]] = {}
 
     def compile(self, *variables: int | float | variable[int] | variable[float] | variable[bool] | Iterable[int | float | variable[int] | variable[float] | variable[bool]]) -> None:
+        """Compiles the code to compute the given variables.
+        
+        Arguments:
+            variables: Variables to compute
+        """
         nodes: list[Node] = []
         for s in variables:
             if isinstance(s, Iterable):
@@ -35,7 +48,8 @@ class Target():
         assert coparun(dw.get_data()) > 0
 
     def run(self) -> None:
-        # set entry point and run code
+        """Runs the compiled code on the target device.
+        """
         dw = binw.data_writer(self.sdb.byteorder)
         dw.write_com(binw.Command.RUN_PROG)
         dw.write_com(binw.Command.END_COM)
@@ -58,8 +72,16 @@ class Target():
         ...
 
     def read_value(self, net: NumLike) -> float | int | bool:
+        """Reads the value of a variable.
+
+        Arguments:
+            net: Variable to read
+        
+        Returns:
+            Value of the variable
+        """
         assert isinstance(net, Net), "Variable must be a copapy variable object"
-        assert net in self._variables, f"Variable {net} not found"
+        assert net in self._variables, f"Variable {net} not found. It might not have been compiled for the target."
         addr, lengths, var_type = self._variables[net]
         print('...', self._variables[net], net.dtype)
         assert lengths > 0
@@ -87,6 +109,7 @@ class Target():
             raise ValueError(f"Unsupported variable type: {var_type}")
 
     def read_value_remote(self, net: Net) -> None:
+        """Reads the raw data of a variable by the runner."""
         dw = binw.data_writer(self.sdb.byteorder)
         add_read_command(dw, self._variables, net)
         assert coparun(dw.get_data()) > 0

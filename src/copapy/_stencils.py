@@ -170,6 +170,13 @@ class stencil_database():
         return strip_function(self.elf.symbols[name])
 
     def get_sub_functions(self, names: Iterable[str]) -> set[str]:
+        """Return recursively all functions called by stencils or by other functions
+        Args:
+            names: function or stencil names
+        
+        Returns:
+            set of all sub function names
+        """
         name_set: set[str] = set()
         for name in names:
             if name not in name_set:
@@ -182,16 +189,27 @@ class stencil_database():
         return name_set
 
     def get_symbol_size(self, name: str) -> int:
+        """Returns the size of a specified symbol name."""
         return self.elf.symbols[name].fields['st_size']
 
-    def get_section_size(self, id: int) -> int:
-        return self.elf.sections[id].fields['sh_size']
+    def get_section_size(self, index: int) -> int:
+        """Returns the size of a section specified by index."""
+        return self.elf.sections[index].fields['sh_size']
 
-    def get_section_data(self, id: int) -> bytes:
-        return self.elf.sections[id].data
+    def get_section_data(self, index: int) -> bytes:
+        """Returns the data of a section specified by index."""
+        return self.elf.sections[index].data
 
     def get_function_code(self, name: str, part: Literal['full', 'start', 'end'] = 'full') -> bytes:
-        """Returns machine code for a specified function name."""
+        """Returns machine code for a specified function name.
+        
+        Args:
+            name: function name
+            part: part of the function to return ('full', 'start', 'end')
+
+        Returns:
+            Machine code bytes of the specified part of the function
+        """
         func = self.elf.symbols[name]
         assert func.info == 'STT_FUNC', f"{name} is not a function"
 

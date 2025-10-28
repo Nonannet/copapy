@@ -10,7 +10,14 @@ def sqrt(x: float | int) -> float: ...
 @overload
 def sqrt(x: variable[Any]) -> variable[float]: ...
 def sqrt(x: NumLike) -> variable[float] | float:
-    """Square root function"""
+    """Square root function
+    
+    Arguments:
+        x: Input value
+        
+    Returns:
+        Square root of x
+    """
     if isinstance(x, variable):
         return add_op('sqrt', [x, x])  # TODO: fix 2. dummy argument
     return float(x ** 0.5)
@@ -33,7 +40,14 @@ def get_42() -> variable[float]:
 
 
 def abs(x: T) -> T:
-    """Absolute value function"""
+    """Absolute value function
+    
+    Arguments:
+        x: Input value
+        
+    Returns:
+        Absolute value of x
+    """
     ret = (x < 0) * -x + (x >= 0) * x
     return ret  # pyright: ignore[reportReturnType]
 
