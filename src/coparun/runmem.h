@@ -17,9 +17,6 @@
 #define FREE_MEMORY    257
 #define PATCH_MATH_POW 512
 
-/* Relocation types */
-#define PATCH_RELATIVE_32 0
-
 /* Memory blobs accessible by other translation units */
 extern uint8_t *data_memory;
 extern uint32_t data_memory_len;

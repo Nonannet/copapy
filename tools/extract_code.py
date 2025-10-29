@@ -1,5 +1,4 @@
 from copapy._binwrite import data_reader, Command, ByteOrder
-from copapy._stencils import RelocationType
 import argparse
 
 if __name__ == "__main__":
@@ -45,18 +44,18 @@ if __name__ == "__main__":
             print(f"COPY_CODE offs={offs} size={size} data={' '.join(hex(d) for d in datab[:5])}...")
         elif com == Command.PATCH_FUNC:
             offs = dr.read_int()
-            reloc_type = dr.read_int()
+            mask = dr.read_int()
             value = dr.read_int(signed=True)
-            assert reloc_type == RelocationType.RELOC_RELATIVE_32.value
+            assert mask == 0xFFFFFFFF
             program_data[offs:offs + 4] = value.to_bytes(4, byteorder, signed=True)
-            print(f"PATCH_FUNC patch_offs={offs} reloc_type={reloc_type} value={value}")
+            print(f"PATCH_FUNC patch_offs={offs} mask=0x{mask:x} value={value}")
         elif com == Command.PATCH_OBJECT:
             offs = dr.read_int()
-            reloc_type = dr.read_int()
+            mask = dr.read_int()
             value = dr.read_int(signed=True)
-            assert reloc_type == RelocationType.RELOC_RELATIVE_32.value
+            assert mask == 0xFFFFFFFF
             program_data[offs:offs + 4] = (value + data_section_offset).to_bytes(4, byteorder, signed=True)
-            print(f"PATCH_OBJECT patch_offs={offs} reloc_type={reloc_type} value={value}")
+            print(f"PATCH_OBJECT patch_offs={offs} mask=ox{mask:x} value={value}")
         elif com == Command.ENTRY_POINT:
             rel_entr_point = dr.read_int()
             print(f"ENTRY_POINT rel_entr_point={rel_entr_point}")

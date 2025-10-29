@@ -1,15 +1,12 @@
 from dataclasses import dataclass
 from pelfy import open_elf_file, elf_file, elf_symbol
 from typing import Generator, Literal, Iterable
-from enum import Enum
+import pelfy
 
 ByteOrder = Literal['little', 'big']
 
 # on x86_64: call or jmp instruction when tail call optimized
 LENGTH_CALL_INSTRUCTION = 5
-
-RelocationType = Enum('RelocationType', [('RELOC_RELATIVE_32', 0)])
-
 
 @dataclass
 class patch_entry:
@@ -20,7 +17,7 @@ class patch_entry:
         addr (int): address of first byte to patch relative to the start of the symbol
         type (RelocationType): relocation type"""
 
-    type: RelocationType
+    mask: int
     patch_address: int
     addend: int
     target_symbol_name: str
@@ -29,12 +26,27 @@ class patch_entry:
     target_symbol_address: int
 
 
-def translate_relocation(relocation_addr: int, reloc_type: str, bits: int, r_addend: int) -> RelocationType:
-    if reloc_type in ('R_AMD64_PLT32', 'R_AMD64_PC32'):
+def translate_relocation(reloc: pelfy.elf_relocation, offset: int) -> patch_entry:
+    if reloc.type in ('R_AMD64_PLT32', 'R_AMD64_PC32'):
         # S + A - P
-        return RelocationType.RELOC_RELATIVE_32
+        mask = 0xFFFFFFFF  # 32 bit
+        imm = offset
+
+    elif reloc.type.endswith('_JUMP26'):
+        assert reloc.file.byteorder == 'little', "Big endian not supported for ARM64"
+        mask = 0x3ffffff  # 26 bit
+        imm = offset >> 2
+        assert imm < mask, "Relocation immediate value too large"
+
     else:
-        raise Exception(f"Unknown relocation type: {reloc_type}")
+        raise NotImplementedError(f"Relocation type {reloc.type} not implemented")
+
+    return patch_entry(mask, imm,
+                    reloc.fields['r_addend'],
+                    reloc.symbol.name,
+                    reloc.symbol.info,
+                    reloc.symbol.fields['st_shndx'],
+                    reloc.symbol.fields['st_value'])
 
 
 def get_return_function_type(symbol: elf_symbol) -> str:
@@ -129,6 +141,7 @@ class stencil_database():
         Yields:
             patch_entry: every relocation for the symbol
         """
+        arm_hi_byte_flag: bool = False
         symbol = self.elf.symbols[symbol_name]
         if stencil:
             start_index, end_index = get_stencil_position(symbol)
@@ -136,27 +149,19 @@ class stencil_database():
             start_index = 0
             end_index = symbol.fields['st_size']
 
+        print('->', symbol_name)
         for reloc in symbol.relocations:
 
             patch_offset = reloc.fields['r_offset'] - symbol.fields['st_value'] - start_index
 
-            # address to fist byte to patch relative to the start of the symbol
-            rtype = translate_relocation(
-                patch_offset,
-                reloc.type,
-                reloc.bits,
-                reloc.fields['r_addend'])
+            if patch_offset < end_index - start_index:  # Exclude the call to the result_* function
+                if reloc.symbol.info == 'STT_SECTION':
+                    arm_hi_byte_flag = True
+                else:
+                    assert not arm_hi_byte_flag, "Page based relocation for ARM not supported"
+                    # address to fist byte to patch relative to the start of the symbol 
 
-            patch = patch_entry(rtype, patch_offset,
-                                reloc.fields['r_addend'],
-                                reloc.symbol.name,
-                                reloc.symbol.info,
-                                reloc.symbol.fields['st_shndx'],
-                                reloc.symbol.fields['st_value'])
-
-            # Exclude the call to the result_* function
-            if patch.patch_address < end_index - start_index:
-                yield patch
+                    yield translate_relocation(reloc, patch_offset)
 
     def get_stencil_code(self, name: str) -> bytes:
         """Return the striped function code for a provided function name

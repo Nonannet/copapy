@@ -23,19 +23,14 @@ uint8_t *executable_memory = NULL;
 uint32_t executable_memory_len = 0;
 entry_point_t entr_point = NULL;
 int data_offs = 0;
-
-void patch_mem_32(uint8_t *patch_addr, int32_t value) {
-    int32_t *val_ptr = (int32_t*)patch_addr;
-    *val_ptr = value;
-}
     
-int patch(uint8_t *patch_addr, uint32_t reloc_type, int32_t value) {
-    if (reloc_type == PATCH_RELATIVE_32) {
-        patch_mem_32(patch_addr, value);
-    }else{
-        LOG("Not implemented");
-        return 0;
-    }
+int patch(uint8_t *patch_addr, uint32_t patch_mask, int32_t value) {
+    uint32_t *val_ptr = (uint32_t*)patch_addr;
+    uint32_t original = *val_ptr;
+
+    uint32_t new_value = (original & ~patch_mask) | ((uint32_t)value & patch_mask);
+
+    *val_ptr = new_value;
     return 1;
 }
 
@@ -58,7 +53,7 @@ int update_data_offs() {
 int parse_commands(uint8_t *bytes) {
     int32_t value;
     uint32_t command;
-    uint32_t reloc_type;
+    uint32_t patch_mask;
     uint32_t offs;
     uint32_t size;
     int end_flag = 0;
@@ -101,20 +96,20 @@ int parse_commands(uint8_t *bytes) {
             
             case PATCH_FUNC:
                 offs = *(uint32_t*)bytes; bytes += 4;
-                reloc_type = *(uint32_t*)bytes; bytes += 4;
+                patch_mask = *(uint32_t*)bytes; bytes += 4;
                 value = *(int32_t*)bytes; bytes += 4;
-                LOG("PATCH_FUNC patch_offs=%i reloc_type=%i value=%i\n",
-                    offs, reloc_type, value);
-                patch(executable_memory + offs, reloc_type, value);
+                LOG("PATCH_FUNC patch_offs=%i patch_mask=%#08x value=%i\n",
+                    offs, patch_mask, value);
+                patch(executable_memory + offs, patch_mask, value);
                 break;
             
             case PATCH_OBJECT:
                 offs = *(uint32_t*)bytes; bytes += 4;
-                reloc_type = *(uint32_t*)bytes; bytes += 4;
+                patch_mask = *(uint32_t*)bytes; bytes += 4;
                 value = *(int32_t*)bytes; bytes += 4;
-                LOG("PATCH_OBJECT patch_offs=%i reloc_type=%i value=%i\n",
-                    offs, reloc_type, value);
-                patch(executable_memory + offs, reloc_type, value + data_offs);
+                LOG("PATCH_OBJECT patch_offs=%i patch_mask=%#08x value=%i\n",
+                    offs, patch_mask, value);
+                patch(executable_memory + offs, patch_mask, value + data_offs);
                 break;
 
             case PATCH_MATH_POW:

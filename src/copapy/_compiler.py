@@ -313,13 +313,13 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
                     obj_addr = section_addr + patch.target_symbol_address
                     patch_value = obj_addr + patch.addend - (offset + patch.patch_address)
                     #print('* constants stancils', patch.type, patch.patch_address, binw.Command.PATCH_OBJECT, node.name)
-                patch_list.append((patch.type.value, offset + patch.patch_address, patch_value, binw.Command.PATCH_OBJECT))
+                patch_list.append((patch.mask, offset + patch.patch_address, patch_value, binw.Command.PATCH_OBJECT))
                 #print(patch.type, patch.addr, binw.Command.PATCH_OBJECT, node.name)
 
             elif patch.target_symbol_info == 'STT_FUNC':
                 addr = aux_func_addr_lookup[patch.target_symbol_name]
                 patch_value = addr + patch.addend - (offset + patch.patch_address)
-                patch_list.append((patch.type.value, offset + patch.patch_address, patch_value, binw.Command.PATCH_FUNC))
+                patch_list.append((patch.mask, offset + patch.patch_address, patch_value, binw.Command.PATCH_FUNC))
                 #print(patch.type, patch.addr, binw.Command.PATCH_FUNC, node.name, '->', patch.target_symbol_name)
             else:
                 raise ValueError(f"Unsupported: {node.name} {patch.target_symbol_info} {patch.target_symbol_name}")
@@ -349,13 +349,13 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
                 section_addr = section_addr_lookup[patch.target_symbol_section_index]
                 obj_addr = section_addr + patch.target_symbol_address
                 patch_value = obj_addr + patch.addend - (start + patch.patch_address)
-                patch_list.append((patch.type.value, start + patch.patch_address, patch_value, binw.Command.PATCH_OBJECT))
+                patch_list.append((patch.mask, start + patch.patch_address, patch_value, binw.Command.PATCH_OBJECT))
                 #print('* constants aux', patch.type, patch.patch_address, obj_addr, binw.Command.PATCH_OBJECT, name)
 
             elif patch.target_symbol_info == 'STT_FUNC':
                 aux_func_addr = aux_func_addr_lookup[patch.target_symbol_name]
                 patch_value = aux_func_addr + patch.addend - (start + patch.patch_address)
-                patch_list.append((patch.type.value, start + patch.patch_address, patch_value, binw.Command.PATCH_FUNC))
+                patch_list.append((patch.mask, start + patch.patch_address, patch_value, binw.Command.PATCH_FUNC))
 
             else:
                 raise ValueError(f"Unsupported: {name} {patch.target_symbol_info} {patch.target_symbol_name}")
@@ -369,10 +369,10 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
     dw.write_bytes(b''.join(data_list))
 
     # write patch operations
-    for patch_type, patch_addr, addr, patch_command in patch_list:
+    for mask, patch_addr, addr, patch_command in patch_list:
         dw.write_com(patch_command)
         dw.write_int(patch_addr)
-        dw.write_int(patch_type)
+        dw.write_int(mask)
         dw.write_int(addr, signed=True)
 
     dw.write_com(binw.Command.ENTRY_POINT)
