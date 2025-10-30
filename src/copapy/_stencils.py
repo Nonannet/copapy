@@ -5,9 +5,6 @@ import pelfy
 
 ByteOrder = Literal['little', 'big']
 
-# on x86_64: call or jmp instruction when tail call optimized
-LENGTH_CALL_INSTRUCTION = 5
-
 @dataclass
 class patch_entry:
     """
@@ -75,7 +72,17 @@ def get_last_call_in_function(func: elf_symbol) -> int:
     # Find last relocation in function
     assert func.relocations, f'No call function in stencil function {func.name}.'
     reloc = func.relocations[-1]
-    return reloc.fields['r_offset'] - func.fields['st_value'] - reloc.fields['r_addend'] - LENGTH_CALL_INSTRUCTION
+    print(f"reloc.fields['r_addend']   {reloc.fields['r_addend']}")
+
+    instruction_lenghs = 4 if reloc.bits < 32 else 5
+    return reloc.fields['r_offset'] - func.fields['st_value'] - reloc.fields['r_addend'] - instruction_lenghs
+
+
+def get_op_after_last_call_in_function(func: elf_symbol) -> int:
+    # Find last relocation in function
+    assert func.relocations, f'No call function in stencil function {func.name}.'
+    reloc = func.relocations[-1]
+    return reloc.fields['r_offset'] - func.fields['st_value'] - reloc.fields['r_addend']
 
 
 def symbol_is_stencil(sym: elf_symbol) -> bool:
@@ -152,6 +159,7 @@ class stencil_database():
 
         print('->', symbol_name)
         for reloc in symbol.relocations:
+            print('  ', symbol_name, arm_hi_byte_flag, reloc.symbol.info)
 
             patch_offset = reloc.fields['r_offset'] - symbol.fields['st_value'] - start_index
 
@@ -223,7 +231,7 @@ class stencil_database():
             index = get_last_call_in_function(func)
             return func.data[:index]
         elif part == 'end':
-            index = get_last_call_in_function(func)
-            return func.data[index + LENGTH_CALL_INSTRUCTION:]
+            index = get_op_after_last_call_in_function(func)
+            return func.data[index:]
         else:
             return func.data
