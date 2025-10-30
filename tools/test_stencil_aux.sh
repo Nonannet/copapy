@@ -4,8 +4,8 @@ set -e
 set -v
 
 mkdir -p bin
-FILE=aux_functions
-SRC=stencils/$FILE.c
+FILE=test
+SRC="stencils/$FILE.c"
 DEST=bin
 OPT=O3
 

@@ -41,13 +41,3 @@ float fast_pow_float(float base, float exponent) {
     u.i = (uint32_t)y;
     return u.f;
 }
-
-int main() {
-    // Test aux functions
-    float a = 16.0f;
-    float sqrt_a = aux_sqrt(a);
-    float pow_a = fast_pow_float(a, 0.5f);
-    float sqrt2_a = aux_sqrt2(a);
-    float g42 = aux_get_42(0.0f);
-    return 0;
-}
