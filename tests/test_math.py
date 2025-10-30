@@ -37,8 +37,8 @@ def test_fine():
     c_f = variable(a_f)
     # c_b = variable(True)
 
-    ret_test = (c_f ** 2, c_i ** -1, cp.sqrt(c_i), cp.sqrt(c_f))  # , c_i & 3)
-    ret_refe = (a_f ** 2, a_i ** -1, cp.sqrt(a_i), cp.sqrt(a_f))  # , a_i & 3)
+    ret_test = (c_f ** 2, c_i ** -1, cp.sqrt(c_i), cp.sqrt(c_f), cp.sin(c_f), cp.cos(c_f), cp.tan(c_f))  # , c_i & 3)
+    ret_refe = (a_f ** 2, a_i ** -1, cp.sqrt(a_i), cp.sqrt(a_f), cp.sin(a_f), cp.cos(a_f), cp.tan(a_f))  # , a_i & 3)
 
     tg = Target()
     print('* compile and copy ...')

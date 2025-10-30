@@ -25,10 +25,6 @@ __attribute__((noinline)) float aux_sqrt(float n) {
     return x;
 }
 
-__attribute__((noinline)) float aux_sqrt2(float n) {
-    return n * 20.5 + 4.5;
-}
-
 __attribute__((noinline)) float aux_get_42(float n) {
     return n + 42.0;
 }

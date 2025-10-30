@@ -11,7 +11,7 @@ stencil_func_prefix = '__attribute__((naked)) '  # Remove callee prolog
 
 stack_size = 64
 
-includes = ['aux_functions.c']
+includes = ['aux_functions.c', 'trigonometry.c']
 
 
 def read_files(files: list[str]) -> str:
@@ -212,10 +212,9 @@ if __name__ == "__main__":
         t_out = 'int' if t1 == 'float' else 'float'
         code += get_cast(t1, t2, t_out)
 
-    for t1, t2 in permutate(types, types):
-        code += get_func2('sqrt', t1, t2)
-        code += get_func2('sqrt2', t1, t2)
-        code += get_func2('get_42', t1, t2)
+    fnames = ['sqrt', 'sin', 'cos', 'tan', 'get_42']
+    for fn, t1, t2 in permutate(fnames, types, types):
+        code += get_func2(fn, t1, t2)
 
     for op, t1, t2 in permutate(ops, types, types):
         t_out = t1 if t1 == t2 else 'float'
