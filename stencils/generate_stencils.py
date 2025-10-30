@@ -4,7 +4,9 @@ from pathlib import Path
 import os
 
 op_signs = {'add': '+', 'sub': '-', 'mul': '*', 'div': '/', 'pow': '**',
-            'gt': '>', 'eq': '==', 'ge': '>=', 'ne': '!=', 'mod': '%'}
+            'gt': '>', 'eq': '==', 'ge': '>=', 'ne': '!=', 'mod': '%',
+            'lshift': '<<', 'rshift': '>>',
+            'bwand': '&', 'bwor': '|', 'bwxor': '^'}
 
 entry_func_prefix = ''
 stencil_func_prefix = '__attribute__((naked)) '  # Remove callee prolog
@@ -15,7 +17,7 @@ includes = ['aux_functions.c', 'trigonometry.c']
 
 
 def read_files(files: list[str]) -> str:
-    ret = ''
+    ret: str = ''
     script_dir = Path(__file__).parent
     for file_name in files:
         file_path = script_dir / file_name
@@ -199,6 +201,7 @@ if __name__ == "__main__":
     # Scalar arithmetic:
     types = ['int', 'float']
     ops = ['add', 'sub', 'mul', 'div', 'floordiv', 'gt', 'ge', 'eq', 'ne', 'pow']
+    int_ops = ['bwand', 'bwor', 'bwxor', 'lshift', 'rshift'] 
 
     for t1 in types:
         code += get_result_stubs1(t1)
@@ -213,8 +216,8 @@ if __name__ == "__main__":
         code += get_cast(t1, t2, t_out)
 
     fnames = ['sqrt', 'sin', 'cos', 'tan', 'get_42']
-    for fn, t1, t2 in permutate(fnames, types, types):
-        code += get_func2(fn, t1, t2)
+    for fn, t1 in permutate(fnames, types):
+        code += get_func2(fn, t1, t1)
 
     for op, t1, t2 in permutate(ops, types, types):
         t_out = t1 if t1 == t2 else 'float'
@@ -228,6 +231,9 @@ if __name__ == "__main__":
             code += get_op_code(op, t1, t2, 'int')
         else:
             code += get_op_code(op, t1, t2, t_out)
+
+    for op in int_ops:
+        code += get_op_code(op, 'int', 'int', 'int')
 
     code += get_op_code('mod', 'int', 'int', 'int')
 
