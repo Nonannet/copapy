@@ -2,8 +2,8 @@
 
 //double (*math_pow)(double, double);
 
-volatile int dummy_int = 1337;
-volatile float dummy_float = 1337;
+extern int dummy_int;
+extern float dummy_float;
 
 __attribute__((noinline)) int floor_div(float arg1, float arg2) {
     float x = arg1 / arg2;
