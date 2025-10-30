@@ -23,6 +23,7 @@ jobs:
           path: src/copapy/obj/*.o
 
   build_wheels:
+    if: contains(github.ref, '-beta') == false
     needs: [build_stencils]
     runs-on: ${{ matrix.os }}
     strategy:
@@ -65,6 +66,7 @@ jobs:
           path: wheelhouse/*.whl
 
 #  publish:
+#    if: contains(github.ref, '-beta') == false
 #    needs: [build_wheels]
 #    runs-on: ubuntu-latest
 #    steps:

@@ -10,6 +10,8 @@ OPT=O3
 
 mkdir -p $DEST
 
+# -------------- Compile stencils --------------
+
 # Windows x86_64 (ARM64)
 python3 stencils/generate_stencils.py --abi ms $SRC
 gcc-13 -$OPT -c $SRC -o $DEST/stencils_AMD64_$OPT.o
@@ -51,3 +53,9 @@ mipsel-linux-gnu-gcc-13 -$OPT -c $SRC -o $DEST/stencils_mipsel_$OPT.o
 
 # RISCV 64 Bit
 riscv64-linux-gnu-gcc-13 -$OPT -c $SRC -o $DEST/stencils_riscv64_$OPT.o
+
+
+# -------------- Cross compile runner --------------
+
+# Aarch64
+aarch64-linux-gnu-gcc-13 -static -O3 -o bin/coparun-aarch64 src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c

@@ -27,12 +27,13 @@ class patch_entry:
 
 
 def translate_relocation(reloc: pelfy.elf_relocation, offset: int) -> patch_entry:
-    if reloc.type in ('R_AMD64_PLT32', 'R_AMD64_PC32'):
+    if reloc.type.endswith('_PLT32') or reloc.type.endswith('_PC32'):
         # S + A - P
         mask = 0xFFFFFFFF  # 32 bit
         imm = offset
 
-    elif reloc.type.endswith('_JUMP26'):
+    elif reloc.type.endswith('_JUMP26') or reloc.type.endswith('_CALL26'):
+        # S + A - P
         assert reloc.file.byteorder == 'little', "Big endian not supported for ARM64"
         mask = 0x3ffffff  # 26 bit
         imm = offset >> 2

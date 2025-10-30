@@ -1,5 +1,16 @@
 from copapy._binwrite import data_reader, Command, ByteOrder
 import argparse
+from typing import Literal
+
+def patch(data: bytearray, offset: int, patch_mask: int, value: int, byteorder: Literal['little', 'big']) -> None:
+    # Read 4 bytes at the offset as a little-endian uint32
+    original = int.from_bytes(data[offset:offset+4], byteorder)
+    
+    # Apply the patch
+    new_value = (original & ~patch_mask) | (value & patch_mask)
+    
+    # Write the new value back to the bytearray
+    data[offset:offset+4] = new_value.to_bytes(4, byteorder)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -14,8 +25,8 @@ if __name__ == "__main__":
     data_section_offset: int = args.data_section_offset
     byteorder: ByteOrder = args.byteorder
 
-    with open(input_file, mode='rb') as f:
-        dr = data_reader(f.read(), byteorder)
+    with open(input_file, mode='rb') as f_in:
+        dr = data_reader(f_in.read(), byteorder)
 
     buffer_index: int = 0
     end_flag: int = 0
@@ -46,15 +57,13 @@ if __name__ == "__main__":
             offs = dr.read_int()
             mask = dr.read_int()
             value = dr.read_int(signed=True)
-            assert mask == 0xFFFFFFFF
-            program_data[offs:offs + 4] = value.to_bytes(4, byteorder, signed=True)
+            patch(program_data, offs, mask, value, byteorder)
             print(f"PATCH_FUNC patch_offs={offs} mask=0x{mask:x} value={value}")
         elif com == Command.PATCH_OBJECT:
             offs = dr.read_int()
             mask = dr.read_int()
             value = dr.read_int(signed=True)
-            assert mask == 0xFFFFFFFF
-            program_data[offs:offs + 4] = (value + data_section_offset).to_bytes(4, byteorder, signed=True)
+            patch(program_data, offs, mask, value + data_section_offset, byteorder)
             print(f"PATCH_OBJECT patch_offs={offs} mask=ox{mask:x} value={value}")
         elif com == Command.ENTRY_POINT:
             rel_entr_point = dr.read_int()
@@ -73,7 +82,7 @@ if __name__ == "__main__":
         else:
             assert False, f"Unknown command: {com}"
 
-    with open(output_file, mode='wb') as f:
-        f.write(program_data)
+    with open(output_file, mode='wb') as f_out:
+        f_out.write(program_data)
 
     print(f"Code written to {output_file}.")

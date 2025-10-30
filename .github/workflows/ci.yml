@@ -25,6 +25,11 @@ jobs:
           name: stencil-object-files
           path: src/copapy/obj/*.o
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cross-runner
+          path: bin/coparun-*
+
   build-ubuntu:
     needs: [build_stencils]
     runs-on: ubuntu-latest
@@ -70,6 +75,11 @@ jobs:
         objdump -D -b binary -m i386:x86-64 --adjust-vma=0x1000 bin/test.copapy.bin > bin/test.copapy.asm
         echo '<p>test.copapy.asm</p>' >> $GITHUB_STEP_SUMMARY
         python tools/clean_asm.py bin/test.copapy.asm >> $GITHUB_STEP_SUMMARY
+
+        python tools/extract_code.py "bin/test-aarch64.copapy" "bin/test-aarch64.copapy.bin"
+        aarch64-linux-gnu-objdump -D -b binary -m aarch64 --adjust-vma=0x1000 bin/test-aarch64.copapy.bin > bin/test-aarch64.copapy.asm
+        echo '<p>test-aarch64.copapy.asm</p>' >> $GITHUB_STEP_SUMMARY
+        python tools/clean_asm.py bin/test-aarch64.copapy.asm >> $GITHUB_STEP_SUMMARY
 
         objdump -d -x src/copapy/obj/stencils_x86_64_O3.o > bin/stencils_x86_64_O3.asm
         echo '<p>stencils_x86_64_O3.asm</p>' >> $GITHUB_STEP_SUMMARY
@@ -176,6 +186,7 @@ jobs:
           set -v
           mkdir -p release
           cp tmp/stencil-object-files/*.o release/
+          cp tmp/cross-runner/coparun-* release/
           cp tmp/runner-linux/coparun release/
           cp tmp/runner-win/coparun.exe release/
 

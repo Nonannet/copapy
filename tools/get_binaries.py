@@ -30,6 +30,8 @@ def main() -> None:
             dest = 'bin'
         elif name == 'coparun' and os.name == 'posix':
             dest = 'bin'
+        elif name.startswith('coparun-'):
+            dest = 'bin'
         else:
             dest = ''
 
