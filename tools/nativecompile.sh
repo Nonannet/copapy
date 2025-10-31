@@ -5,7 +5,7 @@ set -v
 mkdir -p bin
 SRC=bin/stencils.c
 DEST=src/copapy/obj
-FLAGS="-fno-pic -fno-plt"
+FLAGS="-fno-pic"
 
 python stencils/generate_stencils.py $SRC
 

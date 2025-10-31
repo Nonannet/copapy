@@ -7,7 +7,7 @@ mkdir -p bin
 SRC=bin/stencils.c
 DEST=src/copapy/obj
 OPT=O3
-FLAGS="-fno-pic -fno-plt"
+FLAGS="-fno-pic"
 
 mkdir -p $DEST
 
