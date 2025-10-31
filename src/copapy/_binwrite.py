@@ -39,7 +39,7 @@ class data_writer():
                 data = struct.pack(en + 'f', value)
             else:
                 data = struct.pack(en + 'd', value)
-            assert len(data) == num_bytes
+            assert len(data) == num_bytes, (len(data), num_bytes)
             self.write_bytes(data)
 
     def print(self) -> None:

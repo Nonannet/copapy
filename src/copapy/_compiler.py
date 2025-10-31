@@ -1,6 +1,6 @@
 from typing import Generator, Iterable, Any
 from . import _binwrite as binw
-from ._stencils import stencil_database
+from ._stencils import stencil_database, patch_entry
 from collections import defaultdict, deque
 from ._basic_types import Net, Node, Write, CPConstant, Op, transl_type
 
@@ -171,7 +171,7 @@ def get_data_layout(variable_list: Iterable[Net], sdb: stencil_database, offset:
     object_list: list[tuple[Net, int, int]] = []
 
     for variable in variable_list:
-        lengths = sdb.get_symbol_size('dummy_' + transl_type(variable.dtype))
+        lengths = sdb.get_type_size(transl_type(variable.dtype))
         object_list.append((variable, offset, lengths))
         offset += (lengths + 3) // 4 * 4
 
@@ -236,7 +236,7 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
     """
     variables: dict[Net, tuple[int, int, str]] = {}
     data_list: list[bytes] = []
-    patch_list: list[tuple[int, int, int, binw.Command]] = []
+    patch_list: list[patch_entry] = []
 
     ordered_ops = list(stable_toposort(get_all_dag_edges(node_list)))
     const_net_list = get_const_nets(ordered_ops)
@@ -297,32 +297,31 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
         data_list.append(data)
         #print(f"* {node.name} ({offset}) " + ' '.join(f'{d:02X}' for d in data))
 
-        for patch in sdb.get_patch_positions(node.name, stencil=True):
-            if patch.target_symbol_info in {'STT_OBJECT', 'STT_NOTYPE'}:
-                if patch.target_symbol_name.startswith('dummy_'):
+        for reloc in sdb.get_relocations(node.name, stencil=True):
+            if reloc.target_symbol_info in {'STT_OBJECT', 'STT_NOTYPE'}:
+                #print('-- ' + reloc.target_symbol_name + ' // ' + node.name)
+                if reloc.target_symbol_name.startswith('dummy_'):
                     # Patch for write and read addresses to/from heap variables
                     assert associated_net, f"Relocation found but no net defined for operation {node.name}"
                     #print(f"Patch for write and read addresses to/from heap variables: {node.name} {patch.target_symbol_info} {patch.target_symbol_name}")
-                    addr = object_addr_lookup[associated_net]
-                    patch_value = addr + patch.addend - (offset + patch.patch_address)
-                elif patch.target_symbol_name.startswith('result_'):
+                    obj_addr = object_addr_lookup[associated_net]
+                    patch = sdb.get_patch(reloc, obj_addr, offset, binw.Command.PATCH_OBJECT.value)
+                elif reloc.target_symbol_name.startswith('result_'):
                     raise Exception(f"Stencil {node.name} seams to branch to multiple result_* calls.")
                 else:
                     # Patch constants addresses on heap
-                    section_addr = section_addr_lookup[patch.target_symbol_section_index]
-                    obj_addr = section_addr + patch.target_symbol_address
-                    patch_value = obj_addr + patch.addend - (offset + patch.patch_address)
+                    obj_addr = reloc.target_symbol_offset + section_addr_lookup[reloc.target_section_index]
+                    patch = sdb.get_patch(reloc, obj_addr, offset, binw.Command.PATCH_OBJECT.value)
                     #print('* constants stancils', patch.type, patch.patch_address, binw.Command.PATCH_OBJECT, node.name)
-                patch_list.append((patch.mask, offset + patch.patch_address, patch_value, binw.Command.PATCH_OBJECT))
-                #print(patch.type, patch.addr, binw.Command.PATCH_OBJECT, node.name)
 
-            elif patch.target_symbol_info == 'STT_FUNC':
-                addr = aux_func_addr_lookup[patch.target_symbol_name]
-                patch_value = addr + patch.addend - (offset + patch.patch_address)
-                patch_list.append((patch.mask, offset + patch.patch_address, patch_value, binw.Command.PATCH_FUNC))
+            elif reloc.target_symbol_info == 'STT_FUNC':
+                func_addr = aux_func_addr_lookup[reloc.target_symbol_name]
+                patch = sdb.get_patch(reloc, func_addr, offset, binw.Command.PATCH_FUNC.value)
                 #print(patch.type, patch.addr, binw.Command.PATCH_FUNC, node.name, '->', patch.target_symbol_name)
             else:
-                raise ValueError(f"Unsupported: {node.name} {patch.target_symbol_info} {patch.target_symbol_name}")
+                raise ValueError(f"Unsupported: {node.name} {reloc.target_symbol_info} {reloc.target_symbol_name}")
+            
+            patch_list.append(patch)
 
         offset += len(data)
 
@@ -334,6 +333,8 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
     dw.write_com(binw.Command.ALLOCATE_CODE)
     dw.write_int(offset)
 
+    print('o aux: ', aux_function_mem_layout)
+
     # write aux functions code
     for name, start, lengths in aux_function_mem_layout:
         dw.write_com(binw.Command.COPY_CODE)
@@ -343,22 +344,21 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
 
     # Patch aux functions
     for name, start, lengths in aux_function_mem_layout:
-        for patch in sdb.get_patch_positions(name):
-            if patch.target_symbol_info in {'STT_OBJECT', 'STT_NOTYPE'}:
+        for reloc in sdb.get_relocations(name):
+            if reloc.target_symbol_info in {'STT_OBJECT', 'STT_NOTYPE'}:
                 # Patch constants/variable addresses on heap
-                section_addr = section_addr_lookup[patch.target_symbol_section_index]
-                obj_addr = section_addr + patch.target_symbol_address
-                patch_value = obj_addr + patch.addend - (start + patch.patch_address)
-                patch_list.append((patch.mask, start + patch.patch_address, patch_value, binw.Command.PATCH_OBJECT))
+                obj_addr = reloc.target_symbol_offset + section_addr_lookup[reloc.target_section_index]
+                patch = sdb.get_patch(reloc, obj_addr, offset, binw.Command.PATCH_OBJECT.value)
                 #print('* constants aux', patch.type, patch.patch_address, obj_addr, binw.Command.PATCH_OBJECT, name)
 
-            elif patch.target_symbol_info == 'STT_FUNC':
-                aux_func_addr = aux_func_addr_lookup[patch.target_symbol_name]
-                patch_value = aux_func_addr + patch.addend - (start + patch.patch_address)
-                patch_list.append((patch.mask, start + patch.patch_address, patch_value, binw.Command.PATCH_FUNC))
+            elif reloc.target_symbol_info == 'STT_FUNC':
+                func_addr = aux_func_addr_lookup[reloc.target_symbol_name]
+                patch = sdb.get_patch(reloc, func_addr, offset, binw.Command.PATCH_FUNC.value)
 
             else:
-                raise ValueError(f"Unsupported: {name} {patch.target_symbol_info} {patch.target_symbol_name}")
+                raise ValueError(f"Unsupported: {name} {reloc.target_symbol_info} {reloc.target_symbol_name}")
+            
+            patch_list.append(patch)
 
     #assert False, aux_function_mem_layout
 
@@ -369,11 +369,11 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
     dw.write_bytes(b''.join(data_list))
 
     # write patch operations
-    for mask, patch_addr, addr, patch_command in patch_list:
-        dw.write_com(patch_command)
-        dw.write_int(patch_addr)
-        dw.write_int(mask)
-        dw.write_int(addr, signed=True)
+    for patch in patch_list:
+        dw.write_int(patch.patch_type)
+        dw.write_int(patch.address)
+        dw.write_int(patch.mask)
+        dw.write_int(patch.value, signed=True)
 
     dw.write_com(binw.Command.ENTRY_POINT)
     dw.write_int(aux_function_lengths)
