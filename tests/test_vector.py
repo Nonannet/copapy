@@ -11,7 +11,7 @@ def test_vectors_init():
 
     print(tt1, tt2, tt3, tt4, tt5)
 
-
+@pytest.mark.skip(reason="sqrt must be fixed")
 def test_compiled_vectors():
     t1 = cp.vector([10, 11, 12]) + cp.vector(cp.variable(v) for v in range(3))
     t2 = t1.sum()

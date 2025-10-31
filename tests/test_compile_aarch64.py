@@ -10,9 +10,9 @@ import pytest
 if os.name == 'nt':
     # On Windows wsl and qemu-user is required:
     # sudo apt install qemu-user
-    qemu_command = ['wsl', 'qemu-aarch64', 'bin/coparun-aarch64', 'bin/test.copapy']
+    qemu_command = ['wsl', 'qemu-aarch64', 'bin/coparun-aarch64', 'bin/test-aarch64.copapy']
 else:
-    qemu_command = ['qemu-aarch64', 'bin/coparun-aarch64', 'bin/test.copapy']
+    qemu_command = ['qemu-aarch64', 'bin/coparun-aarch64', 'bin/test-aarch64.copapy']
 
 
 def run_command(command: list[str]) -> str:
@@ -72,7 +72,7 @@ def test_compile():
     print('* Data to runner:')
     il.print()
 
-    il.to_file('bin/test.copapy')
+    il.to_file('bin/test-aarch64.copapy')
 
     result = run_command(qemu_command)
     print('* Output from runner:\n--')
