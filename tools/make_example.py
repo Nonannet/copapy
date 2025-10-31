@@ -79,4 +79,4 @@ def test_compile_aarch64() -> None:
 
 if __name__ == "__main__":
     test_compile()
-    test_compile_aarch64()
+    #test_compile_aarch64()

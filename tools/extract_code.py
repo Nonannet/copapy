@@ -46,34 +46,34 @@ if __name__ == "__main__":
             offs = dr.read_int()
             size = dr.read_int()
             datab = dr.read_bytes(size)
-            print(f"COPY_DATA offs={offs} size={size} data={' '.join(hex(d) for d in datab)}")
+            print(f"COPY_DATA offs=0x{offs + data_section_offset:x} size={size} data={' '.join(hex(d) for d in datab)}")
         elif com == Command.COPY_CODE:
             offs = dr.read_int()
             size = dr.read_int()
             datab = dr.read_bytes(size)
             program_data[offs:offs + size] = datab
-            print(f"COPY_CODE offs={offs} size={size} data={' '.join(hex(d) for d in datab[:5])}...")
+            print(f"COPY_CODE offs=0x{offs:x} size={size} data={' '.join(hex(d) for d in datab[:5])}...")
         elif com == Command.PATCH_FUNC:
             offs = dr.read_int()
             mask = dr.read_int()
             value = dr.read_int(signed=True)
             patch(program_data, offs, mask, value, byteorder)
-            print(f"PATCH_FUNC patch_offs={offs} mask=0x{mask:x} value={value}")
+            print(f"PATCH_FUNC patch_offs=0x{offs:x} mask=0x{mask:x} value=0x{value:x}")
         elif com == Command.PATCH_OBJECT:
             offs = dr.read_int()
             mask = dr.read_int()
             value = dr.read_int(signed=True)
             patch(program_data, offs, mask, value + data_section_offset, byteorder)
-            print(f"PATCH_OBJECT patch_offs={offs} mask=ox{mask:x} value={value}")
+            print(f"PATCH_OBJECT patch_offs=0x{offs:x} mask=0x{mask:x} value=0x{value + data_section_offset:x}")
         elif com == Command.ENTRY_POINT:
             rel_entr_point = dr.read_int()
-            print(f"ENTRY_POINT rel_entr_point={rel_entr_point}")
+            print(f"ENTRY_POINT rel_entr_point=0x{rel_entr_point:x}")
         elif com == Command.RUN_PROG:
             print("RUN_PROG")
         elif com == Command.READ_DATA:
             offs = dr.read_int()
             size = dr.read_int()
-            print(f"READ_DATA offs={offs} size={size}")
+            print(f"READ_DATA offs=0x{offs:x} size={size}")
         elif com == Command.FREE_MEMORY:
             print("READ_DATA")
         elif com == Command.END_COM:

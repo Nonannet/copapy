@@ -175,8 +175,8 @@ class stencil_database():
             mask = 0xFFFFFFFF  # 32 bit
             patch_value = symbol_address + pr.fields['r_addend'] - patch_offset
 
-            print(f'** {patch_offset=} {relocation.target_symbol_name=} {pr.fields['r_offset']=} {relocation.function_offset=} {relocation.start=} {function_offset=}')
-            print(f'   {patch_value=} {symbol_address=} {pr.fields['r_addend']=}, {function_offset=}')
+            print(f"** {patch_offset=} {relocation.target_symbol_name=} {pr.fields['r_offset']=} {relocation.function_offset=} {relocation.start=} {function_offset=}")
+            print(f"   {patch_value=} {symbol_address=} {pr.fields['r_addend']=}, {function_offset=}")
 
         #elif reloc.type.endswith('_JUMP26') or reloc.type.endswith('_CALL26'):
         #    # S + A - P
