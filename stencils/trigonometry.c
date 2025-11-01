@@ -67,7 +67,7 @@ __attribute__((noinline)) float aux_cos(float x) {
     // Select function and sign based on quadrant
     int qm = q & 3;
     int use_sin = (qm == 1 || qm == 3);
-    int sign = (qm == 0 || qm == 1) ? +1 : -1;
+    int sign = (qm == 0 || qm == 3) ? +1 : -1;
 
     float r2 = r * r;
 
@@ -101,15 +101,15 @@ __attribute__((noinline)) float aux_tan(float x) {
     int q = (int)(qd + (qd >= 0.0 ? 0.5 : -0.5));  // nearest integer
 
     // Range reduce: r = x - q*(pi/2)
-    const double PIO2_HI = 1.57079625129699707031;     // π/2 high part
-    const double PIO2_LO = 7.54978941586159635335e-08; // π/2 low part
+    const double PIO2_HI = 1.57079625129699707031;     // pi/2 high part
+    const double PIO2_LO = 7.54978941586159635335e-08; // pi/2 low part
     double r_d = xd - (double)q * PIO2_HI - (double)q * PIO2_LO;
     float r = (float)r_d;
 
-    // For tan: period is π, so q mod 2 determines sign
+    // For tan: period is pi, so q mod 2 determines sign
     int qm = q & 3;
     int use_cot = (qm == 1 || qm == 3); // tan(x) = ±cot(r) in odd quadrants
-    int sign = (qm == 1 || qm == 2) ? -1 : +1;
+    int sign = (qm == 0 || qm == 2) ? +1 : -1;
 
     // Polynomial approximations
     // sin(r) ≈ r + s3*r^3 + s5*r^5 + s7*r^7 + s9*r^9
