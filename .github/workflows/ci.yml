@@ -64,14 +64,14 @@ jobs:
       run: |
         echo "set man-db/auto-update false" | sudo debconf-communicate
         sudo dpkg-reconfigure man-db
-        sudo apt-get download binutils-aarch64-linux-gnu
-        sudo dpkg -i binutils-aarch64-linux-gnu_*.deb
+        sudo apt-get update
+        sudo apt-get install --no-install-recommends --no-install-suggests binutils-aarch64-linux-gnu
 
     - name: Generate debug asm files
       if: strategy.job-index == 0
       run: |
         python tools/make_example.py
-        
+
         python tools/extract_code.py "bin/test.copapy" "bin/test.copapy.bin"
         objdump -D -b binary -m i386:x86-64 --adjust-vma=0x1000 bin/test.copapy.bin > bin/test.copapy.asm
         echo '<p>test.copapy.asm</p>' >> $GITHUB_STEP_SUMMARY
