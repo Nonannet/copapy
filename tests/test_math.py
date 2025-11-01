@@ -70,7 +70,8 @@ def test_fine():
 
 def test_trig_precision():
 
-    test_vals = [0.0, 0.0001, 0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.28318530718, 100.0, 1000.0, 100000.0]  # up to 2pi
+    test_vals = [0.0, 0.0001, 0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.28318530718, 100.0, 1000.0, 100000.0,
+                 -0.0001, -0.1, -0.5, -1.0, -1.5, -2.0, -2.5, -3.0, -3.5, -4.0, -4.5, -5.0, -5.5, -6.0, -6.28318530718, -100.0, -1000.0, -100000.0]
 
     ret_test = [r for v in test_vals for r in (cp.sin(variable(v)), cp.cos(variable(v)), cp.tan(variable(v)))]
     ret_refe = [r for v in test_vals for r in (cp.sin(v), cp.cos(v), cp.tan(v))]
@@ -88,6 +89,27 @@ def test_trig_precision():
         assert val == pytest.approx(ref, abs=1e-5), f"Result of {func_name} for input {test_vals[i // 3]} does not match: {val} and reference: {ref}"  # pyright: ignore[reportUnknownMemberType]
 
 
+def test_sqrt_precision():
+
+    test_vals = [0.0, 0.0001, 0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.28318530718, 100.0, 1000.0, 100000.0]
+
+    ret_test = [r for v in test_vals for r in (cp.sqrt(variable(v)),)]
+    ret_refe = [r for v in test_vals for r in (cp.sqrt(v),)]
+
+    tg = Target()
+    tg.compile(ret_test)
+    tg.run()
+
+    for i, (test, ref) in enumerate(zip(ret_test, ret_refe)):
+        func_name = 'sqrt'
+        assert isinstance(test, cp.variable)
+        val = tg.read_value(test)
+        print(f"+ Result of {func_name}: {val}; reference: {ref}")
+        assert val == pytest.approx(ref, 1e-5), f"Result of {func_name} for input {test_vals[i // 3]} does not match: {val} and reference: {ref}"  # pyright: ignore[reportUnknownMemberType]
+
+
 if __name__ == "__main__":
     test_corse()
     test_fine()
+    test_sqrt_precision()
+    test_trig_precision()

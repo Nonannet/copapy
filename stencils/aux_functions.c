@@ -12,17 +12,20 @@ __attribute__((noinline)) int floor_div(float arg1, float arg2) {
     return i;
 }
 
-__attribute__((noinline)) float aux_sqrt(float n) {
-    if (n < 0) return -1;
+__attribute__((noinline)) float aux_sqrt(float x) {
+    if (x <= 0.0f) return 0.0f;
 
-    float x = n;             // initial guess
-    float epsilon = 0.00001; // desired accuracy
+    // --- Improved initial guess using bit-level trick ---
+    union { float f; uint32_t i; } conv = { x };
+    conv.i = (conv.i >> 1) + 0x1fc00000;  // better bias constant
+    float y = conv.f;
 
-    while ((x - n / x) > epsilon || (x - n / x) < -epsilon) {
-        x = 0.5 * (x + n / x);
-    }
+    // --- Fixed number of Newton-Raphson iterations ---
+    y = 0.5f * (y + x / y);
+    y = 0.5f * (y + x / y);
+    y = 0.5f * (y + x / y);  // 3 fixed iterations
 
-    return x;
+    return y;
 }
 
 __attribute__((noinline)) float aux_get_42(float n) {
