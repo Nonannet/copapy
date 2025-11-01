@@ -13,13 +13,38 @@ The language aims to be:
 Because the language is an embedded language, it can relay heavily on **python tooling**. While copapy is static typed, it uses Python to derive types during compile time wherever possible. It can get full benefit from python type checkers, to catch type errors even before compilation to improve ergonomics.
 
 ## How it works
-The **Compilation** step starts with tracing the python code to generate a acyclic directed graph (DAG) of variables and operations. The DAG can be optimized and gets than linearized to a sequence of operations. Each operation gets mapped to a pre-compiled stencil, which is a piece of machine code with placeholders for memory addresses. The compiler generates patch instructions to fill the placeholders with the correct memory addresses. The binary code build from the stencils, data for constants and the patch instructions are than passed to the Runner for execution. The runner allocates memory for the code and data, applies the patch instructions to correct memory addresses and finally executes the code.
+The **Compilation** step starts with tracing the python code to generate an acyclic directed graph (DAG) of variables and operations. The DAG can be optimized and gets than linearized to a sequence of operations. Each operation gets mapped to a pre-compiled stencil, which is a piece of machine code with placeholders for memory addresses. The compiler generates patch instructions to fill the placeholders with the correct memory addresses. The binary code build from the stencils, data for constants and the patch instructions are than passed to the Runner for execution. The runner allocates memory for the code and data, applies the patch instructions to correct memory addresses and finally executes the code.
 
 ## Getting started
 To install copapy, you can use pip:
 
 ```bash
 pip install copapy
+```
+
+A very simple example program using copapy can look like this:
+
+```python
+import copapy as cp
+
+# Define variables
+a = cp.variable(0.25)
+b = cp.variable(0.87)
+
+# Define computations
+c = a + b * 2.0
+d = c ** 2 + cp.sin(a)
+e = cp.sqrt(b)
+
+# Create a target (default is local), compile and run
+tg = cp.Target()
+tg.compile(c, d, e)
+tg.run()
+
+# Read the results
+print("Result c:", tg.read_value(c))
+print("Result d:", tg.read_value(d))
+print("Result e:", tg.read_value(d))
 ```
 
 ## Developer Guide
