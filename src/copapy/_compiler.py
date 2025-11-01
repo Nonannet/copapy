@@ -343,12 +343,15 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
         dw.write_bytes(sdb.get_function_code(name))
 
     # Patch aux functions
-    for name, start, lengths in aux_function_mem_layout:
+    for name, start, _ in aux_function_mem_layout:
         for reloc in sdb.get_relocations(name):
+
+            assert reloc.target_symbol_info != 'STT_FUNC', "Not tested yet!"
+
             if reloc.target_symbol_info in {'STT_OBJECT', 'STT_NOTYPE'}:
                 # Patch constants/variable addresses on heap
                 obj_addr = reloc.target_symbol_offset + section_addr_lookup[reloc.target_section_index]
-                patch = sdb.get_patch(reloc, obj_addr, offset, binw.Command.PATCH_OBJECT.value)
+                patch = sdb.get_patch(reloc, obj_addr, start, binw.Command.PATCH_OBJECT.value)
                 #print('* constants aux', patch.type, patch.patch_address, obj_addr, binw.Command.PATCH_OBJECT, name)
 
             elif reloc.target_symbol_info == 'STT_FUNC':
