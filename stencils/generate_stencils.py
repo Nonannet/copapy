@@ -9,11 +9,11 @@ op_signs = {'add': '+', 'sub': '-', 'mul': '*', 'div': '/', 'pow': '**',
             'bwand': '&', 'bwor': '|', 'bwxor': '^'}
 
 entry_func_prefix = ''
-stencil_func_prefix = '__attribute__((naked)) '  # Remove callee prolog
+stencil_func_prefix = ''  # Remove callee prolog
 
 stack_size = 64
 
-includes = ['aux_functions.c', 'trigonometry.c']
+includes = ['stencil_helper.h', 'aux_functions.c', 'trigonometry.c']
 
 
 def read_files(files: list[str]) -> str:
@@ -25,6 +25,10 @@ def read_files(files: list[str]) -> str:
             file_path = Path(file_name)
         with open(file_path) as f:
             ret += f.read().strip(' \n') + '\n\n'
+
+    for incl in includes:
+        ret = ret.replace(f'#include "{incl}"\n', '')
+
     return ret
 
 
@@ -66,6 +70,7 @@ def get_entry_function_shell() -> str:
 def get_op_code(op: str, type1: str, type2: str, type_out: str) -> str:
     return f"""
     {stencil_func_prefix}void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
+        STENCIL_START({op}_{type1}_{type2});
         result_{type_out}_{type2}(arg1 {op_signs[op]} arg2, arg2);
     }}
     """
@@ -75,6 +80,7 @@ def get_op_code(op: str, type1: str, type2: str, type_out: str) -> str:
 def get_cast(type1: str, type2: str, type_out: str) -> str:
     return f"""
     {stencil_func_prefix}void cast_{type_out}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
+        STENCIL_START(cast_{type_out}_{type1}_{type2});
         result_{type_out}_{type2}(({type1})arg1, arg2);
     }}
     """
@@ -84,6 +90,7 @@ def get_cast(type1: str, type2: str, type_out: str) -> str:
 def get_func2(func_name: str, type1: str, type2: str) -> str:
     return f"""
     {stencil_func_prefix}void {func_name}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
+        STENCIL_START({func_name}_{type1}_{type2});
         result_float_{type2}(aux_{func_name}((float)arg1), arg2);
     }}
     """
@@ -93,6 +100,7 @@ def get_func2(func_name: str, type1: str, type2: str) -> str:
 def get_conv_code(type1: str, type2: str, type_out: str) -> str:
     return f"""
     {stencil_func_prefix}void conv_{type1}_{type2}({type1} arg1, {type2} arg2) {{
+        STENCIL_START(conv_{type1}_{type2});
         result_{type_out}_{type2}(({type_out})arg1, arg2);
     }}
     """
@@ -102,6 +110,7 @@ def get_conv_code(type1: str, type2: str, type_out: str) -> str:
 def get_op_code_float(op: str, type1: str, type2: str) -> str:
     return f"""
     {stencil_func_prefix}void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
+        STENCIL_START({op}_{type1}_{type2});
         result_float_{type2}((float)arg1 {op_signs[op]} (float)arg2, arg2);
     }}
     """
@@ -111,7 +120,7 @@ def get_op_code_float(op: str, type1: str, type2: str) -> str:
 def get_pow(type1: str, type2: str) -> str:
     return f"""
     {stencil_func_prefix}void pow_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        //result_float_{type2}((float)math_pow((double)arg1, (double)arg2), arg2);
+        STENCIL_START(pow_{type1}_{type2});
         result_float_{type2}(fast_pow_float((float)arg1, (float)arg2), arg2);
     }}
     """
@@ -121,13 +130,16 @@ def get_pow(type1: str, type2: str) -> str:
 def get_floordiv(op: str, type1: str, type2: str) -> str:
     if type1 == 'int' and type2 == 'int':
         return f"""
-        {stencil_func_prefix}void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-            result_int_{type2}(floor_div((float)arg1, (float)arg2), arg2);
+        {stencil_func_prefix}void {op}_{type1}_{type2}({type1} a, {type2} b) {{
+            STENCIL_START({op}_{type1}_{type2});
+            int result = a / b - ((a % b != 0) && ((a < 0) != (b < 0)));
+            result_int_{type2}(result, b);
         }}
         """
     else:
         return f"""
         {stencil_func_prefix}void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
+            STENCIL_START({op}_{type1}_{type2});
             result_float_{type2}((float)floor_div((float)arg1, (float)arg2), arg2);
         }}
         """
@@ -151,6 +163,7 @@ def get_result_stubs2(type1: str, type2: str) -> str:
 def get_read_reg0_code(type1: str, type2: str, type_out: str) -> str:
     return f"""
     {stencil_func_prefix}void read_{type_out}_reg0_{type1}_{type2}({type1} arg1, {type2} arg2) {{
+        STENCIL_START(read_{type_out}_reg0_{type1}_{type2});
         result_{type_out}_{type2}(dummy_{type_out}, arg2);
     }}
     """
@@ -160,6 +173,7 @@ def get_read_reg0_code(type1: str, type2: str, type_out: str) -> str:
 def get_read_reg1_code(type1: str, type2: str, type_out: str) -> str:
     return f"""
     {stencil_func_prefix}void read_{type_out}_reg1_{type1}_{type2}({type1} arg1, {type2} arg2) {{
+        STENCIL_START(read_{type_out}_reg1_{type1}_{type2});
         result_{type1}_{type_out}(arg1, dummy_{type_out});
     }}
     """
@@ -169,6 +183,7 @@ def get_read_reg1_code(type1: str, type2: str, type_out: str) -> str:
 def get_write_code(type1: str) -> str:
     return f"""
     {stencil_func_prefix}void write_{type1}({type1} arg1) {{
+        STENCIL_START(write_{type1});
         dummy_{type1} = arg1;
         result_{type1}(arg1);
     }}

@@ -1,8 +1,10 @@
+#include "stencil_helper.h"
+
 const float PI      = 3.14159265358979323846f;
 const float PI_2    = 1.57079632679489661923f;  // pi/2
 const float TWO_OVER_PI = 0.63661977236758134308f; // 2/pi
 
-__attribute__((noinline)) float aux_sin(float x) {
+NOINLINE float aux_sin(float x) {
     // convert to double for reduction (better precision)
     double xd = (double)x;
 
@@ -48,7 +50,7 @@ __attribute__((noinline)) float aux_sin(float x) {
     }
 }
 
-__attribute__((noinline)) float aux_cos(float x) {
+NOINLINE float aux_cos(float x) {
     // convert to double for reduction (better precision)
     double xd = (double)x;
 
@@ -94,7 +96,7 @@ __attribute__((noinline)) float aux_cos(float x) {
     }
 }
 
-__attribute__((noinline)) float aux_tan(float x) {
+NOINLINE float aux_tan(float x) {
     // Promote to double for argument reduction (improves precision)
     double xd = (double)x;
     double qd = xd * (double)TWO_OVER_PI;   // how many half-pi multiples
