@@ -276,7 +276,7 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
             dw.write_int(start)
             dw.write_int(lengths)
             dw.write_value(net.source.value, lengths)
-            # print(f'+ {net.dtype} {net.source.value}')
+            #print(f'+ {net.dtype} {net.source.value}')
 
     # prep auxiliary_functions
     aux_function_mem_layout, aux_function_lengths = get_aux_function_mem_layout(aux_function_names, sdb)
@@ -333,8 +333,6 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
     dw.write_com(binw.Command.ALLOCATE_CODE)
     dw.write_int(offset)
 
-    print('o aux: ', aux_function_mem_layout)
-
     # write aux functions code
     for name, start, lengths in aux_function_mem_layout:
         dw.write_com(binw.Command.COPY_CODE)
@@ -348,7 +346,7 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
 
             assert reloc.target_symbol_info != 'STT_FUNC', "Not tested yet!"
 
-            if reloc.target_symbol_info in {'STT_OBJECT', 'STT_NOTYPE'}:
+            if reloc.target_symbol_info in {'STT_OBJECT', 'STT_NOTYPE', 'STT_SECTION'}:
                 # Patch constants/variable addresses on heap
                 obj_addr = reloc.target_symbol_offset + section_addr_lookup[reloc.target_section_index]
                 patch = sdb.get_patch(reloc, obj_addr, start, binw.Command.PATCH_OBJECT.value)
@@ -359,7 +357,7 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
                 patch = sdb.get_patch(reloc, func_addr, offset, binw.Command.PATCH_FUNC.value)
 
             else:
-                raise ValueError(f"Unsupported: {name} {reloc.target_symbol_info} {reloc.target_symbol_name}")
+                raise ValueError(f"Unsupported: {name=} {reloc.target_symbol_info=} {reloc.target_symbol_name=} {reloc.target_section_index}")
             
             patch_list.append(patch)
 
