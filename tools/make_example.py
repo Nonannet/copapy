@@ -1,6 +1,5 @@
 from copapy import variable
 from copapy.backend import Write, compile_to_dag, stencil_db_from_package
-import copapy as cp
 from copapy._binwrite import Command
 
 

@@ -1,4 +1,4 @@
-from copapy import variable, NumLike
+from copapy import NumLike
 from copapy.backend import Write, compile_to_dag, add_read_command
 import subprocess
 from copapy import _binwrite
@@ -26,7 +26,7 @@ def check_for_qemu() -> bool:
     command = qemu_command + ['--version']
     try:
         result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf8', check=False)
-    except:
+    except Exception:
         return False
     return result.returncode == 0
 

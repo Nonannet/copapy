@@ -1,4 +1,4 @@
-from copapy import variable, NumLike
+from copapy import NumLike
 from copapy.backend import Write, compile_to_dag, add_read_command
 import copapy as cp
 import subprocess

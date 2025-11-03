@@ -12,10 +12,10 @@ def sqrt(x: float | int) -> float: ...
 def sqrt(x: variable[Any]) -> variable[float]: ...
 def sqrt(x: NumLike) -> variable[float] | float:
     """Square root function
-    
+
     Arguments:
         x: Input value
-        
+
     Returns:
         Square root of x
     """
@@ -30,10 +30,10 @@ def sin(x: float | int) -> float: ...
 def sin(x: variable[Any]) -> variable[float]: ...
 def sin(x: NumLike) -> variable[float] | float:
     """Sine function
-    
+
     Arguments:
         x: Input value
-        
+
     Returns:
         Square root of x
     """
@@ -47,10 +47,10 @@ def cos(x: float | int) -> float: ...
 def cos(x: variable[Any]) -> variable[float]: ...
 def cos(x: NumLike) -> variable[float] | float:
     """Cosine function
-    
+
     Arguments:
         x: Input value
-        
+
     Returns:
         Cosine of x
     """
@@ -64,10 +64,10 @@ def tan(x: float | int) -> float: ...
 def tan(x: variable[Any]) -> variable[float]: ...
 def tan(x: NumLike) -> variable[float] | float:
     """Tangent function
-    
+
     Arguments:
         x: Input value
-        
+
     Returns:
         Tangent of x
     """
@@ -83,10 +83,10 @@ def get_42() -> variable[float]:
 
 def abs(x: T) -> T:
     """Absolute value function
-    
+
     Arguments:
         x: Input value
-        
+
     Returns:
         Absolute value of x
     """

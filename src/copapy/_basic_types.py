@@ -32,7 +32,7 @@ def transl_type(t: str) -> str:
 
 
 class Node:
-    """A Node represents an computational operation like ADD or other operations 
+    """A Node represents an computational operation like ADD or other operations
     like read and write from or to the memory or IOs. In the computation graph
     Nodes are connected via Nets.
 

@@ -42,7 +42,7 @@ case RUN_PROG:
     rel_entr_point = *(uint32_t*)bytes; bytes += 4;
     printf("RUN_PROG rel_entr_point=%i\n", rel_entr_point);
     entr_point = (int (*)())(executable_memory + rel_entr_point);  
-    
+
     mark_mem_executable(executable_memory, executable_memory_len);
     int ret = entr_point();
     printf("Return value: %i\n", ret);

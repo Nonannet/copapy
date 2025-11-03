@@ -1,3 +1,4 @@
+from typing import Any
 import os
 import json
 from urllib.request import urlopen, Request
@@ -5,13 +6,13 @@ from urllib.request import urlopen, Request
 OWNER = "Nonannet"
 REPO = "copapy"
 
-def fetch_json(url: str):
+def fetch_json(url: str) -> Any:
     req = Request(url, headers={"User-Agent": "Python"})
     with urlopen(req, timeout=10) as resp:
         assert resp.status == 200
         return json.load(resp)
 
-def download_file(url: str, dest_path: str):
+def download_file(url: str, dest_path: str) -> None:
     req = Request(url, headers={"User-Agent": "Python"})
     with urlopen(req, timeout=30) as resp, open(dest_path, "wb") as f:
         f.write(resp.read())

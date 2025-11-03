@@ -143,7 +143,7 @@ class stencil_database():
             end_index = symbol.fields['st_size']
 
         for reloc in symbol.relocations:
-            
+
             # address to fist byte to patch relative to the start of the symbol
             patch_offset = reloc.fields['r_offset'] - symbol.fields['st_value'] - start_index
 
@@ -175,7 +175,7 @@ class stencil_database():
         patch_offset = pr.fields['r_offset'] - relocation.function_offset - relocation.start + function_offset
         #print(f"xx {pr.fields['r_offset'] - relocation.function_offset} {relocation.target_symbol_name=} {pr.fields['r_offset']=} {relocation.function_offset=} {relocation.start=} {function_offset=}")
         scale = 1
-        
+
         if pr.type.endswith('_PLT32') or pr.type.endswith('_PC32'):
             # S + A - P
             mask = 0xFFFFFFFF  # 32 bit
@@ -233,7 +233,7 @@ class stencil_database():
         """Return recursively all functions called by stencils or by other functions
         Args:
             names: function or stencil names
-        
+
         Returns:
             set of all sub function names
         """
@@ -266,7 +266,7 @@ class stencil_database():
 
     def get_function_code(self, name: str, part: Literal['full', 'start', 'end'] = 'full') -> bytes:
         """Returns machine code for a specified function name.
-        
+
         Args:
             name: function name
             part: part of the function to return ('full', 'start', 'end')

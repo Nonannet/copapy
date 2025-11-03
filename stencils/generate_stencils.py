@@ -216,7 +216,7 @@ if __name__ == "__main__":
     # Scalar arithmetic:
     types = ['int', 'float']
     ops = ['add', 'sub', 'mul', 'div', 'floordiv', 'gt', 'ge', 'eq', 'ne', 'pow']
-    int_ops = ['bwand', 'bwor', 'bwxor', 'lshift', 'rshift'] 
+    int_ops = ['bwand', 'bwor', 'bwxor', 'lshift', 'rshift']
 
     for t1 in types:
         code += get_result_stubs1(t1)
