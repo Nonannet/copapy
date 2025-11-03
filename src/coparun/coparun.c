@@ -53,7 +53,7 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "Usage: %s <code_file> <memory_dump_file>\n", argv[0]);
             return EXIT_FAILURE;
         }
-        FILE *f = fopen(argv[2], "wb");
+        f = fopen(argv[2], "wb");
         fwrite(executable_memory, 1, (size_t)executable_memory_len, f);
         fclose(f);
     }

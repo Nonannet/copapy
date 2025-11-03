@@ -28,9 +28,9 @@ void patch(uint8_t *patch_addr, uint32_t patch_mask, int32_t value) {
     uint32_t *val_ptr = (uint32_t*)patch_addr;
     uint32_t original = *val_ptr;
 
-    int32_t shift_factor = patch_mask & -patch_mask;
+    uint32_t shift_factor = patch_mask & -patch_mask;
 
-    uint32_t new_value = (original & ~patch_mask) | ((uint32_t)(value * shift_factor) & patch_mask);
+    uint32_t new_value = (original & ~patch_mask) | (((uint32_t)value * shift_factor) & patch_mask);
 
     *val_ptr = new_value;
 }
