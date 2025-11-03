@@ -3,6 +3,17 @@
 
 #include <stdint.h>
 
+#ifdef ENABLE_LOGGING
+    #define LOG(...) printf(__VA_ARGS__)
+    #define BLOG(...) printf(__VA_ARGS__)
+#elif ENABLE_BASIC_LOGGING
+    #define LOG(...)
+    #define BLOG(...) printf(__VA_ARGS__)
+#else
+    #define LOG(...)
+    #define BLOG(...)
+#endif
+
 /* Command opcodes used by the parser */
 #define ALLOCATE_DATA     1
 #define COPY_DATA         2

@@ -5,17 +5,6 @@
 #include "runmem.h"
 #include "mem_man.h"
 
-#ifdef ENABLE_LOGGING
-    #define LOG(...) printf(__VA_ARGS__)
-    #define BLOG(...) printf(__VA_ARGS__)
-#elif ENABLE_BASIC_LOGGING
-    #define LOG(...)
-    #define BLOG(...) printf(__VA_ARGS__)
-#else
-    #define LOG(...)
-    #define BLOG(...)
-#endif
-
 /* Globals declared extern in runmem.h */
 uint8_t *data_memory = NULL;
 uint32_t data_memory_len = 0;
