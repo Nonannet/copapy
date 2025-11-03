@@ -11,6 +11,7 @@
 #define PATCH_FUNC        0x1000
 #define PATCH_OBJECT      0x2000
 #define PATCH_OBJECT_HI21 0x2001
+#define PATCH_OBJECT_ABS  0x2002
 #define ENTRY_POINT       7
 #define RUN_PROG         64
 #define READ_DATA        65
