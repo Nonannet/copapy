@@ -34,9 +34,7 @@ copapy = ["obj/*.o", "py.typed"]
 dev = [
     "ruff",
     "mypy",
-    "pytest",
-    "requests",
-    "types-requests"
+    "pytest"
 ]
 
 [tool.mypy]
