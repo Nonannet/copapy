@@ -1,6 +1,6 @@
 from copapy import variable, NumLike
 from copapy.backend import Write, compile_to_dag, add_read_command
-import copapy
+import copapy as cp
 import subprocess
 import struct
 from copapy import _binwrite
@@ -41,11 +41,20 @@ def function(c1: NumLike, c2: NumLike) -> tuple[NumLike, ...]:
 
 def test_compile():
 
-    c1 = variable(4)
-    c2 = variable(2)
+    #c1 = variable(4)
+    #c2 = variable(2)
 
-    ret = function(c1, c2)
+    #ret = function(c1, c2)
     #ret = [c1 // 3.3 + 5]
+
+    t1 = cp.vector([10, 11, 12]) + cp.vector(cp.variable(v) for v in range(3))
+    t2 = t1.sum()
+
+    t3 = cp.vector(cp.variable(1 / (v + 1)) for v in range(3))
+    t4 = ((t3 * t1) * 2).sum()
+    t5 = ((t3 * t1) * 2).magnitude()
+
+    ret = (t2, t4, t5)
 
     out = [Write(r) for r in ret]
 
