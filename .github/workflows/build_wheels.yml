@@ -45,17 +45,17 @@ jobs:
           python-version: "3.11"
 
       # Only needed for Linux ARM builds
-      #- name: Set up QEMU
-      #  if: runner.os == 'Linux'
-      #  uses: docker/setup-qemu-action@v2
-      #  with:
-      #    platforms: all
+      - name: Set up QEMU
+        if: runner.os == 'Linux'
+        uses: docker/setup-qemu-action@v2
+        with:
+          platforms: all
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.2.0
         env:
-          CIBW_ARCHS_LINUX: "x86_64"  # aarch64
-          CIBW_ARCHS_MACOS: "universal2" # x86_64 arm64
+          CIBW_ARCHS_LINUX: "x86_64 aarch64"
+          CIBW_ARCHS_MACOS: "x86_64 universal2" # x86_64 arm64
           CIBW_ARCHS_WINDOWS: "AMD64"  # x86
           CIBW_TEST_REQUIRES: "pytest"
           CIBW_TEST_COMMAND: "pytest {package}/tests/test_coparun_module.py"
