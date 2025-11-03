@@ -140,6 +140,16 @@ int parse_commands(uint8_t *bytes) {
                 patch(executable_memory + offs, patch_mask, value / patch_scale + data_offs / patch_scale);
                 break;
 
+            case PATCH_OBJECT_ABS:
+                offs = *(uint32_t*)bytes; bytes += 4;
+                patch_mask = *(uint32_t*)bytes; bytes += 4;
+                patch_scale = *(int32_t*)bytes; bytes += 4;
+                value = *(int32_t*)bytes; bytes += 4;
+                LOG("PATCH_OBJECT_ABS patch_offs=%i patch_mask=%#08x scale=%i value=%i\n",
+                    offs, patch_mask, patch_scale, value);
+                patch(executable_memory + offs, patch_mask, value / patch_scale);
+                break;
+
             case PATCH_OBJECT_HI21:
                 offs = *(uint32_t*)bytes; bytes += 4;
                 patch_mask = *(uint32_t*)bytes; bytes += 4;
