@@ -36,3 +36,4 @@ def test_compiled_vectors():
 
 if __name__ == "__main__":
     test_compiled_vectors()
+    print('Finished!')

@@ -1,18 +1,18 @@
 from copapy import variable, NumLike
 from copapy.backend import Write, compile_to_dag, add_read_command
 import subprocess
-import struct
 from copapy import _binwrite
 import copapy.backend as backend
+import copapy as cp
 import os
-import pytest
+import warnings
 
 if os.name == 'nt':
     # On Windows wsl and qemu-user is required:
     # sudo apt install qemu-user
-    qemu_command = ['wsl', 'qemu-aarch64', 'bin/coparun-aarch64', 'bin/test-aarch64.copapy']
+    qemu_command = ['wsl', 'qemu-aarch64']
 else:
-    qemu_command = ['qemu-aarch64', 'bin/coparun-aarch64', 'bin/test-aarch64.copapy']
+    qemu_command = ['qemu-aarch64']
 
 
 def run_command(command: list[str]) -> str:
@@ -22,20 +22,13 @@ def run_command(command: list[str]) -> str:
     return result.stdout
 
 
-def test_example():
-    c1 = 4
-    c2 = 2
-
-    i1 = c1 * 2
-    r1 = i1 + 7 + (c2 + 7 * 9)
-    r2 = i1 + 9
-
-    en = {'little': '<', 'big': '>'}['little']
-    data = struct.pack(en + 'i', r1)
-    print("example r1 " + ' '.join(f'{b:02X}' for b in data))
-
-    data = struct.pack(en + 'i', r2)
-    print("example r2 " + ' '.join(f'{b:02X}' for b in data))
+def check_for_qemu() -> bool:
+    command = qemu_command + ['--version']
+    try:
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf8', check=False)
+    except:
+        return False
+    return result.returncode == 0
 
 
 def function(c1: NumLike, c2: NumLike) -> tuple[NumLike, ...]:
@@ -47,17 +40,19 @@ def function(c1: NumLike, c2: NumLike) -> tuple[NumLike, ...]:
     return i1, i2, r1, r2
 
 
-@pytest.mark.skip(reason="no way of currently testing this")
 def test_compile():
-    c1 = variable(4)
-    c2 = variable(2)
+    t1 = cp.vector([10, 11, 12]) + cp.vector(cp.variable(v) for v in range(3))
+    t2 = t1.sum()
 
-    ret = function(c1, c2)
-    #ret = [c1 // 3.3 + 5]
+    t3 = cp.vector(cp.variable(1 / (v + 1)) for v in range(3))
+    t4 = ((t3 * t1) * 2).sum()
+    t5 = ((t3 * t1) * 2).magnitude()
+
+    ret = (t2, t4, t5)
 
     out = [Write(r) for r in ret]
 
-    sdb = backend.stencil_db_from_package('aarch64', 'O3')
+    sdb = backend.stencil_db_from_package('aarch64')
     il, variables = compile_to_dag(out, sdb)
 
     # run program command
@@ -74,13 +69,21 @@ def test_compile():
 
     il.to_file('bin/test-aarch64.copapy')
 
-    result = run_command(qemu_command)
-    print('* Output from runner:\n--')
-    print(result)
-    print('--')
+    if not check_for_qemu():
+        warnings.warn("qemu-aarch64 not found, aarch64 test skipped!", UserWarning)
+    else:
+        command = ['bin/coparun-aarch64', 'bin/test-aarch64.copapy']
+        result = run_command(qemu_command + command)
+        print('* Output from runner:\n--')
+        print(result)
+        print('--')
 
-    assert 'Return value: 1' in result
-    #assert 'END_COM' in result
+        assert 'Return value: 1' in result
+
+        # Compare to x86_64 reference results
+        assert " size=4 data=24 00 00 00" in result
+        assert " size=4 data=56 55 25 42" in result
+        assert " size=4 data=B4 F9 C8 41" in result
 
 
 if __name__ == "__main__":
