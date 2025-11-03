@@ -2,21 +2,53 @@ from copapy._binwrite import data_reader, Command, ByteOrder
 import argparse
 from typing import Literal
 
+
 def patch(data: bytearray, offset: int, patch_mask: int, value: int, byteorder: Literal['little', 'big']) -> None:
     # Read 4 bytes at the offset as a little-endian uint32
     original = int.from_bytes(data[offset:offset+4], byteorder)
-    
+
+    shift_factor = patch_mask & -patch_mask
+
     # Apply the patch
-    new_value = (original & ~patch_mask) | (value & patch_mask)
-    
+    new_value = (original & ~patch_mask) | ((value * shift_factor) & patch_mask)
+
     # Write the new value back to the bytearray
     data[offset:offset+4] = new_value.to_bytes(4, byteorder)
+
+
+def patch_hi21(data: bytearray, offset: int, page_offset: int, byteorder: Literal['little', 'big']) -> None:
+    # ADRP immediate is signed 21 bits: valid range [-2^20, 2^20 - 1]
+    if not (-(1 << 20) <= page_offset < (1 << 20)):
+        raise ValueError(f"page_offset {page_offset} out of 21-bit range")
+
+    # Load current 32-bit instruction from data
+    instr_bytes = data[offset:offset+4]
+    instr = int.from_bytes(instr_bytes, byteorder)
+
+    # Split the page offset into immhi and immlo
+    immlo = page_offset & 0x3          # bits[1:0]
+    immhi = (page_offset >> 2) & 0x7FFFF  # bits[20:2] (19 bits)
+
+    # Clear previous immhi and immlo bits (bits 23:5 and 30:29)
+    instr &= ~((0x7FFFF << 5) | (0x3 << 29))
+
+    # Insert new immhi and immlo fields
+    instr |= (immhi << 5) | (immlo << 29)
+
+    #instr ^= (1 << 23)
+
+    print(f"->>> page_offset=0x{page_offset:x}, immhi=0x{immhi:x}, immlo=0x{immlo:x}, instr=0x{instr:x}")
+    print(f"     page_offset=0x{page_offset:x}, immhi=0x{immhi:b}, immlo=0x{immlo:b}, instr=0x{instr:b}")
+
+    # Store the patched instruction back into the bytearray
+    data[offset:offset+4] = instr.to_bytes(4, byteorder)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("input_file", type=str, help="Input file path with copapy commands")
     parser.add_argument("output_file", type=str, help="Output file with patched code")
-    parser.add_argument("--data_section_offset", type=int, default=0x3000, help="Offset for data relative to code section")
+    parser.add_argument("--data_section_offset", type=int, default=-0x1000, help="Offset for data relative to code section")
     parser.add_argument("--byteorder", type=str, choices=['little', 'big'], default='little', help="Select byteorder")
     args = parser.parse_args()
 
@@ -56,15 +88,26 @@ if __name__ == "__main__":
         elif com == Command.PATCH_FUNC:
             offs = dr.read_int()
             mask = dr.read_int()
+            scale = dr.read_int()
             value = dr.read_int(signed=True)
-            patch(program_data, offs, mask, value, byteorder)
-            print(f"PATCH_FUNC patch_offs=0x{offs:x} mask=0x{mask:x} value=0x{value:x}")
+            patch(program_data, offs, mask, value // scale, byteorder)
+            print(f"PATCH_FUNC patch_offs=0x{offs:x} mask=0x{mask:x} scale=0x{scale:x} value=0x{value:x}")
         elif com == Command.PATCH_OBJECT:
             offs = dr.read_int()
             mask = dr.read_int()
+            scale = dr.read_int()
             value = dr.read_int(signed=True)
-            patch(program_data, offs, mask, value + data_section_offset, byteorder)
-            print(f"PATCH_OBJECT patch_offs=0x{offs:x} mask=0x{mask:x} value=0x{value + data_section_offset:x}")
+            patch(program_data, offs, mask, value // scale + data_section_offset // scale, byteorder)
+            print(f"PATCH_OBJECT patch_offs=0x{offs:x} mask=0x{mask:x} scale=0x{scale:x} value=0x{value + data_section_offset:x}")
+            print(f" | calculated value: 0x{(value // scale + data_section_offset // scale):x}")
+        elif com == Command.PATCH_OBJECT_HI21:
+            offs = dr.read_int()
+            mask = dr.read_int()
+            scale = dr.read_int()
+            value = dr.read_int(signed=True)
+            patch_hi21(program_data, offs, value // scale + data_section_offset // scale, byteorder)
+            print(f"PATCH_OBJECT_HI31 patch_offs=0x{offs:x} mask=0x{mask:x} scale=0x{scale:x} value=0x{value + data_section_offset:x}")
+            print(f" | calculated value: 0x{(value // scale + data_section_offset // scale):x}")
         elif com == Command.ENTRY_POINT:
             rel_entr_point = dr.read_int()
             print(f"ENTRY_POINT rel_entr_point=0x{rel_entr_point:x}")
@@ -76,6 +119,9 @@ if __name__ == "__main__":
             print(f"READ_DATA offs=0x{offs:x} size={size}")
         elif com == Command.FREE_MEMORY:
             print("READ_DATA")
+        elif com == Command.DUMP_CODE:
+            print("DUMP_CODE")
+            end_flag = 2
         elif com == Command.END_COM:
             print("END_COM")
             end_flag = 1
