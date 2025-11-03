@@ -65,7 +65,7 @@ def get_last_call_in_function(func: elf_symbol) -> int:
     # Assume the call instruction is 4 bytes long for relocations with less than 32 bit and 5 bytes otherwise
     instruction_lengths = 4 if reloc.bits < 32 else 5
     address_field_length = 4
-    print(f"-> {[r.fields['r_offset'] - func.fields['st_value'] for r in func.relocations]}")
+    #print(f"-> {[r.fields['r_offset'] - func.fields['st_value'] for r in func.relocations]}")
     return reloc.fields['r_offset'] - func.fields['st_value'] + address_field_length - instruction_lengths
 
 
@@ -142,14 +142,12 @@ class stencil_database():
             start_index = 0
             end_index = symbol.fields['st_size']
 
-        print('->', symbol_name)
         for reloc in symbol.relocations:
             
             # address to fist byte to patch relative to the start of the symbol
             patch_offset = reloc.fields['r_offset'] - symbol.fields['st_value'] - start_index
 
             if patch_offset < end_index - start_index:  # Exclude the call to the result_* function
-                print(' |', symbol_name, reloc.symbol.info, reloc.symbol.name, reloc.type)
                 yield relocation_entry(reloc.symbol.name,
                                        reloc.symbol.info,
                                        reloc.symbol.fields['st_value'],
@@ -183,9 +181,6 @@ class stencil_database():
             mask = 0xFFFFFFFF  # 32 bit
             patch_value = symbol_address + pr.fields['r_addend'] - patch_offset
 
-            print(f"** {patch_offset=} {relocation.target_symbol_name=} {pr.fields['r_offset']=} {relocation.function_offset=} {relocation.start=} {function_offset=}")
-            print(f" * {patch_value=} {symbol_address=} {pr.fields['r_addend']=}, {function_offset=}")
-
         elif pr.type.endswith('_CALL26'):
             # ((S + A) - P) >> 2
             assert pr.file.byteorder == 'little', "Big endian not supported for ARM64"
@@ -199,13 +194,19 @@ class stencil_database():
             patch_value = symbol_address + pr.fields['r_addend']
             scale = 4096
             symbol_type = symbol_type + 0x01
-            print(f" *> {patch_value=} {symbol_address=} {pr.fields['r_addend']=}, {function_offset=}")
+            #print(f" *> {patch_value=} {symbol_address=} {pr.fields['r_addend']=}, {function_offset=}")
 
         elif pr.type.endswith('_LDST32_ABS_LO12_NC'):
             # (S + A) & 0xFFF
-            mask = 0b11111111111100000000
-            patch_value = symbol_address + pr.fields['r_addend']
-            print(f" *> {patch_value=} {symbol_address=} {pr.fields['r_addend']=}, {function_offset=}")
+            mask = 0b11_1111_1111_1100_0000_0000
+            patch_value = (symbol_address + pr.fields['r_addend']) >> 2
+            #print(f" *> {patch_value=} {symbol_address=} {pr.fields['r_addend']=}, {function_offset=}")
+
+        elif pr.type.endswith('_LDST64_ABS_LO12_NC'):
+            # (S + A) & 0xFFF
+            mask = 0b11_1111_1111_1100_0000_0000
+            patch_value = (symbol_address + pr.fields['r_addend']) >> 3
+            #print(f" *> {patch_value=} {symbol_address=} {pr.fields['r_addend']=}, {function_offset=}")
 
         else:
             raise NotImplementedError(f"Relocation type {pr.type} not implemented")
