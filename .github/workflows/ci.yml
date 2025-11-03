@@ -47,6 +47,11 @@ jobs:
         name: stencil-object-files
         path: src/copapy/obj
 
+    #- uses: actions/download-artifact@v4
+    #  with:
+    #    name: cross-runner
+    #    path: bin
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
@@ -55,29 +60,35 @@ jobs:
     - name: Install Python dependencies
       run: python -m pip install -e .[dev]
 
-    - name: Compile coparun
-      run: |
-        mkdir -p bin
-        gcc -DENABLE_BASIC_LOGGING -O3 -Wall -Wextra -Wconversion -Wsign-conversion -Wshadow -Wstrict-overflow -Werror -g src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c -o bin/coparun
-
-    - name: Install ARM binutils
+    - name: Install ARM binutils and qemu
+      if: strategy.job-index == 0
       run: |
         echo "set man-db/auto-update false" | sudo debconf-communicate
         sudo dpkg-reconfigure man-db
         sudo apt-get update
-        sudo apt-get install --no-install-recommends --no-install-suggests binutils-aarch64-linux-gnu
+        sudo apt-get install --no-install-recommends --no-install-suggests binutils-aarch64-linux-gnu qemu-user gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+
+    - name: Compile coparun
+      run: |
+        mkdir -p bin
+        gcc -O3 -DENABLE_BASIC_LOGGING -o bin/coparun src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c
+        aarch64-linux-gnu-gcc -O3 -static -DENABLE_BASIC_LOGGING src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c -o bin/coparun-aarch64 
 
     - name: Generate debug asm files
       if: strategy.job-index == 0
       run: |
+        set -e
+        set -v
         python tools/make_example.py
 
-        python tools/extract_code.py "bin/test.copapy" "bin/test.copapy.bin"
+        echo "- Patch code..."
+        bin/coparun bin/test.copapy bin/test.copapy.bin
+        qemu-aarch64 bin/coparun-aarch64 bin/test-aarch64.copapy bin/test-aarch64.copapy.bin
+
         objdump -D -b binary -m i386:x86-64 --adjust-vma=0x1000 bin/test.copapy.bin > bin/test.copapy.asm
         echo '<p>test.copapy.asm</p>' >> $GITHUB_STEP_SUMMARY
         python tools/clean_asm.py bin/test.copapy.asm >> $GITHUB_STEP_SUMMARY
 
-        #python tools/extract_code.py "bin/test-aarch64.copapy" "bin/test-aarch64.copapy.bin"
         #aarch64-linux-gnu-objdump -D -b binary -m aarch64 --adjust-vma=0x1000 bin/test-aarch64.copapy.bin > bin/test-aarch64.copapy.asm
         #echo '<p>test-aarch64.copapy.asm</p>' >> $GITHUB_STEP_SUMMARY
         #python tools/clean_asm.py bin/test-aarch64.copapy.asm >> $GITHUB_STEP_SUMMARY
