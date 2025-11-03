@@ -73,10 +73,8 @@ def get_op_after_last_call_in_function(func: elf_symbol) -> int:
     # Find last relocation in function
     assert func.relocations, f'No call function in stencil function {func.name}.'
     reloc = func.relocations[-1]
-    if reloc.bits < 32:
-        return reloc.fields['r_offset'] - func.fields['st_value'] - reloc.fields['r_addend'] + 4
-    else:
-        return reloc.fields['r_offset'] - func.fields['st_value'] - reloc.fields['r_addend']
+    assert reloc.bits <= 32, "Relocation segment might be larger then 32 bit"
+    return reloc.fields['r_offset'] - func.fields['st_value'] + 4
 
 
 def symbol_is_stencil(sym: elf_symbol) -> bool:
