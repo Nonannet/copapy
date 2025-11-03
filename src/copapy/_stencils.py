@@ -53,7 +53,7 @@ def strip_function(func: elf_symbol) -> bytes:
 
 
 def get_stencil_position(func: elf_symbol) -> tuple[int, int]:
-    start_index = 0  # TODO: Only for "naked" functions
+    start_index = 0  # There must be no prolog
     end_index = get_last_call_in_function(func)
     return start_index, end_index
 
@@ -193,22 +193,22 @@ class stencil_database():
             mask = 0  # Handled by runner
             patch_value = symbol_address + pr.fields['r_addend']
             scale = 4096
-            symbol_type = symbol_type + 0x01
+            symbol_type = symbol_type + 0x01  # HI21
             #print(f" *> {patch_value=} {symbol_address=} {pr.fields['r_addend']=}, {function_offset=}")
 
         elif pr.type.endswith('_LDST32_ABS_LO12_NC'):
             # (S + A) & 0xFFF
             mask = 0b11_1111_1111_1100_0000_0000
             patch_value = (symbol_address + pr.fields['r_addend'])
-            symbol_type = symbol_type + 0x02
+            symbol_type = symbol_type + 0x02  # Absolut value
             scale = 4
             #print(f" *> {patch_value=} {symbol_address=} {pr.fields['r_addend']=}, {function_offset=}")
 
         elif pr.type.endswith('_LDST64_ABS_LO12_NC'):
             # (S + A) & 0xFFF
             mask = 0b11_1111_1111_1100_0000_0000
-            patch_value = (symbol_address + pr.fields['r_addend']) >> 3
-            symbol_type = symbol_type + 0x02
+            patch_value = (symbol_address + pr.fields['r_addend'])
+            symbol_type = symbol_type + 0x02  # Absolut value
             scale = 8
             #print(f" *> {patch_value=} {symbol_address=} {pr.fields['r_addend']=}, {function_offset=}")
 
