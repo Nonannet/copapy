@@ -43,7 +43,7 @@ def test_fine():
                 cp.sin(c_f),
                 cp.cos(c_f),
                 cp.tan(c_f))  # , c_i & 3)
-    
+
     ret_refe = (a_f ** 2,
                 a_i ** -1,
                 cp.sqrt(a_i),

@@ -20,7 +20,7 @@ class Target():
     """
     def __init__(self, arch: str = 'native', optimization: str = 'O3') -> None:
         """Initialize Target object
-        
+
         Arguments:
             arch: Target architecture
             optimization: Optimization level
@@ -30,7 +30,7 @@ class Target():
 
     def compile(self, *variables: int | float | variable[int] | variable[float] | variable[bool] | Iterable[int | float | variable[int] | variable[float] | variable[bool]]) -> None:
         """Compiles the code to compute the given variables.
-        
+
         Arguments:
             variables: Variables to compute
         """
@@ -76,7 +76,7 @@ class Target():
 
         Arguments:
             net: Variable to read
-        
+
         Returns:
             Value of the variable
         """

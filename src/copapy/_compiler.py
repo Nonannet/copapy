@@ -159,7 +159,7 @@ def get_nets(*inputs: Iterable[Iterable[Any]]) -> list[Net]:
 
 def get_data_layout(variable_list: Iterable[Net], sdb: stencil_database, offset: int = 0) -> tuple[list[tuple[Net, int, int]], int]:
     """Get memory layout for the provided variables
-    
+
     Arguments:
         variable_list: Variables to layout
         sdb: Stencil database for size lookup
@@ -184,7 +184,7 @@ def get_data_layout(variable_list: Iterable[Net], sdb: stencil_database, offset:
 
 def get_section_layout(section_indexes: Iterable[int], sdb: stencil_database, offset: int = 0) -> tuple[list[tuple[int, int, int]], int]:
     """Get memory layout for the provided sections
-    
+
     Arguments:
         section_indexes: Sections (by index) to layout
         sdb: Stencil database for size lookup
@@ -210,7 +210,7 @@ def get_aux_function_mem_layout(function_names: Iterable[str], sdb: stencil_data
         function_names: Function names to layout
         sdb: Stencil database for size lookup
         offset: Starting offset for layout
-    
+
     Returns:
         Tuple of list of (function_name, start_offset, length) and total length
     """
@@ -320,7 +320,7 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
                 #print(patch.type, patch.addr, binw.Command.PATCH_FUNC, node.name, '->', patch.target_symbol_name)
             else:
                 raise ValueError(f"Unsupported: {node.name} {reloc.target_symbol_info} {reloc.target_symbol_name}")
-            
+
             patch_list.append(patch)
 
         offset += len(data)
@@ -358,7 +358,7 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
 
             else:
                 raise ValueError(f"Unsupported: {name=} {reloc.target_symbol_info=} {reloc.target_symbol_name=} {reloc.target_section_index}")
-            
+
             patch_list.append(patch)
 
     #assert False, aux_function_mem_layout

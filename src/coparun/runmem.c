@@ -23,7 +23,7 @@ uint8_t *executable_memory = NULL;
 uint32_t executable_memory_len = 0;
 entry_point_t entr_point = NULL;
 int data_offs = 0;
-    
+
 void patch(uint8_t *patch_addr, uint32_t patch_mask, int32_t value) {
     uint32_t *val_ptr = (uint32_t*)patch_addr;
     uint32_t original = *val_ptr;
@@ -84,7 +84,7 @@ int parse_commands(uint8_t *bytes) {
     uint32_t size;
     int end_flag = 0;
     uint32_t rel_entr_point = 0;
-    
+
     while(!end_flag) {
         command = *(uint32_t*)bytes;
         bytes += 4;
@@ -96,14 +96,14 @@ int parse_commands(uint8_t *bytes) {
                 LOG("ALLOCATE_DATA size=%i mem_addr=%p\n", size, (void*)data_memory);
                 if (!update_data_offs()) end_flag = -4;
                 break;
-            
+
             case COPY_DATA:
                 offs = *(uint32_t*)bytes; bytes += 4;
                 size = *(uint32_t*)bytes; bytes += 4;
                 LOG("COPY_DATA offs=%i size=%i\n", offs, size);
                 memcpy(data_memory + offs, bytes, size); bytes += size;
                 break;
-            
+
             case ALLOCATE_CODE:
                 size = *(uint32_t*)bytes; bytes += 4;
                 executable_memory = allocate_executable_memory(size);
@@ -112,14 +112,14 @@ int parse_commands(uint8_t *bytes) {
                 //LOG("# d %i  c %i  off %i\n", data_memory, executable_memory, data_offs);
                 if (!update_data_offs()) end_flag = -4;
                 break;
-            
+
             case COPY_CODE:
                 offs = *(uint32_t*)bytes; bytes += 4;
                 size = *(uint32_t*)bytes; bytes += 4;
                 LOG("COPY_CODE offs=%i size=%i\n", offs, size);
                 memcpy(executable_memory + offs, bytes, size); bytes += size;
                 break;
-            
+
             case PATCH_FUNC:
                 offs = *(uint32_t*)bytes; bytes += 4;
                 patch_mask = *(uint32_t*)bytes; bytes += 4;
@@ -129,7 +129,7 @@ int parse_commands(uint8_t *bytes) {
                     offs, patch_mask, patch_scale, value);
                 patch(executable_memory + offs, patch_mask, value / patch_scale);
                 break;
-            
+
             case PATCH_OBJECT:
                 offs = *(uint32_t*)bytes; bytes += 4;
                 patch_mask = *(uint32_t*)bytes; bytes += 4;
@@ -166,13 +166,13 @@ int parse_commands(uint8_t *bytes) {
                 entr_point = (entry_point_t)(executable_memory + rel_entr_point);  
                 mark_mem_executable(executable_memory, executable_memory_len);
                 break;
-            
+
             case RUN_PROG:
                 LOG("RUN_PROG\n");
                 int ret = entr_point();
                 BLOG("Return value: %i\n", ret);
                 break;
-            
+
             case READ_DATA:
                 offs = *(uint32_t*)bytes; bytes += 4;
                 size = *(uint32_t*)bytes; bytes += 4;
@@ -197,7 +197,7 @@ int parse_commands(uint8_t *bytes) {
                 LOG("END_COM\n");
                 end_flag = 1;
                 break;
-            
+
             default:
                 LOG("Unknown command\n");
                 end_flag = -1;
