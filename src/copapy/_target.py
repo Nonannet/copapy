@@ -83,7 +83,6 @@ class Target():
         assert isinstance(net, Net), "Variable must be a copapy variable object"
         assert net in self._variables, f"Variable {net} not found. It might not have been compiled for the target."
         addr, lengths, var_type = self._variables[net]
-        print('...', self._variables[net], net.dtype)
         assert lengths > 0
         data = read_data_mem(addr, lengths)
         assert data is not None and len(data) == lengths, f"Failed to read variable {net}"

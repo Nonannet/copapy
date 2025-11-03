@@ -4,18 +4,19 @@
 #include <stdint.h>
 
 /* Command opcodes used by the parser */
-#define ALLOCATE_DATA    1
-#define COPY_DATA        2
-#define ALLOCATE_CODE    3
-#define COPY_CODE        4
-#define PATCH_FUNC       5
-#define PATCH_OBJECT     6
-#define ENTRY_POINT      7
-#define RUN_PROG        64
-#define READ_DATA       65
-#define END_COM        256
-#define FREE_MEMORY    257
-#define PATCH_MATH_POW 512
+#define ALLOCATE_DATA     1
+#define COPY_DATA         2
+#define ALLOCATE_CODE     3
+#define COPY_CODE         4
+#define PATCH_FUNC        0x1000
+#define PATCH_OBJECT      0x2000
+#define PATCH_OBJECT_HI21 0x2001
+#define ENTRY_POINT       7
+#define RUN_PROG         64
+#define READ_DATA        65
+#define END_COM         256
+#define FREE_MEMORY     257
+#define DUMP_CODE       258
 
 /* Memory blobs accessible by other translation units */
 extern uint8_t *data_memory;
