@@ -24,14 +24,31 @@ uint32_t executable_memory_len = 0;
 entry_point_t entr_point = NULL;
 int data_offs = 0;
     
-int patch(uint8_t *patch_addr, uint32_t patch_mask, int32_t value) {
+void patch(uint8_t *patch_addr, uint32_t patch_mask, int32_t value) {
     uint32_t *val_ptr = (uint32_t*)patch_addr;
     uint32_t original = *val_ptr;
 
-    uint32_t new_value = (original & ~patch_mask) | ((uint32_t)value & patch_mask);
+    int32_t shift_factor = patch_mask & -patch_mask;
+
+    uint32_t new_value = (original & ~patch_mask) | ((uint32_t)(value * shift_factor) & patch_mask);
 
     *val_ptr = new_value;
-    return 1;
+}
+
+void patch_hi21(uint8_t *patch_addr, int32_t page_offset) {
+    uint32_t instr = *(uint32_t *)patch_addr;
+
+    // Split page_offset into immhi (upper 19 bits) and immlo (lower 2 bits)
+    uint32_t immlo = page_offset & 0x3;        // bits[1:0]
+    uint32_t immhi = (page_offset >> 2) & 0x7FFFF; // bits[20:2]
+
+    // Clear previous imm fields: immhi (bits[23:5]) and immlo (bits[30:29])
+    instr &= ~((0x7FFFFu << 5) | (0x3 << 29));
+
+    // Set new immhi and immlo
+    instr |= (immhi << 5) | (immlo << 29);
+
+    *(uint32_t *)patch_addr = instr;
 }
 
 void free_memory() {
@@ -46,14 +63,23 @@ int update_data_offs() {
         perror("Error: code and data memory to far apart");
         return 0;
     }
+    if (data_memory && executable_memory && (data_memory - executable_memory > 0x7FFFFFFF || executable_memory - data_memory > 0x7FFFFFFF)) {
+        perror("Error: code and data memory to far apart");
+        return 0;
+    }
     data_offs = (int)(data_memory - executable_memory);
     return 1;
+}
+
+int floor_div(int a, int b) {
+    return a / b - ((a % b != 0) && ((a < 0) != (b < 0)));
 }
 
 int parse_commands(uint8_t *bytes) {
     int32_t value;
     uint32_t command;
     uint32_t patch_mask;
+    int32_t patch_scale;
     uint32_t offs;
     uint32_t size;
     int end_flag = 0;
@@ -97,22 +123,31 @@ int parse_commands(uint8_t *bytes) {
             case PATCH_FUNC:
                 offs = *(uint32_t*)bytes; bytes += 4;
                 patch_mask = *(uint32_t*)bytes; bytes += 4;
+                patch_scale = *(int32_t*)bytes; bytes += 4;
                 value = *(int32_t*)bytes; bytes += 4;
-                LOG("PATCH_FUNC patch_offs=%i patch_mask=%#08x value=%i\n",
-                    offs, patch_mask, value);
-                patch(executable_memory + offs, patch_mask, value);
+                LOG("PATCH_FUNC patch_offs=%i patch_mask=%#08x scale=%i value=%i\n",
+                    offs, patch_mask, patch_scale, value);
+                patch(executable_memory + offs, patch_mask, value / patch_scale);
                 break;
             
             case PATCH_OBJECT:
                 offs = *(uint32_t*)bytes; bytes += 4;
                 patch_mask = *(uint32_t*)bytes; bytes += 4;
+                patch_scale = *(int32_t*)bytes; bytes += 4;
                 value = *(int32_t*)bytes; bytes += 4;
-                LOG("PATCH_OBJECT patch_offs=%i patch_mask=%#08x value=%i\n",
-                    offs, patch_mask, value);
-                patch(executable_memory + offs, patch_mask, value + data_offs);
+                LOG("PATCH_OBJECT patch_offs=%i patch_mask=%#08x scale=%i value=%i\n",
+                    offs, patch_mask, patch_scale, value);
+                patch(executable_memory + offs, patch_mask, value / patch_scale + data_offs / patch_scale);
                 break;
 
-            case PATCH_MATH_POW:
+            case PATCH_OBJECT_HI21:
+                offs = *(uint32_t*)bytes; bytes += 4;
+                patch_mask = *(uint32_t*)bytes; bytes += 4;
+                patch_scale = *(int32_t*)bytes; bytes += 4;
+                value = *(int32_t*)bytes; bytes += 4;
+                LOG("PATCH_OBJECT_HI21 patch_offs=%i patch_mask=%#08x scale=%i value=%i res_value=%i\n",
+                    offs, patch_mask, patch_scale, value, floor_div(data_offs + value, patch_scale) - (int32_t)offs / patch_scale);
+                patch_hi21(executable_memory + offs, floor_div(data_offs + value, patch_scale) - (int32_t)offs / patch_scale);
                 break;
 
             case ENTRY_POINT:
@@ -139,7 +174,13 @@ int parse_commands(uint8_t *bytes) {
                 break;
 
             case FREE_MEMORY:
+                LOG("FREE_MENORY\n");
                 free_memory();
+                break;
+
+            case DUMP_CODE:
+                LOG("DUMP_CODE\n");
+                end_flag = 2;
                 break;
 
             case END_COM:

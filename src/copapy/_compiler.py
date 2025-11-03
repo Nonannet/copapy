@@ -373,9 +373,10 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
 
     # write patch operations
     for patch in patch_list:
-        dw.write_int(patch.patch_type)
+        dw.write_com(binw.Command(patch.patch_type))
         dw.write_int(patch.address)
         dw.write_int(patch.mask)
+        dw.write_int(patch.scale)
         dw.write_int(patch.value, signed=True)
 
     dw.write_com(binw.Command.ENTRY_POINT)

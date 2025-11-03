@@ -4,8 +4,8 @@
 #include "mem_man.h"
 
 int main(int argc, char *argv[]) {
-    if (argc != 2) {
-        fprintf(stderr, "Usage: %s <binary_file>\n", argv[0]);
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <code_file>\n", argv[0]);
         return EXIT_FAILURE;
     }
 
@@ -46,6 +46,17 @@ int main(int argc, char *argv[]) {
     }
 
     int ret = parse_commands(file_buff);
+
+    if (ret == 2) {
+        /* Dump code for debugging */
+        if (argc != 3) {
+            fprintf(stderr, "Usage: %s <code_file> <memory_dump_file>\n", argv[0]);
+            return EXIT_FAILURE;
+        }
+        FILE *f = fopen(argv[2], "wb");
+        fwrite(executable_memory, 1, (size_t)executable_memory_len, f);
+        fclose(f);
+    }
 
     free_memory();
 
