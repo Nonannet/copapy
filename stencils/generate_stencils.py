@@ -87,11 +87,21 @@ def get_cast(type1: str, type2: str, type_out: str) -> str:
 
 
 @norm_indent
-def get_func2(func_name: str, type1: str, type2: str) -> str:
+def get_func1(func_name: str, type1: str, type2: str) -> str:
     return f"""
     {stencil_func_prefix}void {func_name}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         STENCIL_START({func_name}_{type1}_{type2});
         result_float_{type2}(aux_{func_name}((float)arg1), arg2);
+    }}
+    """
+
+
+@norm_indent
+def get_func2(func_name: str, type1: str, type2: str) -> str:
+    return f"""
+    {stencil_func_prefix}void {func_name}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
+        STENCIL_START({func_name}_{type1}_{type2});
+        result_float_{type2}(aux_{func_name}((float)arg1, (float)arg2), arg2);
     }}
     """
 
@@ -205,7 +215,7 @@ if __name__ == "__main__":
 
     # Scalar arithmetic:
     types = ['int', 'float']
-    ops = ['add', 'sub', 'mul', 'div', 'floordiv', 'gt', 'ge', 'eq', 'ne', 'pow', 'atan2']
+    ops = ['add', 'sub', 'mul', 'div', 'floordiv', 'gt', 'ge', 'eq', 'ne', 'atan2']
     int_ops = ['bwand', 'bwor', 'bwxor', 'lshift', 'rshift']
 
     for t1 in types:
@@ -220,9 +230,9 @@ if __name__ == "__main__":
         t_out = 'int' if t1 == 'float' else 'float'
         code += get_cast(t1, t2, t_out)
 
-    fnames = ['sqrt', 'exp', 'sin', 'cos', 'tan', 'asin', 'atan', 'get_42']
+    fnames = ['sqrt', 'exp', 'log', 'sin', 'cos', 'tan', 'asin', 'atan', 'get_42']
     for fn, t1 in permutate(fnames, types):
-        code += get_func2(fn, t1, t1)
+        code += get_func1(fn, t1, t1)
 
     for op, t1, t2 in permutate(ops, types, types):
         t_out = t1 if t1 == t2 else 'float'
@@ -230,7 +240,7 @@ if __name__ == "__main__":
             code += get_floordiv('floordiv', t1, t2)
         elif op == 'div':
             code += get_op_code_float(op, t1, t2)
-        elif op in {'pow', 'atan2'}:
+        elif op in {'atan2'}:
             code += get_func2(op, t1, t2)
         elif op in {'gt', 'eq', 'ge', 'ne'}:
             code += get_op_code(op, t1, t2, 'int')

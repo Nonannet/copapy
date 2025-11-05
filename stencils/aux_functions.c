@@ -33,15 +33,35 @@ NOINLINE float aux_get_42(float n) {
     return n + 42.0;
 }
 
-float fast_pow_float(float base, float exponent) {
-    union {
-        float f;
-        uint32_t i;
-    } u;
+NOINLINE float aux_log(float x)
+{
+    union { float f; uint32_t i; } vx = { x };
+    float e = (float)((vx.i >> 23) & 0xFF) - 127.0f;
+    vx.i = (vx.i & 0x007FFFFF) | 0x3F800000; // normalized mantissa in [1,2)
+    float m = vx.f;
 
-    u.f = base;
-    int32_t x = u.i;
-    int32_t y = (int32_t)(exponent * (x - 1072632447) + 1072632447);
-    u.i = (uint32_t)y;
-    return u.f;
+    // 3rd-degree minimax polynomial approximation of log2(m)
+    // over [1, 2): log2(m) ≈ p(m) = a*m^3 + b*m^2 + c*m + d
+    float p = -0.34484843f * m * m * m + 2.02466578f * m * m - 2.67487759f * m + 1.65149613f;
+
+    float log2x = e + p;
+    return log2x * 0.69314718f; // convert log2 → ln
+}
+
+NOINLINE float aux_exp(float x)
+{
+    // Scale by 1/ln(2)
+    x = x * 1.44269504089f;
+    float xi = (float)((int)x);
+    float f = x - xi;
+
+    // Polynomial approximation of 2^f for f ∈ [0,1)
+    float p = 1.0f + f * (0.69314718f + f * (0.24022651f + f * (0.05550411f)));
+
+    // Reconstruct exponent
+    int ei = (int)xi + 127;
+    if (ei <= 0) ei = 0; else if (ei >= 255) ei = 255;
+    union { uint32_t i; float f; } v = { (uint32_t)(ei << 23) };
+
+    return v.f * p;
 }
