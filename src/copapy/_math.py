@@ -45,8 +45,10 @@ def log(x: NumLike) -> variable[float] | float:
 @overload
 def pow(x: float | int, y: float | int) -> float: ...
 @overload
-def pow(x: variable[Any], y: variable[Any]) -> variable[float]: ...
-def pow(x: NumLike, y: NumLike) -> variable[float] | float:
+def pow(x: variable[Any], y: NumLike) -> variable[float]: ...
+@overload
+def pow(x: NumLike, y: variable[Any]) -> variable[float]: ...
+def pow(x: NumLike, y: NumLike) -> NumLike:
     """x to the power of y
 
     Arguments:
@@ -55,6 +57,15 @@ def pow(x: NumLike, y: NumLike) -> variable[float] | float:
     Returns:
         result of x**y
     """
+    if isinstance(y, int) and 0 <= y < 16:
+        if y == 0:
+            return 1
+        m = x
+        for _ in range(y - 1):
+            m *= x
+        return m
+    if y == -1:
+        return 1 / x
     return exp(y * log(x))
 
 
@@ -198,7 +209,7 @@ def acos(x: NumLike) -> variable[float] | float:
     Returns:
         Inverse cosine of x
     """
-    return 2 * math.pi - asin(x)
+    return math.pi / 2 - asin(x)
 
 
 def get_42() -> variable[float]:
