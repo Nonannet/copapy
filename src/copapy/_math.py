@@ -7,6 +7,58 @@ T = TypeVar("T", int, float, variable[int], variable[float])
 
 
 @overload
+def exp(x: float | int) -> float: ...
+@overload
+def exp(x: variable[Any]) -> variable[float]: ...
+def exp(x: NumLike) -> variable[float] | float:
+    """Exponential function to basis e
+
+    Arguments:
+        x: Input value
+
+    Returns:
+        result of e**x
+    """
+    if isinstance(x, variable):
+        return add_op('exp', [x, x])  # TODO: fix 2. dummy argument
+    return float(math.exp(x))
+
+
+@overload
+def log(x: float | int) -> float: ...
+@overload
+def log(x: variable[Any]) -> variable[float]: ...
+def log(x: NumLike) -> variable[float] | float:
+    """Logarithm to basis e
+
+    Arguments:
+        x: Input value
+
+    Returns:
+        result of ln(x)
+    """
+    if isinstance(x, variable):
+        return add_op('log', [x, x])  # TODO: fix 2. dummy argument
+    return float(math.log(x))
+
+
+@overload
+def pow(x: float | int, y: float | int) -> float: ...
+@overload
+def pow(x: variable[Any], y: variable[Any]) -> variable[float]: ...
+def pow(x: NumLike, y: NumLike) -> variable[float] | float:
+    """x to the power of y
+
+    Arguments:
+        x: Input value
+
+    Returns:
+        result of x**y
+    """
+    return exp(y * log(x))
+
+
+@overload
 def sqrt(x: float | int) -> float: ...
 @overload
 def sqrt(x: variable[Any]) -> variable[float]: ...
@@ -21,7 +73,7 @@ def sqrt(x: NumLike) -> variable[float] | float:
     """
     if isinstance(x, variable):
         return add_op('sqrt', [x, x])  # TODO: fix 2. dummy argument
-    return float(x ** 0.5)
+    return float(math.sqrt(x))
 
 
 @overload
@@ -41,6 +93,7 @@ def sin(x: NumLike) -> variable[float] | float:
         return add_op('sin', [x, x])  # TODO: fix 2. dummy argument
     return math.sin(x)
 
+
 @overload
 def cos(x: float | int) -> float: ...
 @overload
@@ -57,6 +110,7 @@ def cos(x: NumLike) -> variable[float] | float:
     if isinstance(x, variable):
         return add_op('cos', [x, x])  # TODO: fix 2. dummy argument
     return math.cos(x)
+
 
 @overload
 def tan(x: float | int) -> float: ...
@@ -76,6 +130,77 @@ def tan(x: NumLike) -> variable[float] | float:
     return math.tan(x)
 
 
+@overload
+def atan(x: float | int) -> float: ...
+@overload
+def atan(x: variable[Any]) -> variable[float]: ...
+def atan(x: NumLike) -> variable[float] | float:
+    """Inverse tangent function
+
+    Arguments:
+        x: Input value
+
+    Returns:
+        Inverse tangent of x
+    """
+    if isinstance(x, variable):
+        return add_op('atan', [x, x])  # TODO: fix 2. dummy argument
+    return math.atan(x)
+
+
+@overload
+def atan2(x: float | int, y: float | int) -> float: ...
+@overload
+def atan2(x: variable[Any], y: variable[Any]) -> variable[float]: ...
+def atan2(x: NumLike, y: NumLike) -> variable[float] | float:
+    """2-argument arctangent
+
+    Arguments:
+        x: Input value
+        y: Input value
+
+    Returns:
+        Result in radian
+    """
+    if isinstance(x, variable) or isinstance(y, variable):
+        return add_op('atan', [x, x])  # TODO: fix 2. dummy argument
+    return math.atan2(x, y)
+
+
+@overload
+def asin(x: float | int) -> float: ...
+@overload
+def asin(x: variable[Any]) -> variable[float]: ...
+def asin(x: NumLike) -> variable[float] | float:
+    """Inverse sine function
+
+    Arguments:
+        x: Input value
+
+    Returns:
+        Inverse sine of x
+    """
+    if isinstance(x, variable):
+        return add_op('asin', [x, x])  # TODO: fix 2. dummy argument
+    return math.asin(x)
+
+
+@overload
+def acos(x: float | int) -> float: ...
+@overload
+def acos(x: variable[Any]) -> variable[float]: ...
+def acos(x: NumLike) -> variable[float] | float:
+    """Inverse cosine function
+
+    Arguments:
+        x: Input value
+
+    Returns:
+        Inverse cosine of x
+    """
+    return 2 * math.pi - asin(x)
+
+
 def get_42() -> variable[float]:
     """Returns the variable representing the constant 42"""
     return add_op('get_42', [0.0, 0.0])
@@ -92,4 +217,3 @@ def abs(x: T) -> T:
     """
     ret = (x < 0) * -x + (x >= 0) * x
     return ret  # pyright: ignore[reportReturnType]
-
