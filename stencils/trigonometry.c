@@ -182,9 +182,9 @@ NOINLINE float aux_atan2(float y, float x) {
     float angle;
 
     if (abs_x > abs_y)
-        angle = fast_atanf_fp32_nolib(y / x);
+        angle = aux_atan(y / x);
     else
-        angle = PI_2 - fast_atanf_fp32_nolib(x / y);
+        angle = PI_2 - aux_atan(x / y);
 
     // Quadrant correction
     if (x < 0) angle = (y >= 0) ? angle + PI : angle - PI;
