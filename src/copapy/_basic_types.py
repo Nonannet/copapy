@@ -2,6 +2,7 @@ import pkgutil
 from typing import Any, TypeVar, overload, TypeAlias, Generic, cast
 from ._stencils import stencil_database
 import platform
+import copapy as cp
 
 NumLike: TypeAlias = 'variable[int] | variable[float] | variable[bool] | int | float | bool'
 unifloat: TypeAlias = 'variable[float] | float'
@@ -228,12 +229,7 @@ class variable(Generic[TNum], Net):
     @overload
     def __pow__(self, other: NumLike) -> 'variable[float] | variable[int]': ...
     def __pow__(self, other: NumLike) -> Any:
-        if not isinstance(other, variable):
-            if other == 2:
-                return self * self
-            if other == -1:
-                return 1 / self
-        return add_op('pow', [self, other])
+        return cp.pow(self, other)
 
     @overload
     def __rpow__(self: TCPNum, other: int) -> TCPNum: ...
