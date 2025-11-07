@@ -22,7 +22,7 @@ def parse_results(log_text: str) -> dict[int, bytes]:
 
     for match in matches:
         value_str: list[str] = match.group(3).strip().split(' ')
-        print('--', value_str)
+        #print('--', value_str)
         value = bytes(int(v, base=16) for v in value_str)
         if len(value) <= 8:
             var_dict[int(match.group(1))] = value
@@ -81,17 +81,13 @@ def iiftests(c1: NumLike) -> list[NumLike]:
 
 
 def test_compile():
+    c_i = variable(9)
+    c_f = variable(1.111)
+    c_b = variable(True)
 
-    a1 = 0.0
-    a2 = 3
-    
-    c1 = variable(a1)
-    c2 = variable(a2)
+    ret_test = function1(c_i) + function1(c_f) + function2(c_i) + function2(c_f) + function3(c_i) + function4(c_i) + function5(c_b) + [variable(9) % 2] + iiftests(c_i) + iiftests(c_f)
+    ret_ref = function1(9) + function1(1.111) + function2(9) + function2(1.111) + function3(9) + function4(9) + function5(True) + [9 % 2] + iiftests(9) + iiftests(1.111)
 
-    ret_test = [c1 + c2, c2 + c2]
-    ret_ref: list[int | float] = [a1 + a2, a2 + a2]
-
-    #out = [Write(r) for r in ret_test]
     out = [Write(r) for r in ret_test]
 
     #ret_test += [c_i, v2]
