@@ -143,9 +143,11 @@ def add_write_ops(net_node_list: list[tuple[Net | None, Node]], const_nets: list
             yield None, node
 
         if net:
+            # Update virtual register state with result net and 2. parameter net
             registers[0] = net
             if len(node.args) > 1:
-                registers[1] = net
+                registers[1] = node.args[1]
+            #print("* reg", node.name, [transl_type(r.dtype) if r else 'int' for r in registers])
 
             if net in read_back_nets and net not in stored_nets:
                 type_list = [transl_type(r.dtype) if r else 'int' for r in registers]
