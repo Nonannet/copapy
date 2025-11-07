@@ -180,12 +180,12 @@ def get_read_reg1_code(type1: str, type2: str, type_out: str) -> str:
 
 
 @norm_indent
-def get_write_code(type1: str) -> str:
+def get_write_code(type1: str, type2: str) -> str:
     return f"""
-    {stencil_func_prefix}void write_{type1}({type1} arg1) {{
+    {stencil_func_prefix}void write_{type1}_reg0_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         STENCIL_START(write_{type1});
         dummy_{type1} = arg1;
-        result_{type1}(arg1);
+        result_{type1}_{type2}(arg1, arg2);
     }}
     """
 
@@ -256,8 +256,8 @@ if __name__ == "__main__":
         code += get_read_reg0_code(t1, t2, t_out)
         code += get_read_reg1_code(t1, t2, t_out)
 
-    for t1 in types:
-        code += get_write_code(t1)
+    for t1, t2 in permutate(types, types):
+        code += get_write_code(t1, t2)
 
     print(f"Write file {args.path}...")
     with open(args.path, 'w') as f:
