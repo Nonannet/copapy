@@ -129,18 +129,28 @@ def add_write_ops(net_node_list: list[tuple[Net | None, Node]], const_nets: list
     read_back_nets = {
         net for net, node in net_node_list
         if net and node.name.startswith('read_')}
+    
+    registers: list[Net | None] = [None, None]
 
     for net, node in net_node_list:
         if isinstance(node, Write):
-            yield node.args[0], node
+            assert len(registers) == 2
+            type_list = [transl_type(r.dtype) if r else 'int' for r in registers]
+            yield node.args[0], Op(f"write_{type_list[0]}_reg0_" + '_'.join(type_list), node.args)
         elif node.name.startswith('read_'):
             yield net, node
         else:
             yield None, node
 
-        if net and net in read_back_nets and net not in stored_nets:
-            yield net, Write(net)
-            stored_nets.add(net)
+        if net:
+            registers[0] = net
+            if len(node.args) > 1:
+                registers[1] = net
+
+            if net in read_back_nets and net not in stored_nets:
+                type_list = [transl_type(r.dtype) if r else 'int' for r in registers]
+                yield net, Op(f"write_{type_list[0]}_reg0_" + '_'.join(type_list), [])
+                stored_nets.add(net)
 
 
 def get_nets(*inputs: Iterable[Iterable[Any]]) -> list[Net]:

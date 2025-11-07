@@ -3,12 +3,10 @@ from copapy.backend import Write, compile_to_dag, add_read_command
 import subprocess
 from copapy import _binwrite
 import copapy.backend as backend
-import copapy as cp
 import os
 import warnings
 import re
 import struct
-import pytest
 
 if os.name == 'nt':
     # On Windows wsl and qemu-user is required:
@@ -83,12 +81,17 @@ def iiftests(c1: NumLike) -> list[NumLike]:
 
 
 def test_compile():
-    c_i = variable(5)
-    v2 = variable(0.0)
 
-    ret_test = [c_i + v2, c_i + v2]
-    ret_ref = [9 * 4.44, 9 * -4.44, 9 * -4.44]
+    a1 = 0.0
+    a2 = 3
+    
+    c1 = variable(a1)
+    c2 = variable(a2)
 
+    ret_test = [c1 + c2, c2 + c2]
+    ret_ref: list[int | float] = [a1 + a2, a2 + a2]
+
+    #out = [Write(r) for r in ret_test]
     out = [Write(r) for r in ret_test]
 
     #ret_test += [c_i, v2]
@@ -97,21 +100,21 @@ def test_compile():
     sdb = backend.stencil_db_from_package('aarch64')
     dw, variables = compile_to_dag(out, sdb)
 
-    dw.write_com(_binwrite.Command.READ_DATA)
-    dw.write_int(0)
-    dw.write_int(28)
+    #dw.write_com(_binwrite.Command.READ_DATA)
+    #dw.write_int(0)
+    #dw.write_int(28)
 
     # run program command
     dw.write_com(_binwrite.Command.RUN_PROG)
-    #il.write_com(_binwrite.Command.DUMP_CODE)
+    #dw.write_com(_binwrite.Command.DUMP_CODE)
 
     for net in ret_test:
         assert isinstance(net, backend.Net)
         add_read_command(dw, variables, net)
 
-    dw.write_com(_binwrite.Command.READ_DATA)
-    dw.write_int(0)
-    dw.write_int(28)
+    #dw.write_com(_binwrite.Command.READ_DATA)
+    #dw.write_int(0)
+    #dw.write_int(28)
 
     dw.write_com(_binwrite.Command.END_COM)
 
