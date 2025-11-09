@@ -13,7 +13,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-  "pelfy>=1.0.3"
+  "pelfy>=1.0.4"
 ]
 
 [project.urls]
@@ -51,6 +51,8 @@ minversion = "6.0"
 addopts = "-ra -q"
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+    "runner: requires to have an compiled runner executable"]
 
 [tool.ruff]
 lint.ignore = ["E501", "E226", "E265"]
