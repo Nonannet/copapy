@@ -2,21 +2,21 @@
 
 const float PI      = 3.14159265358979323846f;
 const float PI_2    = 1.57079632679489661923f;  // pi/2
-const float TWO_OVER_PI = 0.63661977236758134308f; // 2/pi
+const double TWO_OVER_PI = 0.63661977236758134308; // 2/pi
+const double PIO2_HI = 1.57079625129699707031;     // pi/2 high part
+const double PIO2_LO = 7.54978941586159635335e-08; // pi/2 low part
 
 NOINLINE float aux_sin(float x) {
     // convert to double for reduction (better precision)
     double xd = (double)x;
 
     // quadrant index q = nearest integer to x * 2/pi
-    double qd = xd * (double)TWO_OVER_PI;
+    double qd = xd * TWO_OVER_PI;
     // round to nearest integer (tie to even rounding not guaranteed)
     int q = (int)(qd + (qd >= 0.0 ? 0.5 : -0.5));
 
     // range-reduced remainder r = x − q*(pi/2)
     // use hi/lo parts for pi/2 to reduce error
-    const double PIO2_HI = 1.57079625129699707031;     // ≈ first 24 bits
-    const double PIO2_LO = 7.54978941586159635335e-08; // remainder
     double r_d = xd - (double)q * PIO2_HI - (double)q * PIO2_LO;
     float r = (float)r_d;
 
@@ -55,14 +55,12 @@ NOINLINE float aux_cos(float x) {
     double xd = (double)x;
 
     // quadrant index q = nearest integer to x * 2/pi
-    double qd = xd * (double)TWO_OVER_PI;
+    double qd = xd * TWO_OVER_PI;
     // round to nearest integer (tie to even rounding not guaranteed)
     int q = (int)(qd + (qd >= 0.0 ? 0.5 : -0.5));
 
     // range-reduced remainder r = x − q*(pi/2)
     // use hi/lo parts for pi/2 to reduce error
-    const double PIO2_HI = 1.57079625129699707031;     // ≈ first 24 bits
-    const double PIO2_LO = 7.54978941586159635335e-08; // remainder
     double r_d = xd - (double)q * PIO2_HI - (double)q * PIO2_LO;
     float r = (float)r_d;
 
@@ -99,12 +97,10 @@ NOINLINE float aux_cos(float x) {
 NOINLINE float aux_tan(float x) {
     // Promote to double for argument reduction (improves precision)
     double xd = (double)x;
-    double qd = xd * (double)TWO_OVER_PI;   // how many half-pi multiples
+    double qd = xd * TWO_OVER_PI;   // how many half-pi multiples
     int q = (int)(qd + (qd >= 0.0 ? 0.5 : -0.5));  // nearest integer
 
     // Range reduce: r = x - q*(pi/2)
-    const double PIO2_HI = 1.57079625129699707031;     // pi/2 high part
-    const double PIO2_LO = 7.54978941586159635335e-08; // pi/2 low part
     double r_d = xd - (double)q * PIO2_HI - (double)q * PIO2_LO;
     float r = (float)r_d;
 
@@ -192,7 +188,6 @@ NOINLINE float aux_atan2(float y, float x) {
 }
 
 NOINLINE float aux_asin(float x) {
-    const float PI_2 = 1.57079632679489661923f;
     if (x > 1.0f) x = 1.0f;
     if (x < -1.0f) x = -1.0f;
 
