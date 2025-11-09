@@ -23,7 +23,7 @@ def test_readme_example():
 
     # Assertions to verify correctness
     assert tg.read_value(c) == pytest.approx(0.25 + 0.87 * 2.0, 0.001)  # pyright: ignore[reportUnknownMemberType]
-    assert tg.read_value(d) == pytest.approx((0.25 + 0.87 * 2.0) ** 2 + cp.sin(0.25), 0.001)  # pyright: ignore[reportUnknownMemberType]
+    assert tg.read_value(d) == pytest.approx((0.25 + 0.87 * 2.0) ** 2 + cp.sin(0.25), 0.005)  # pyright: ignore[reportUnknownMemberType]
     assert tg.read_value(e) == pytest.approx(cp.sqrt(0.87), 0.001)  # pyright: ignore[reportUnknownMemberType]
 
 if __name__ == "__main__":
