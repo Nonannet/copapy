@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 jobs:
-  docker-build:
+  docker-build-cross-compiler:
     runs-on: ubuntu-latest
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -28,7 +28,38 @@ jobs:
         run: echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/cross_compiler_unix:1" >> $GITHUB_ENV
 
       - name: Build Docker image
-        run:  docker build -t $IMAGE_NAME ./tools/build_container/
+        run:  docker build -t $IMAGE_NAME ./tools/cross_compiler_unix/
 
       - name: Push Docker image
         run:  docker push $IMAGE_NAME
+
+  docker-build-arm64:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set image name
+        run: echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/arm64_test:1" >> $GITHUB_ENV
+
+      - name: Build & Push Docker image
+        run:  docker buildx build --platform linux/arm64 --push -t $IMAGE_NAME tools/arm64_test/
+
