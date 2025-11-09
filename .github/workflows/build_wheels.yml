@@ -58,7 +58,7 @@ jobs:
           CIBW_ARCHS_MACOS: "x86_64 universal2"
           CIBW_ARCHS_WINDOWS: "AMD64 x86"
           CIBW_TEST_REQUIRES: "pytest"
-          CIBW_TEST_COMMAND: "pytest -m 'not runner'"
+          CIBW_TEST_COMMAND: "pytest -m \"not runner\" {package}/tests/"
 
       - uses: actions/upload-artifact@v4
         with:
