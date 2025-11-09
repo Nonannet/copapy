@@ -139,6 +139,16 @@ int parse_commands(uint8_t *bytes) {
                 patch(executable_memory + offs, patch_mask, value / patch_scale);
                 break;
 
+            case PATCH_OBJECT_REL:
+                offs = *(uint32_t*)bytes; bytes += 4;
+                patch_mask = *(uint32_t*)bytes; bytes += 4;
+                patch_scale = *(int32_t*)bytes; bytes += 4;
+                value = *(int32_t*)bytes; bytes += 4;
+                LOG("PATCH_OBJECT_REL patch_offs=%i patch_addr=%p scale=%i value=%i\n",
+                    offs, (void*)(data_memory + value), patch_scale, value);
+                *(void **)(executable_memory + offs) = data_memory + value; // / patch_scale;
+                break;
+
             case PATCH_OBJECT_HI21:
                 offs = *(uint32_t*)bytes; bytes += 4;
                 patch_mask = *(uint32_t*)bytes; bytes += 4;

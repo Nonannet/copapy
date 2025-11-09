@@ -173,13 +173,27 @@ class stencil_database():
         patch_offset = pr.fields['r_offset'] - relocation.function_offset - relocation.start + function_offset
         #print(f"xx {pr.fields['r_offset'] - relocation.function_offset} {relocation.target_symbol_name=} {pr.fields['r_offset']=} {relocation.function_offset=} {relocation.start=} {function_offset=}")
         scale = 1
+        mask = 0xFFFFFFFF  # 32 bit
 
-        if pr.type.endswith('_PLT32') or pr.type.endswith('_PC32'):
+        if pr.type.endswith('64_PC32') or pr.type.endswith('64_PLT32'):
             # S + A - P
-            mask = 0xFFFFFFFF  # 32 bit
             patch_value = symbol_address + pr.fields['r_addend'] - patch_offset
+            #print(f" *> {pr.type} {patch_value=} {symbol_address=} {pr.fields['r_addend']=} {pr.bits=}, {function_offset=} {patch_offset=}")
+
+        elif pr.type == 'R_386_PC32':
+            # S + A - P
+            patch_value = symbol_address + pr.fields['r_addend'] - patch_offset - 4
+            #print(f" *> {pr.type} {patch_value=} {symbol_address=} {pr.fields['r_addend']=} {pr.bits=}, {function_offset=} {patch_offset=}")
+
+        elif pr.type == 'R_386_32':
+            # R_386_32
+            # (S + A)
+            patch_value = symbol_address + pr.fields['r_addend']
+            symbol_type = symbol_type + 0x03  # Relative to data section
+            #print(f" *> {pr.type} {patch_value=} {symbol_address=} {pr.fields['r_addend']=} {pr.bits=}, {function_offset=} {patch_offset=}")
 
         elif pr.type.endswith('_CALL26'):
+            # R_AARCH64_CALL26
             # ((S + A) - P) >> 2
             assert pr.file.byteorder == 'little', "Big endian not supported for ARM64"
             mask = 0x3ffffff  # 26 bit (1<<26)-1
@@ -187,6 +201,8 @@ class stencil_database():
             scale = 4
 
         elif pr.type.endswith('_ADR_PREL_PG_HI21'):
+            # R_AARCH64_LDST32_ABS_LO12_NC
+            # R_AARCH64_ADR_PREL_PG_HI21
             assert pr.file.byteorder == 'little', "Big endian not supported for ARM64"
             mask = 0  # Handled by runner
             patch_value = symbol_address + pr.fields['r_addend']
@@ -195,17 +211,19 @@ class stencil_database():
             #print(f" *> {patch_value=} {symbol_address=} {pr.fields['r_addend']=}, {function_offset=}")
 
         elif pr.type.endswith('_LDST32_ABS_LO12_NC'):
+            # R_AARCH64_LDST32_ABS_LO12_NC
             # (S + A) & 0xFFF
             mask = 0b11_1111_1111_1100_0000_0000
-            patch_value = (symbol_address + pr.fields['r_addend'])
+            patch_value = symbol_address + pr.fields['r_addend']
             symbol_type = symbol_type + 0x02  # Absolut value
             scale = 4
             #print(f" *> {patch_value=} {symbol_address=} {pr.fields['r_addend']=}, {function_offset=}")
 
         elif pr.type.endswith('_LDST64_ABS_LO12_NC'):
+            # R_AARCH64_LDST64_ABS_LO12_NC
             # (S + A) & 0xFFF
             mask = 0b11_1111_1111_1100_0000_0000
-            patch_value = (symbol_address + pr.fields['r_addend'])
+            patch_value = symbol_address + pr.fields['r_addend']
             symbol_type = symbol_type + 0x02  # Absolut value
             scale = 8
             #print(f" *> {patch_value=} {symbol_address=} {pr.fields['r_addend']=}, {function_offset=}")

@@ -319,7 +319,7 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
                     obj_addr = object_addr_lookup[associated_net]
                     patch = sdb.get_patch(reloc, obj_addr, offset, binw.Command.PATCH_OBJECT.value)
                 elif reloc.target_symbol_name.startswith('result_'):
-                    raise Exception(f"Stencil {node.name} seams to branch to multiple result_* calls.")
+                    raise Exception(f"Stencil {node.name} seems to branch to multiple result_* calls.")
                 else:
                     # Patch constants addresses on heap
                     obj_addr = reloc.target_symbol_offset + section_addr_lookup[reloc.target_section_index]

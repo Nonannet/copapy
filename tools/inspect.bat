@@ -9,3 +9,5 @@ wsl aarch64-linux-gnu-objdump -D -b binary -m aarch64 --adjust-vma=0x5000 bin/te
 REM wsl objdump -D -b binary -m i386:x86-64 --adjust-vma=0x1000 bin/test.copapy.bin
 
 REM wsl aarch64-linux-gnu-objdump -d -x src/copapy/obj/stencils_aarch64_O3.o
+
+REM wsl objdump -D -b binary -m i8086 --adjust-vma=0x5000 bin/test-x86.copapy.bin

@@ -60,7 +60,7 @@ jobs:
     - name: Install Python dependencies
       run: python -m pip install -e .[dev]
 
-    - name: Install ARM binutils and qemu
+    - name: Install ARM binutils, qemu and gcc-multilib (32 bit support)
       if: strategy.job-index == 0
       run: |
         echo "set man-db/auto-update false" | sudo debconf-communicate
@@ -72,7 +72,7 @@ jobs:
       run: |
         mkdir -p bin
         gcc -O3 -DENABLE_BASIC_LOGGING -o bin/coparun src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c
-        aarch64-linux-gnu-gcc -O3 -static -DENABLE_BASIC_LOGGING src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c -o bin/coparun-aarch64 
+        aarch64-linux-gnu-gcc -O3 -static -DENABLE_BASIC_LOGGING src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c -o bin/coparun-aarch64
 
     - name: Generate debug asm files
       if: strategy.job-index == 0
@@ -177,6 +177,8 @@ jobs:
         mkdir bin
         call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=amd64
         cl /DENABLE_BASIC_LOGGING /O2 src\coparun\runmem.c src\coparun\coparun.c src\coparun\mem_man.c /Fe:bin\coparun.exe
+        call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x86
+        cl /DENABLE_BASIC_LOGGING /O2 src\coparun\runmem.c src\coparun\coparun.c src\coparun\mem_man.c /Fe:bin\coparun-x86.exe
 
     - name: Run tests with pytest
       run: pytest
