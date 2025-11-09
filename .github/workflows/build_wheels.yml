@@ -54,11 +54,11 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.2.0
         env:
-          CIBW_ARCHS_LINUX: "x86_64 aarch64 x86"
+          CIBW_ARCHS_LINUX: "x86_64 aarch64 i686"
           CIBW_ARCHS_MACOS: "x86_64 universal2"
           CIBW_ARCHS_WINDOWS: "AMD64 x86"
           CIBW_TEST_REQUIRES: "pytest"
-          CIBW_TEST_COMMAND: "pytest {package}/tests/test_coparun_module.py {package}/tests/test_vector.py {package}/tests/test_ops.py {package}/tests/test_math.py"
+          CIBW_TEST_COMMAND: "pytest -m 'not runner'"
 
       - uses: actions/upload-artifact@v4
         with:
