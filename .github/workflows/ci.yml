@@ -60,19 +60,19 @@ jobs:
     - name: Install Python dependencies
       run: python -m pip install -e .[dev]
 
-    - name: Install ARM binutils, qemu and gcc-multilib (32 bit support)
-      if: strategy.job-index == 0
-      run: |
-        echo "set man-db/auto-update false" | sudo debconf-communicate
-        sudo dpkg-reconfigure man-db
-        sudo apt-get update
-        sudo apt-get install --no-install-recommends --no-install-suggests binutils-aarch64-linux-gnu qemu-user gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+    #- name: Install ARM binutils and qemu
+    #  if: strategy.job-index == 0
+    #  run: |
+    #    echo "set man-db/auto-update false" | sudo debconf-communicate
+    #    sudo dpkg-reconfigure man-db
+    #    sudo apt-get update
+    #    sudo apt-get install --no-install-recommends --no-install-suggests binutils-aarch64-linux-gnu qemu-user gcc-aarch64-linux-gnu libc6-dev-arm64-cross
 
     - name: Compile coparun
       run: |
         mkdir -p bin
         gcc -O3 -DENABLE_BASIC_LOGGING -o bin/coparun src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c
-        aarch64-linux-gnu-gcc -O3 -static -DENABLE_BASIC_LOGGING src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c -o bin/coparun-aarch64
+     #   aarch64-linux-gnu-gcc -O3 -static -DENABLE_BASIC_LOGGING src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c -o bin/coparun-aarch64
 
     - name: Generate debug asm files
       if: strategy.job-index == 0
@@ -83,7 +83,7 @@ jobs:
 
         echo "- Patch code..."
         bin/coparun bin/test.copapy bin/test.copapy.bin
-        qemu-aarch64 bin/coparun-aarch64 bin/test-aarch64.copapy bin/test-aarch64.copapy.bin
+        #qemu-aarch64 bin/coparun-aarch64 bin/test-aarch64.copapy bin/test-aarch64.copapy.bin
 
         objdump -D -b binary -m i386:x86-64 --adjust-vma=0x1000 bin/test.copapy.bin > bin/test.copapy.asm
         echo '<p>test.copapy.asm</p>' >> $GITHUB_STEP_SUMMARY
@@ -97,9 +97,9 @@ jobs:
         echo '<p>stencils_x86_64_O3.asm</p>' >> $GITHUB_STEP_SUMMARY
         python tools/clean_asm.py bin/stencils_x86_64_O3.asm >> $GITHUB_STEP_SUMMARY
 
-        aarch64-linux-gnu-objdump -d -x src/copapy/obj/stencils_arm64_O3.o > bin/stencils_arm64_O3.asm
-        echo '<p>stencils_arm64_O3.asm</p>' >> $GITHUB_STEP_SUMMARY
-        python tools/clean_asm.py bin/stencils_arm64_O3.asm >> $GITHUB_STEP_SUMMARY
+        #aarch64-linux-gnu-objdump -d -x src/copapy/obj/stencils_arm64_O3.o > bin/stencils_arm64_O3.asm
+        #echo '<p>stencils_arm64_O3.asm</p>' >> $GITHUB_STEP_SUMMARY
+        #python tools/clean_asm.py bin/stencils_arm64_O3.asm >> $GITHUB_STEP_SUMMARY
 
     - name: Run tests with pytest
       run: pytest
@@ -132,14 +132,17 @@ jobs:
         platforms: linux/arm64
     - name: Use ARM64 container
       run: |
-        docker run --rm -v $PWD:/app -w /app --platform linux/arm64 python:3.11-slim \
-        bash -lc "apt-get update && \
-                  apt-get install -y build-essential && \
-                  pip install setuptools wheel pytest && \
-                  pip install . && \
+        docker run --rm -v $PWD:/app -w /app --platform linux/arm64 ghcr.io/nonannet/arm64_test:1 \
+        bash -lc "pip install . && \
                   mkdir -p bin && \
-                  gcc -O3 -DENABLE_LOGGING -o bin/coparun src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c && \
+                  gcc -O3 -DENABLE_LOGGING -o bin/coparun src/coparun/runmem.c \
+                  src/coparun/coparun.c src/coparun/mem_man.c && \
                   pytest"
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: runner-linux-arm64
+        path: bin/*
 
   build-windows:
     needs: [build_stencils]
@@ -196,7 +199,7 @@ jobs:
         path: bin/*
 
   release-stencils:
-    needs: [build_stencils, build-ubuntu, build-windows]
+    needs: [build_stencils, build-ubuntu, build-windows, build-arm64]
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
     permissions:
@@ -227,7 +230,8 @@ jobs:
           cp tmp/stencil-object-files/*.o release/
           cp tmp/cross-runner/coparun-* release/
           cp tmp/runner-linux/coparun release/
-          cp tmp/runner-win/coparun.exe release/
+          cp tmp/runner-linux-arm64/coparun release/
+          cp tmp/runner-win/coparun*.exe release/
 
           TAG="${{ steps.version.outputs.version }}"
 
