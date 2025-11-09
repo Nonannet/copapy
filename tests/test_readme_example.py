@@ -19,7 +19,7 @@ def test_readme_example():
     # Read the results
     print("Result c:", tg.read_value(c))
     print("Result d:", tg.read_value(d))
-    print("Result e:", tg.read_value(d))
+    print("Result e:", tg.read_value(e))
 
     # Assertions to verify correctness
     assert tg.read_value(c) == pytest.approx(0.25 + 0.87 * 2.0, 0.001)  # pyright: ignore[reportUnknownMemberType]

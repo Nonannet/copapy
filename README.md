@@ -44,7 +44,7 @@ tg.run()
 # Read the results
 print("Result c:", tg.read_value(c))
 print("Result d:", tg.read_value(d))
-print("Result e:", tg.read_value(d))
+print("Result e:", tg.read_value(e))
 ```
 
 ## Developer Guide
