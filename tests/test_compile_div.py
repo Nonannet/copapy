@@ -3,6 +3,7 @@ from copapy.backend import Write, compile_to_dag
 import copapy
 import subprocess
 from copapy import _binwrite
+import pytest
 
 
 def run_command(command: list[str], encoding: str = 'utf8') -> str:
@@ -18,6 +19,7 @@ def function(c1: NumLike) -> list[NumLike]:
     return [r1]
 
 
+@pytest.mark.runner
 def test_compile():
 
     c1 = variable(16)

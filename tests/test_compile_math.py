@@ -4,6 +4,7 @@ import copapy as cp
 import subprocess
 from copapy import _binwrite
 import copapy.backend
+import pytest
 
 
 def run_command(command: list[str]) -> str:
@@ -13,6 +14,7 @@ def run_command(command: list[str]) -> str:
     return result.stdout
 
 
+@pytest.mark.runner
 def test_compile():
     test_vals = [0.0, 0.0001, 0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.28318530718, 100.0, 1000.0, 100000.0]
 

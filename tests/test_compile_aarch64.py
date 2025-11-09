@@ -6,6 +6,7 @@ import copapy.backend as backend
 import copapy as cp
 import os
 import warnings
+import pytest
 
 if os.name == 'nt':
     # On Windows wsl and qemu-user is required:
@@ -40,6 +41,7 @@ def function(c1: NumLike, c2: NumLike) -> tuple[NumLike, ...]:
     return i1, i2, r1, r2
 
 
+@pytest.mark.runner
 def test_compile():
     t1 = cp.vector([10, 11, 12]) + cp.vector(cp.variable(v) for v in range(3))
     t2 = t1.sum()

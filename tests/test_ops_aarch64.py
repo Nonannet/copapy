@@ -7,6 +7,7 @@ import os
 import warnings
 import re
 import struct
+import pytest
 
 if os.name == 'nt':
     # On Windows wsl and qemu-user is required:
@@ -80,6 +81,7 @@ def iiftests(c1: NumLike) -> list[NumLike]:
             iif(c1 < 5, c1 * 3.3, 8.8)]
 
 
+@pytest.mark.runner
 def test_compile():
     c_i = variable(9)
     c_f = variable(1.111)
@@ -121,35 +123,36 @@ def test_compile():
 
     if not check_for_qemu():
         warnings.warn("qemu-aarch64 not found, aarch64 test skipped!", UserWarning)
-    else:
-        command = ['bin/coparun-aarch64', 'bin/test-aarch64.copapy'] + ['bin/test-aarch64.copapy.bin']
-        result = run_command(qemu_command + command)
-        print('* Output from runner:\n--')
-        print(result)
-        print('--')
+        return
+    
+    command = ['bin/coparun-aarch64', 'bin/test-aarch64.copapy'] + ['bin/test-aarch64.copapy.bin']
+    result = run_command(qemu_command + command)
+    print('* Output from runner:\n--')
+    print(result)
+    print('--')
 
-        assert 'Return value: 1' in result
+    assert 'Return value: 1' in result
 
-        result_data = parse_results(result)
+    result_data = parse_results(result)
 
-        for test, ref in zip(ret_test, ret_ref):
-            assert isinstance(test, variable)
-            address = variables[test][0]
-            data = result_data[address]
-            if test.dtype == 'int':
-                val = int.from_bytes(data, sdb.byteorder, signed=True)
-            elif test.dtype == 'bool':
-                val = bool.from_bytes(data, sdb.byteorder)
-            elif test.dtype == 'float':
-                en = {'little': '<', 'big': '>'}[sdb.byteorder]
-                val = struct.unpack(en + 'f', data)[0]
-                assert isinstance(val, float)
-            else:
-                raise Exception(f"Unknown type: {test.dtype}")
-            print('+', val, ref, test.dtype, f"  addr={address}")
-            #for t in (int, float, bool):
-            #    assert isinstance(val, t) == isinstance(ref, t), f"Result type does not match for {val} and {ref}"
-            #assert val == pytest.approx(ref, 1e-5), f"Result does not match: {val} and reference: {ref}"  # pyright: ignore[reportUnknownMemberType]
+    for test, ref in zip(ret_test, ret_ref):
+        assert isinstance(test, variable)
+        address = variables[test][0]
+        data = result_data[address]
+        if test.dtype == 'int':
+            val = int.from_bytes(data, sdb.byteorder, signed=True)
+        elif test.dtype == 'bool':
+            val = bool.from_bytes(data, sdb.byteorder)
+        elif test.dtype == 'float':
+            en = {'little': '<', 'big': '>'}[sdb.byteorder]
+            val = struct.unpack(en + 'f', data)[0]
+            assert isinstance(val, float)
+        else:
+            raise Exception(f"Unknown type: {test.dtype}")
+        print('+', val, ref, test.dtype, f"  addr={address}")
+        #for t in (int, float, bool):
+        #    assert isinstance(val, t) == isinstance(ref, t), f"Result type does not match for {val} and {ref}"
+        #assert val == pytest.approx(ref, 1e-5), f"Result does not match: {val} and reference: {ref}"  # pyright: ignore[reportUnknownMemberType]
 
 
 if __name__ == "__main__":

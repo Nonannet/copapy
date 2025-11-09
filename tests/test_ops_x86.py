@@ -8,6 +8,7 @@ import re
 import struct
 import platform
 import copapy as cp
+import pytest
 
 
 def parse_results(log_text: str) -> dict[int, bytes]:
@@ -67,6 +68,7 @@ def iiftests(c1: NumLike) -> list[NumLike]:
             iif(c1 < 5, c1 * 3.3, 8.8)]
 
 
+@pytest.mark.runner
 def test_compile():
     t1 = cp.vector([10, 11, 12]) + cp.vector(cp.variable(v) for v in range(3))
     t2 = t1.sum()
@@ -114,11 +116,17 @@ def test_compile():
 
     dw.to_file('bin/test-x86.copapy')
 
-    if platform.machine() != 'AMD64' and platform.machine() != 'x86':
+    if platform.machine() != 'AMD64' and platform.machine() != 'x86_64':
         warnings.warn(f"Test skipped, {platform.machine()} not supported for this test.", UserWarning)
     else:
         command = ['bin/coparun-x86', 'bin/test-x86.copapy', 'bin/test-x86.copapy.bin']
-        result = run_command(command)
+
+        try:
+            result = run_command(command)
+        except FileNotFoundError:
+            warnings.warn(f"Test skipped, executable not found.", UserWarning)
+            return
+
         print('* Output from runner:\n--')
         print(result)
         print('--')

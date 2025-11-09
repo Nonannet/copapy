@@ -5,6 +5,7 @@ import subprocess
 import struct
 from copapy import _binwrite
 import copapy.backend
+import pytest
 
 
 def run_command(command: list[str]) -> str:
@@ -39,6 +40,7 @@ def function(c1: NumLike, c2: NumLike) -> tuple[NumLike, ...]:
     return i1, i2, r1, r2
 
 
+@pytest.mark.runner
 def test_compile():
 
     #c1 = variable(4)
