@@ -184,8 +184,9 @@ def get_data_layout(variable_list: Iterable[Net], sdb: stencil_database, offset:
 
     for variable in variable_list:
         lengths = sdb.get_type_size(transl_type(variable.dtype))
+        offset = (offset + lengths - 1) // lengths * lengths  # align variables to there own size
         object_list.append((variable, offset, lengths))
-        offset += (lengths + 3) // 4 * 4
+        offset += lengths
 
     return object_list, offset
 
@@ -209,8 +210,10 @@ def get_section_layout(section_indexes: Iterable[int], sdb: stencil_database, of
 
     for index in section_indexes:
         lengths = sdb.get_section_size(index)
+        alignment = sdb.get_section_alignment(index)
+        offset = (offset + alignment - 1) // alignment * alignment
         section_list.append((index, offset, lengths))
-        offset += (lengths + 3) // 4 * 4
+        offset += lengths
 
     return section_list, offset
 
@@ -231,7 +234,8 @@ def get_aux_function_mem_layout(function_names: Iterable[str], sdb: stencil_data
     for name in function_names:
         lengths = sdb.get_symbol_size(name)
         function_list.append((name, offset, lengths))
-        offset += (lengths + 3) // 4 * 4
+        offset += (lengths + 15) // 16 * 16
+        offset += lengths
 
     return function_list, offset
 
