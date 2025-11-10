@@ -1,10 +1,8 @@
-from copapy._stencils import stencil_database, get_stencil_position
-import platform
+from copapy._stencils import get_stencil_position
 from copapy._basic_types import stencil_db_from_package
 
-arch = platform.machine()
-#sdb = stencil_database(f'src/copapy/obj/stencils_{arch}_O3.o')
-sdb = stencil_db_from_package(arch)
+
+sdb = stencil_db_from_package()
 
 
 def test_list_symbols():
