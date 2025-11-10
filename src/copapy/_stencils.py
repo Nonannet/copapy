@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from pelfy import open_elf_file, elf_file, elf_symbol
 from typing import Generator, Literal, Iterable
 import pelfy
+import struct
+import platform
 
 ByteOrder = Literal['little', 'big']
 
@@ -35,6 +37,28 @@ class patch_entry:
     value: int
     scale: int
     patch_type: int
+
+
+def detect_process_arch() -> str:
+    bits = struct.calcsize("P") * 8
+    arch = platform.machine().lower()
+
+    if arch in ('amd64', 'x86_64'):
+        arch_family = 'x86_64' if bits == 64 else 'x86'
+    elif arch in ('i386', 'i686', 'x86'):
+        arch_family = 'x86'
+    elif arch in ('arm64', 'aarch64'):
+        arch_family = 'arm64'
+    elif 'arm' in arch:
+        arch_family = 'arm'
+    elif 'mips' in arch:
+        arch_family = 'mips64' if bits == 64 else 'mips'
+    elif 'riscv' in arch:
+        arch_family = 'riscv64' if bits == 64 else 'riscv'
+    else:
+        raise NotImplementedError(f"Platform {arch} with {bits} bits is not supported.")
+
+    return arch_family
 
 
 def get_return_function_type(symbol: elf_symbol) -> str:
@@ -275,6 +299,10 @@ class stencil_database():
     def get_section_size(self, index: int) -> int:
         """Returns the size of a section specified by index."""
         return self.elf.sections[index].fields['sh_size']
+    
+    def get_section_alignment(self, index: int) -> int:
+        """Returns the required alignment of a section specified by index."""
+        return self.elf.sections[index].fields['sh_addralign']
 
     def get_section_data(self, index: int) -> bytes:
         """Returns the data of a section specified by index."""

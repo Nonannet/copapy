@@ -1,7 +1,6 @@
 import pkgutil
 from typing import Any, TypeVar, overload, TypeAlias, Generic, cast
-from ._stencils import stencil_database
-import platform
+from ._stencils import stencil_database, detect_process_arch
 import copapy as cp
 
 NumLike: TypeAlias = 'variable[int] | variable[float] | variable[bool] | int | float | bool'
@@ -12,17 +11,25 @@ unibool: TypeAlias = 'variable[bool] | bool'
 TCPNum = TypeVar("TCPNum", bound='variable[Any]')
 TNum = TypeVar("TNum", int, bool, float)
 
+stencil_cache: dict[tuple[str, str], stencil_database] = {}
+
 
 def get_var_name(var: Any, scope: dict[str, Any] = globals()) -> list[str]:
     return [name for name, value in scope.items() if value is var]
 
 
 def stencil_db_from_package(arch: str = 'native', optimization: str = 'O3') -> stencil_database:
+    global stencil_cache
+    ci = (arch, optimization)
+    if ci in stencil_cache:
+        return stencil_cache[ci]  # return cached stencil db
     if arch == 'native':
-        arch = platform.machine()
+        arch = detect_process_arch()
     stencil_data = pkgutil.get_data(__name__, f"obj/stencils_{arch}_{optimization}.o")
     assert stencil_data, f"stencils_{arch}_{optimization} not found"
-    return stencil_database(stencil_data)
+    sdb = stencil_database(stencil_data)
+    stencil_cache[ci] = sdb
+    return sdb
 
 
 generic_sdb = stencil_db_from_package()
