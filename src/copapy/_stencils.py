@@ -78,7 +78,14 @@ def strip_function(func: elf_symbol) -> bytes:
 
 def get_stencil_position(func: elf_symbol) -> tuple[int, int]:
     start_index = 0  # There must be no prolog
-    end_index = get_last_call_in_function(func)
+    # Find last relocation in function
+    last_instr = get_last_call_in_function(func)
+    function_size = func.fields['st_size']
+    if last_instr + 5 >= function_size:  # Check if jump is last instruction
+        end_index = last_instr  # Jump can be striped
+    else:
+        end_index = function_size
+
     return start_index, end_index
 
 
@@ -216,7 +223,7 @@ class stencil_database():
             symbol_type = symbol_type + 0x03  # Relative to data section
             #print(f" *> {pr.type} {patch_value=} {symbol_address=} {pr.fields['r_addend']=} {pr.bits=}, {function_offset=} {patch_offset=}")
 
-        elif pr.type.endswith('_CALL26'):
+        elif pr.type.endswith('_CALL26') or pr.type.endswith('_JUMP26'):
             # R_AARCH64_CALL26
             # ((S + A) - P) >> 2
             assert pr.file.byteorder == 'little', "Big endian not supported for ARM64"

@@ -314,7 +314,7 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
         #print(f"* {node.name} ({offset}) " + ' '.join(f'{d:02X}' for d in data))
 
         for reloc in sdb.get_relocations(node.name, stencil=True):
-            if reloc.target_symbol_info in {'STT_OBJECT', 'STT_NOTYPE'}:
+            if reloc.target_symbol_info in ('STT_OBJECT', 'STT_NOTYPE', 'STT_SECTION'):
                 #print('-- ' + reloc.target_symbol_name + ' // ' + node.name)
                 if reloc.target_symbol_name.startswith('dummy_'):
                     # Patch for write and read addresses to/from heap variables
@@ -323,7 +323,8 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
                     obj_addr = object_addr_lookup[associated_net]
                     patch = sdb.get_patch(reloc, obj_addr, offset, binw.Command.PATCH_OBJECT.value)
                 elif reloc.target_symbol_name.startswith('result_'):
-                    raise Exception(f"Stencil {node.name} seems to branch to multiple result_* calls.")
+                    # Set return jump address to address of following stencil
+                    patch = sdb.get_patch(reloc, offset + len(data), offset, binw.Command.PATCH_FUNC.value)
                 else:
                     # Patch constants addresses on heap
                     obj_addr = reloc.target_symbol_offset + section_addr_lookup[reloc.target_section_index]
