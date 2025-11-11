@@ -9,7 +9,7 @@ op_signs = {'add': '+', 'sub': '-', 'mul': '*', 'div': '/', 'pow': '**',
             'bwand': '&', 'bwor': '|', 'bwxor': '^'}
 
 entry_func_prefix = ''
-stencil_func_prefix = ''  # Remove callee prolog
+stencil_func_prefix = '__attribute__((aligned(1))) ' # Remove function alignment for stencils
 
 stack_size = 64
 
