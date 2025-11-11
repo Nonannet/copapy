@@ -6,14 +6,14 @@
 volatile extern int dummy_int;
 volatile extern float dummy_float;
 
-NOINLINE int floor_div(float arg1, float arg2) {
+int floor_div(float arg1, float arg2) {
     float x = arg1 / arg2;
     int i = (int)x;
     if (x < 0 && x != (float)i) i -= 1;
     return i;
 }
 
-NOINLINE float aux_sqrt(float x) {
+float aux_sqrt(float x) {
     if (x <= 0.0f) return 0.0f;
 
     // --- Improved initial guess using bit-level trick ---
@@ -29,11 +29,11 @@ NOINLINE float aux_sqrt(float x) {
     return y;
 }
 
-NOINLINE float aux_get_42(float n) {
+float aux_get_42(float n) {
     return n + 42.0;
 }
 
-NOINLINE float aux_log(float x)
+float aux_log(float x)
 {
     union { float f; uint32_t i; } vx = { x };
     float e = (float)((vx.i >> 23) & 0xFF) - 127.0f;
@@ -48,7 +48,7 @@ NOINLINE float aux_log(float x)
     return log2x * 0.69314718f; // convert log2 → ln
 }
 
-NOINLINE float aux_exp(float x)
+float aux_exp(float x)
 {
     // Scale by 1/ln(2)
     x = x * 1.44269504089f;

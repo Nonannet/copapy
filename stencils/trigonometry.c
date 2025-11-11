@@ -6,7 +6,7 @@ const double TWO_OVER_PI = 0.63661977236758134308; // 2/pi
 const double PIO2_HI = 1.57079625129699707031;     // pi/2 high part
 const double PIO2_LO = 7.54978941586159635335e-08; // pi/2 low part
 
-NOINLINE float aux_sin(float x) {
+float aux_sin(float x) {
     // convert to double for reduction (better precision)
     double xd = (double)x;
 
@@ -50,7 +50,7 @@ NOINLINE float aux_sin(float x) {
     }
 }
 
-NOINLINE float aux_cos(float x) {
+float aux_cos(float x) {
     // convert to double for reduction (better precision)
     double xd = (double)x;
 
@@ -94,7 +94,7 @@ NOINLINE float aux_cos(float x) {
     }
 }
 
-NOINLINE float aux_tan(float x) {
+float aux_tan(float x) {
     // Promote to double for argument reduction (improves precision)
     double xd = (double)x;
     double qd = xd * TWO_OVER_PI;   // how many half-pi multiples
@@ -143,7 +143,7 @@ NOINLINE float aux_tan(float x) {
     return sign * t;
 }
 
-NOINLINE float aux_atan(float x) {
+float aux_atan(float x) {
     const float absx = x < 0 ? -x : x;
 
     // Coefficients for a rational minimax fit on [0,1]
@@ -166,7 +166,7 @@ NOINLINE float aux_atan(float x) {
     return x < 0 ? -y : y;
 }
 
-NOINLINE float aux_atan2(float y, float x) {
+float aux_atan2(float y, float x) {
     if (x == 0.0f) {
         if (y > 0.0f)  return  PI_2;
         if (y < 0.0f)  return -PI_2;
@@ -187,7 +187,7 @@ NOINLINE float aux_atan2(float y, float x) {
     return angle;
 }
 
-NOINLINE float aux_asin(float x) {
+float aux_asin(float x) {
     if (x > 1.0f) x = 1.0f;
     if (x < -1.0f) x = -1.0f;
 
