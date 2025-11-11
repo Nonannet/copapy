@@ -52,7 +52,7 @@ def compile_to_x86() -> None:
 
 
 def compile_to_aarch64() -> None:
-    """Test compilation of a simple program for aarch64."""
+    """Test compilation of a simple program for arm64."""
     c1 = variable(9.0)
 
     #ret = [c1 / 4, c1 / -4, c1 // 4, c1 // -4, (c1 * -1) // 4]
@@ -71,7 +71,7 @@ def compile_to_aarch64() -> None:
     print('* Data to runner:')
     dw.print()
 
-    dw.to_file('bin/test-aarch64.copapy')
+    dw.to_file('bin/test-arm64.copapy')
 
 
 if __name__ == "__main__":

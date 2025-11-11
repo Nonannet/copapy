@@ -83,15 +83,15 @@ jobs:
 
         echo "- Patch code..."
         bin/coparun bin/test.copapy bin/test.copapy.bin
-        #qemu-aarch64 bin/coparun-aarch64 bin/test-aarch64.copapy bin/test-aarch64.copapy.bin
+        #qemu-aarch64 bin/coparun-aarch64 bin/test-arm64.copapy bin/test-arm64.copapy.bin
 
         objdump -D -b binary -m i386:x86-64 --adjust-vma=0x1000 bin/test.copapy.bin > bin/test.copapy.asm
         echo '<p>test.copapy.asm</p>' >> $GITHUB_STEP_SUMMARY
         python tools/clean_asm.py bin/test.copapy.asm >> $GITHUB_STEP_SUMMARY
 
-        #aarch64-linux-gnu-objdump -D -b binary -m aarch64 --adjust-vma=0x1000 bin/test-aarch64.copapy.bin > bin/test-aarch64.copapy.asm
-        #echo '<p>test-aarch64.copapy.asm</p>' >> $GITHUB_STEP_SUMMARY
-        #python tools/clean_asm.py bin/test-aarch64.copapy.asm >> $GITHUB_STEP_SUMMARY
+        #aarch64-linux-gnu-objdump -D -b binary -m aarch64 --adjust-vma=0x1000 bin/test-arm64.copapy.bin > bin/test-arm64.copapy.asm
+        #echo '<p>test-arm64.copapy.asm</p>' >> $GITHUB_STEP_SUMMARY
+        #python tools/clean_asm.py bin/test-arm64.copapy.asm >> $GITHUB_STEP_SUMMARY
 
         objdump -d -x src/copapy/obj/stencils_x86_64_O3.o > bin/stencils_x86_64_O3.asm
         echo '<p>stencils_x86_64_O3.asm</p>' >> $GITHUB_STEP_SUMMARY

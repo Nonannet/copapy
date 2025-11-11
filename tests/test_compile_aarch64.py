@@ -54,7 +54,7 @@ def test_compile():
 
     out = [Write(r) for r in ret]
 
-    sdb = backend.stencil_db_from_package('aarch64')
+    sdb = backend.stencil_db_from_package('arm64')
     il, variables = compile_to_dag(out, sdb)
 
     # run program command
@@ -69,12 +69,12 @@ def test_compile():
     print('* Data to runner:')
     il.print()
 
-    il.to_file('bin/test-aarch64.copapy')
+    il.to_file('bin/test-arm64.copapy')
 
     if not check_for_qemu():
         warnings.warn("qemu-aarch64 not found, aarch64 test skipped!", UserWarning)
     else:
-        command = ['bin/coparun-aarch64', 'bin/test-aarch64.copapy']
+        command = ['bin/coparun-aarch64', 'bin/test-arm64.copapy']
         result = run_command(qemu_command + command)
         print('* Output from runner:\n--')
         print(result)
