@@ -174,7 +174,7 @@ def atan2(x: NumLike, y: NumLike) -> variable[float] | float:
         Result in radian
     """
     if isinstance(x, variable) or isinstance(y, variable):
-        return add_op('atan', [x, x])  # TODO: fix 2. dummy argument
+        return add_op('atan2', [x, y])  # TODO: fix 2. dummy argument
     return math.atan2(x, y)
 
 
