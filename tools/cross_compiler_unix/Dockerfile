@@ -5,6 +5,7 @@ WORKDIR /home
 RUN apt-get update && apt-get install -y \
     build-essential \
     gcc-13 \
+    gcc-12-i686-linux-gnu \
     gcc-13-arm-linux-gnueabihf \
     gcc-13-mips-linux-gnu \
     gcc-13-mipsel-linux-gnu \
@@ -13,3 +14,7 @@ RUN apt-get update && apt-get install -y \
     gcc-13-multilib \
     python3 \
     git
+
+COPY *.sh ./
+
+RUN sh build_musl.sh && ls build/

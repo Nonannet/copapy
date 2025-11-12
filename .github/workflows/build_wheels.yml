@@ -10,7 +10,7 @@ jobs:
   build_stencils:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/nonannet/cross_compiler_unix:1
+      image: ghcr.io/nonannet/cross_compiler_unix:2
     steps:
       - uses: actions/checkout@v4
 

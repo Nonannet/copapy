@@ -25,7 +25,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set image name
-        run: echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/cross_compiler_unix:1" >> $GITHUB_ENV
+        run: echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/cross_compiler_unix:2" >> $GITHUB_ENV
 
       - name: Build Docker image
         run:  docker build -t $IMAGE_NAME ./tools/cross_compiler_unix/
