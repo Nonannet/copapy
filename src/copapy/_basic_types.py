@@ -243,7 +243,7 @@ class variable(Generic[TNum], Net):
     @overload
     def __rpow__(self, other: float) -> 'variable[float]': ...
     def __rpow__(self, other: NumLike) -> Any:
-        return add_op('rpow', [other, self])
+        return cp.pow(other, self)
 
     def __hash__(self) -> int:
         return super().__hash__()

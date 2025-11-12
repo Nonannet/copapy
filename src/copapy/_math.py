@@ -57,7 +57,7 @@ def pow(x: NumLike, y: NumLike) -> NumLike:
     Returns:
         result of x**y
     """
-    if isinstance(y, int) and 0 <= y < 16:
+    if isinstance(y, int) and 0 <= y < 8:
         if y == 0:
             return 1
         m = x
@@ -66,7 +66,10 @@ def pow(x: NumLike, y: NumLike) -> NumLike:
         return m
     if y == -1:
         return 1 / x
-    return exp(y * log(x))
+    if isinstance(x, variable) or isinstance(y, variable):
+        return add_op('pow', [x, y])
+    else:
+        return float(x ** y)
 
 
 @overload
