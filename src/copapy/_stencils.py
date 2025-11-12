@@ -286,6 +286,7 @@ class stencil_database():
         """
         name_set: set[str] = set()
         for name in names:
+            print('- get_sub_functions: ', name)
             if name not in name_set:
                 # assert name in self.elf.symbols, f"Stencil {name} not found" <-- see: https://github.com/Nonannet/pelfy/issues/1
                 func = self.elf.symbols[name]
