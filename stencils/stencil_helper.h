@@ -1,3 +1,5 @@
+#include <math.h>
+
 #if defined(__GNUC__)
 #define NOINLINE __attribute__((noinline))
 #define STENCIL_START_EX(funcname) \
