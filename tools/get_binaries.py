@@ -38,11 +38,11 @@ def main() -> None:
         if name.endswith('.o'):
             dest = 'src/copapy/obj'
         elif name == 'coparun.exe' and os.name == 'nt':
-            dest = 'bin'
+            dest = 'build/runner'
         elif name == 'coparun' and os.name == 'posix':
-            dest = 'bin'
+            dest = 'build/runner'
         elif name.startswith('coparun-'):
-            dest = 'bin'
+            dest = 'build/runner'
         else:
             dest = ''
 

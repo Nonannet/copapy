@@ -3,8 +3,8 @@
 set -e
 set -v
 
-mkdir -p bin
-SRC=bin/stencils.c
+mkdir -p build/stencils
+SRC=build/stencils/stencils.c
 DEST=src/copapy/obj
 OPT=O3
 FLAGS="-fno-pic"
@@ -47,6 +47,10 @@ riscv64-linux-gnu-gcc-13 $FLAGS -$OPT -c $SRC -o $DEST/stencils_riscv64_$OPT.o
 
 
 # -------------- Cross compile runner --------------
+mkdir -p build/runner
 
 # Aarch64
-aarch64-linux-gnu-gcc-13 -static -O3 -DENABLE_LOGGING -o bin/coparun-aarch64 src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c
+aarch64-linux-gnu-gcc-13 -static -O3 -DENABLE_LOGGING -o build/runner/coparun-aarch64 src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c
+
+
+

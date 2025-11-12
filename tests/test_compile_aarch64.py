@@ -69,12 +69,14 @@ def test_compile():
     print('* Data to runner:')
     il.print()
 
-    il.to_file('bin/test-arm64.copapy')
+    il.to_file('build/runner/test-arm64.copapy')
 
     if not check_for_qemu():
         warnings.warn("qemu-aarch64 not found, aarch64 test skipped!", UserWarning)
+    elif not os.path.isfile('build/runner/coparun-aarch64'):
+        warnings.warn("aarch64 runner not found, aarch64 test skipped!", UserWarning)
     else:
-        command = ['bin/coparun-aarch64', 'bin/test-arm64.copapy']
+        command = ['build/runner/coparun-aarch64', 'build/runner/test-arm64.copapy']
         result = run_command(qemu_command + command)
         print('* Output from runner:\n--')
         print(result)

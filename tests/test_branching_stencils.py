@@ -39,9 +39,9 @@ def test_compile():
     print('* Data to runner:')
     #il.print()
 
-    il.to_file('bin/test.copapy')
+    il.to_file('build/runner/test.copapy')
 
-    result = run_command(['bin/coparun', 'bin/test.copapy', 'bin/test.copapy.bin'])
+    result = run_command(['build/runner/coparun', 'build/runner/test.copapy', 'build/runner/test.copapy.bin'])
     print('* Output from runner:\n--')
     print(result)
     print('--')
