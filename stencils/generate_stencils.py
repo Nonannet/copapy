@@ -9,11 +9,10 @@ op_signs = {'add': '+', 'sub': '-', 'mul': '*', 'div': '/', 'pow': '**',
             'bwand': '&', 'bwor': '|', 'bwxor': '^'}
 
 entry_func_prefix = ''
-stencil_func_prefix = '__attribute__((aligned(1))) ' # Remove function alignment for stencils
 
 stack_size = 64
 
-includes = ['stencil_helper.h', 'aux_functions.c', 'trigonometry.c']
+includes = ['stencil_helper.h', 'aux_functions.c']
 
 
 def read_files(files: list[str]) -> str:
@@ -69,8 +68,7 @@ def get_entry_function_shell() -> str:
 @norm_indent
 def get_op_code(op: str, type1: str, type2: str, type_out: str) -> str:
     return f"""
-    {stencil_func_prefix}void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        STENCIL_START({op}_{type1}_{type2});
+    STENCIL void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         result_{type_out}_{type2}(arg1 {op_signs[op]} arg2, arg2);
     }}
     """
@@ -79,8 +77,7 @@ def get_op_code(op: str, type1: str, type2: str, type_out: str) -> str:
 @norm_indent
 def get_cast(type1: str, type2: str, type_out: str) -> str:
     return f"""
-    {stencil_func_prefix}void cast_{type_out}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        STENCIL_START(cast_{type_out}_{type1}_{type2});
+    STENCIL void cast_{type_out}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         result_{type_out}_{type2}(({type1})arg1, arg2);
     }}
     """
@@ -89,8 +86,7 @@ def get_cast(type1: str, type2: str, type_out: str) -> str:
 @norm_indent
 def get_func1(func_name: str, type1: str, type2: str) -> str:
     return f"""
-    {stencil_func_prefix}void {func_name}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        STENCIL_START({func_name}_{type1}_{type2});
+    STENCIL void {func_name}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         result_float_{type2}(aux_{func_name}((float)arg1), arg2);
     }}
     """
@@ -99,9 +95,26 @@ def get_func1(func_name: str, type1: str, type2: str) -> str:
 @norm_indent
 def get_func2(func_name: str, type1: str, type2: str) -> str:
     return f"""
-    {stencil_func_prefix}void {func_name}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        STENCIL_START({func_name}_{type1}_{type2});
+    STENCIL void {func_name}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         result_float_{type2}(aux_{func_name}((float)arg1, (float)arg2), arg2);
+    }}
+    """
+
+
+@norm_indent
+def get_math_func1(func_name: str, type1: str, type2: str) -> str:
+    return f"""
+    STENCIL void {func_name}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
+        result_float_{type2}({func_name}f((float)arg1), arg2);
+    }}
+    """
+
+
+@norm_indent
+def get_math_func2(func_name: str, type1: str, type2: str) -> str:
+    return f"""
+    STENCIL void {func_name}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
+        result_float_{type2}({func_name}f((float)arg1, (float)arg2), arg2);
     }}
     """
 
@@ -109,8 +122,7 @@ def get_func2(func_name: str, type1: str, type2: str) -> str:
 @norm_indent
 def get_conv_code(type1: str, type2: str, type_out: str) -> str:
     return f"""
-    {stencil_func_prefix}void conv_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        STENCIL_START(conv_{type1}_{type2});
+    STENCIL void conv_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         result_{type_out}_{type2}(({type_out})arg1, arg2);
     }}
     """
@@ -119,8 +131,7 @@ def get_conv_code(type1: str, type2: str, type_out: str) -> str:
 @norm_indent
 def get_op_code_float(op: str, type1: str, type2: str) -> str:
     return f"""
-    {stencil_func_prefix}void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        STENCIL_START({op}_{type1}_{type2});
+    STENCIL void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         result_float_{type2}((float)arg1 {op_signs[op]} (float)arg2, arg2);
     }}
     """
@@ -130,16 +141,14 @@ def get_op_code_float(op: str, type1: str, type2: str) -> str:
 def get_floordiv(op: str, type1: str, type2: str) -> str:
     if type1 == 'int' and type2 == 'int':
         return f"""
-        {stencil_func_prefix}void {op}_{type1}_{type2}({type1} a, {type2} b) {{
-            STENCIL_START({op}_{type1}_{type2});
+        STENCIL void {op}_{type1}_{type2}({type1} a, {type2} b) {{
             int result = a / b - ((a % b != 0) && ((a < 0) != (b < 0)));
             result_int_{type2}(result, b);
         }}
         """
     else:
         return f"""
-        {stencil_func_prefix}void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-            STENCIL_START({op}_{type1}_{type2});
+        STENCIL void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
             result_float_{type2}((float)floor_div((float)arg1, (float)arg2), arg2);
         }}
         """
@@ -162,8 +171,7 @@ def get_result_stubs2(type1: str, type2: str) -> str:
 @norm_indent
 def get_read_reg0_code(type1: str, type2: str, type_out: str) -> str:
     return f"""
-    {stencil_func_prefix}void read_{type_out}_reg0_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        STENCIL_START(read_{type_out}_reg0_{type1}_{type2});
+    STENCIL void read_{type_out}_reg0_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         result_{type_out}_{type2}(dummy_{type_out}, arg2);
     }}
     """
@@ -172,8 +180,7 @@ def get_read_reg0_code(type1: str, type2: str, type_out: str) -> str:
 @norm_indent
 def get_read_reg1_code(type1: str, type2: str, type_out: str) -> str:
     return f"""
-    {stencil_func_prefix}void read_{type_out}_reg1_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        STENCIL_START(read_{type_out}_reg1_{type1}_{type2});
+    STENCIL void read_{type_out}_reg1_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         result_{type1}_{type_out}(arg1, dummy_{type_out});
     }}
     """
@@ -182,8 +189,7 @@ def get_read_reg1_code(type1: str, type2: str, type_out: str) -> str:
 @norm_indent
 def get_write_code(type1: str, type2: str) -> str:
     return f"""
-    {stencil_func_prefix}void write_{type1}_reg0_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        STENCIL_START(write_{type1});
+    STENCIL void write_{type1}_reg0_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         dummy_{type1} = arg1;
         result_{type1}_{type2}(arg1, arg2);
     }}
@@ -215,7 +221,7 @@ if __name__ == "__main__":
 
     # Scalar arithmetic:
     types = ['int', 'float']
-    ops = ['add', 'sub', 'mul', 'div', 'floordiv', 'gt', 'ge', 'eq', 'ne', 'atan2']
+    ops = ['add', 'sub', 'mul', 'div', 'floordiv', 'gt', 'ge', 'eq', 'ne']
     int_ops = ['bwand', 'bwor', 'bwxor', 'lshift', 'rshift']
 
     for t1 in types:
@@ -230,9 +236,17 @@ if __name__ == "__main__":
         t_out = 'int' if t1 == 'float' else 'float'
         code += get_cast(t1, t2, t_out)
 
-    fnames = ['sqrt', 'exp', 'log', 'sin', 'cos', 'tan', 'asin', 'atan', 'get_42']
+    fnames = ['get_42']
     for fn, t1 in permutate(fnames, types):
         code += get_func1(fn, t1, t1)
+
+    fnames = ['sqrt', 'exp', 'log', 'sin', 'cos', 'tan', 'asin', 'atan']
+    for fn, t1 in permutate(fnames, types):
+        code += get_math_func1(fn, t1, t1)
+
+    fnames = ['atan2', 'pow']
+    for fn, t1, t2 in permutate(fnames, types, types):
+        code += get_math_func2(fn, t1, t2)
 
     for op, t1, t2 in permutate(ops, types, types):
         t_out = t1 if t1 == t2 else 'float'
@@ -240,8 +254,6 @@ if __name__ == "__main__":
             code += get_floordiv('floordiv', t1, t2)
         elif op == 'div':
             code += get_op_code_float(op, t1, t2)
-        elif op in {'atan2'}:
-            code += get_func2(op, t1, t2)
         elif op in {'gt', 'eq', 'ge', 'ne'}:
             code += get_op_code(op, t1, t2, 'int')
         else:
