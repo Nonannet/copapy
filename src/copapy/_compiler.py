@@ -235,6 +235,7 @@ def get_aux_function_mem_layout(function_names: Iterable[str], sdb: stencil_data
         lengths = sdb.get_symbol_size(name)
         offset = (offset + 15) // 16 * 16
         function_list.append((name, offset, lengths))
+        print('xx aux    0x', hex(offset), name, lengths)
         offset += lengths
 
     return function_list, offset
@@ -361,15 +362,17 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
     for name, start, _ in aux_function_mem_layout:
         for reloc in sdb.get_relocations(name):
 
-            assert reloc.target_symbol_info != 'STT_FUNC', "Not tested yet!"
+            #assert reloc.target_symbol_info != 'STT_FUNC', "Not tested yet!"
 
             if reloc.target_symbol_info in {'STT_OBJECT', 'STT_NOTYPE', 'STT_SECTION'}:
                 # Patch constants/variable addresses on heap
+                print('--> DATA ', name, reloc.pelfy_reloc.symbol.name, reloc.pelfy_reloc.symbol.info, reloc.pelfy_reloc.symbol.section.name)
                 obj_addr = reloc.target_symbol_offset + section_addr_lookup[reloc.target_section_index]
                 patch = sdb.get_patch(reloc, obj_addr, start, binw.Command.PATCH_OBJECT.value)
                 #print('* constants aux', patch.type, patch.patch_address, obj_addr, binw.Command.PATCH_OBJECT, name)
 
             elif reloc.target_symbol_info == 'STT_FUNC':
+                print('--> FUNC', name, reloc.pelfy_reloc.symbol.name, reloc.pelfy_reloc.symbol.info, reloc.pelfy_reloc.symbol.section.name)
                 func_addr = aux_func_addr_lookup[reloc.target_symbol_name]
                 patch = sdb.get_patch(reloc, func_addr, offset, binw.Command.PATCH_FUNC.value)
 
