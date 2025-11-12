@@ -18,8 +18,6 @@ def run_command(command: list[str]) -> str:
 def test_compile_sqrt():
     test_vals = [0.0, 0.0001, 0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.28318530718, 100.0, 1000.0, 100000.0]
 
-    test_vals = [100000.0]
-
     ret = [r for v in test_vals for r in (cp.sqrt(variable(v)),)]
 
 
@@ -53,8 +51,6 @@ def test_compile_sqrt():
 @pytest.mark.runner
 def test_compile_log():
     test_vals = [0.0, 0.0001, 0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.28318530718, 100.0, 1000.0, 100000.0]
-
-    test_vals = [100000.0]
 
     ret = [r for v in test_vals for r in (cp.log(variable(v)),)]
 
@@ -90,8 +86,6 @@ def test_compile_log():
 def test_compile_sin():
     test_vals = [0.0, 0.0001, 0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.28318530718, 100.0, 1000.0, 100000.0]
 
-    test_vals = [100000.0]
-
     ret = [r for v in test_vals for r in (cp.sin(variable(v)),)]
 
 
@@ -109,7 +103,7 @@ def test_compile_sin():
     il.write_com(_binwrite.Command.END_COM)
 
     print('* Data to runner:')
-    il.print()
+    #il.print()
 
     il.to_file('bin/test.copapy')
 
@@ -123,6 +117,6 @@ def test_compile_sin():
 
 
 if __name__ == "__main__":
-    #test_compile_sqrt()
-    #test_compile_log()
+    test_compile_sqrt()
+    test_compile_log()
     test_compile_sin()
