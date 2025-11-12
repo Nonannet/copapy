@@ -2,7 +2,7 @@
 set -e
 set -v
 mkdir -p bin
-SRC=bin/stencils.c
+SRC=build/stencils/stencils.c
 DEST=src/copapy/obj
 python3 stencils/generate_stencils.py $SRC
 mkdir -p $DEST
@@ -16,5 +16,5 @@ mkdir bin -p
 gcc -Wall -Wextra -Wconversion -Wsign-conversion \
     -Wshadow -Wstrict-overflow -Werror -g -O3 \
     -DENABLE_LOGGING
-    src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c -o bin/coparun
+    src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c -o build/runner/coparun
 #x86_64-w64-mingw32-gcc -Wall -Wextra -Wconversion -Wsign-conversion -Wshadow -Wstrict-overflow -Werror src/runner/runmem2.c -Wall -O3 -o bin/runmem2.exe

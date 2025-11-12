@@ -24,7 +24,7 @@ def compile_to_x86_64() -> None:
     print('* Data to runner:')
     dw.print()
 
-    dw.to_file('bin/test.copapy')
+    dw.to_file('build/runner/test.copapy')
 
 
 def compile_to_x86() -> None:
@@ -48,7 +48,7 @@ def compile_to_x86() -> None:
     print('* Data to runner:')
     dw.print()
 
-    dw.to_file('bin/test-x86.copapy')
+    dw.to_file('build/runner/test-x86.copapy')
 
 
 def compile_to_aarch64() -> None:
@@ -71,7 +71,7 @@ def compile_to_aarch64() -> None:
     print('* Data to runner:')
     dw.print()
 
-    dw.to_file('bin/test-arm64.copapy')
+    dw.to_file('build/runner/test-arm64.copapy')
 
 
 if __name__ == "__main__":

@@ -28,7 +28,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: cross-runner
-          path: bin/coparun-*
+          path: build/runner/coparun-*
 
   build-ubuntu:
     needs: [build_stencils]
@@ -50,7 +50,7 @@ jobs:
     #- uses: actions/download-artifact@v4
     #  with:
     #    name: cross-runner
-    #    path: bin
+    #    path: build/runner
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
@@ -70,9 +70,9 @@ jobs:
 
     - name: Compile coparun
       run: |
-        mkdir -p bin
-        gcc -O3 -DENABLE_BASIC_LOGGING -o bin/coparun src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c
-     #   aarch64-linux-gnu-gcc -O3 -static -DENABLE_BASIC_LOGGING src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c -o bin/coparun-aarch64
+        mkdir -p build/runner
+        gcc -O3 -DENABLE_BASIC_LOGGING -o build/runner/coparun src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c
+     #   aarch64-linux-gnu-gcc -O3 -static -DENABLE_BASIC_LOGGING src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c -o build/runner/coparun-aarch64
 
     - name: Generate debug asm files
       if: strategy.job-index == 0
@@ -82,24 +82,24 @@ jobs:
         python tools/make_example.py
 
         echo "- Patch code..."
-        bin/coparun bin/test.copapy bin/test.copapy.bin
-        #qemu-aarch64 bin/coparun-aarch64 bin/test-arm64.copapy bin/test-arm64.copapy.bin
+        build/runner/coparun build/runner/test.copapy build/runner/test.copapy.bin
+        #qemu-aarch64 build/runner/coparun-aarch64 build/runner/test-arm64.copapy build/runner/test-arm64.copapy.bin
 
-        objdump -D -b binary -m i386:x86-64 --adjust-vma=0x1000 bin/test.copapy.bin > bin/test.copapy.asm
+        objdump -D -b binary -m i386:x86-64 --adjust-vma=0x1000 build/runner/test.copapy.bin > build/runner/test.copapy.asm
         echo '<p>test.copapy.asm</p>' >> $GITHUB_STEP_SUMMARY
-        python tools/clean_asm.py bin/test.copapy.asm >> $GITHUB_STEP_SUMMARY
+        python tools/clean_asm.py build/runner/test.copapy.asm >> $GITHUB_STEP_SUMMARY
 
-        #aarch64-linux-gnu-objdump -D -b binary -m aarch64 --adjust-vma=0x1000 bin/test-arm64.copapy.bin > bin/test-arm64.copapy.asm
+        #aarch64-linux-gnu-objdump -D -b binary -m aarch64 --adjust-vma=0x1000 build/runner/test-arm64.copapy.bin > build/runner/test-arm64.copapy.asm
         #echo '<p>test-arm64.copapy.asm</p>' >> $GITHUB_STEP_SUMMARY
-        #python tools/clean_asm.py bin/test-arm64.copapy.asm >> $GITHUB_STEP_SUMMARY
+        #python tools/clean_asm.py build/runner/test-arm64.copapy.asm >> $GITHUB_STEP_SUMMARY
 
-        objdump -d -x src/copapy/obj/stencils_x86_64_O3.o > bin/stencils_x86_64_O3.asm
+        objdump -d -x src/copapy/obj/stencils_x86_64_O3.o > build/runner/stencils_x86_64_O3.asm
         echo '<p>stencils_x86_64_O3.asm</p>' >> $GITHUB_STEP_SUMMARY
-        python tools/clean_asm.py bin/stencils_x86_64_O3.asm >> $GITHUB_STEP_SUMMARY
+        python tools/clean_asm.py build/runner/stencils_x86_64_O3.asm >> $GITHUB_STEP_SUMMARY
 
-        #aarch64-linux-gnu-objdump -d -x src/copapy/obj/stencils_arm64_O3.o > bin/stencils_arm64_O3.asm
+        #aarch64-linux-gnu-objdump -d -x src/copapy/obj/stencils_arm64_O3.o > build/runner/stencils_arm64_O3.asm
         #echo '<p>stencils_arm64_O3.asm</p>' >> $GITHUB_STEP_SUMMARY
-        #python tools/clean_asm.py bin/stencils_arm64_O3.asm >> $GITHUB_STEP_SUMMARY
+        #python tools/clean_asm.py build/runner/stencils_arm64_O3.asm >> $GITHUB_STEP_SUMMARY
 
     - name: Run tests with pytest
       run: pytest
@@ -114,7 +114,7 @@ jobs:
       if: strategy.job-index == 0
       with:
         name: runner-linux
-        path: bin/*
+        path: build/runner/*
 
   build-arm64:
     needs: [build_stencils]
@@ -134,15 +134,15 @@ jobs:
       run: |
         docker run --rm -v $PWD:/app -w /app --platform linux/arm64 ghcr.io/nonannet/arm64_test:1 \
         bash -lc "pip install . && \
-                  mkdir -p bin && \
-                  gcc -O3 -DENABLE_LOGGING -o bin/coparun src/coparun/runmem.c \
+                  mkdir -p build/runner && \
+                  gcc -O3 -DENABLE_LOGGING -o build/runner/coparun src/coparun/runmem.c \
                   src/coparun/coparun.c src/coparun/mem_man.c && \
                   pytest"
 
     - uses: actions/upload-artifact@v4
       with:
         name: runner-linux-arm64
-        path: bin/*
+        path: build/runner/*
 
   build-windows:
     needs: [build_stencils]
@@ -177,11 +177,11 @@ jobs:
     - name: Compile coparun
       shell: cmd
       run: |
-        mkdir bin
+        mkdir build\runner
         call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=amd64
-        cl /DENABLE_BASIC_LOGGING /O2 src\coparun\runmem.c src\coparun\coparun.c src\coparun\mem_man.c /Fe:bin\coparun.exe
+        cl /DENABLE_BASIC_LOGGING /O2 src\coparun\runmem.c src\coparun\coparun.c src\coparun\mem_man.c /Fe:build\runner\coparun.exe
         call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x86
-        cl /DENABLE_BASIC_LOGGING /O2 src\coparun\runmem.c src\coparun\coparun.c src\coparun\mem_man.c /Fe:bin\coparun-x86.exe
+        cl /DENABLE_BASIC_LOGGING /O2 src\coparun\runmem.c src\coparun\coparun.c src\coparun\mem_man.c /Fe:build\runner\coparun-x86.exe
 
     - name: Run tests with pytest
       run: pytest
@@ -196,7 +196,7 @@ jobs:
       if: strategy.job-index == 0
       with:
         name: runner-win
-        path: bin/*
+        path: build/runner/*
 
   release-stencils:
     needs: [build_stencils, build-ubuntu, build-windows, build-arm64]

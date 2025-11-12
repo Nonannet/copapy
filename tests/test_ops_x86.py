@@ -114,12 +114,12 @@ def test_compile():
     print('* Data to runner:')
     dw.print()
 
-    dw.to_file('bin/test-x86.copapy')
+    dw.to_file('build/runner/test-x86.copapy')
 
     if platform.machine() != 'AMD64' and platform.machine() != 'x86_64':
         warnings.warn(f"Test skipped, {platform.machine()} not supported for this test.", UserWarning)
     else:
-        command = ['bin/coparun-x86', 'bin/test-x86.copapy', 'bin/test-x86.copapy.bin']
+        command = ['build/runner/coparun-x86', 'build/runner/test-x86.copapy', 'build/runner/test-x86.copapy.bin']
 
         try:
             result = run_command(command)
