@@ -17,4 +17,4 @@ RUN apt-get update && apt-get install -y \
 
 COPY *.sh ./
 
-RUN sh build_musl.sh && ls build/*
+RUN sh build_musl.sh

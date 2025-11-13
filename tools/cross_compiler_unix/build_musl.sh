@@ -1,19 +1,20 @@
-
 #!/bin/sh
 
 set -e
 set -v
+
+mkdir -p /object_files
 
 git clone --single-branch --branch master --depth 1 https://git.musl-libc.org/git/musl
 cd musl
 
 #./configure CFLAGS="-O2 -fno-stack-protector -ffast-math"
 
-sh ../packobjs.sh x86_64 gcc ld
+sh ../packobjs.sh gcc ld /object_files/musl_objects_x86_64.o
 
-sh ../packobjs.sh x86 i686-linux-gnu-gcc-13 i686-linux-gnu-ld
+sh ../packobjs.sh i686-linux-gnu-gcc-13 i686-linux-gnu-ld /object_files/musl_objects_x86.o
 
-sh ../packobjs.sh arm64 aarch64-linux-gnu-gcc-13 aarch64-linux-gnu-ld
+sh ../packobjs.sh aarch64-linux-gnu-gcc-13 aarch64-linux-gnu-ld /object_files/musl_objects_arm64.o
 
 #sh ../packobjs.sh mips mips-linux-gnu-gcc-13 mips-linux-gnu-ld
 
