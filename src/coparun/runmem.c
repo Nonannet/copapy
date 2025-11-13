@@ -160,9 +160,9 @@ int parse_commands(uint8_t *bytes) {
                 break;
 
             case ENTRY_POINT:
-                LOG("ENTRY_POINT rel_entr_point=%i\n", rel_entr_point);
                 rel_entr_point = *(uint32_t*)bytes; bytes += 4;
-                entr_point = (entry_point_t)(executable_memory + rel_entr_point);  
+                entr_point = (entry_point_t)(executable_memory + rel_entr_point);
+                LOG("ENTRY_POINT rel_entr_point=%i\n", rel_entr_point); 
                 mark_mem_executable(executable_memory, executable_memory_len);
                 break;
 
