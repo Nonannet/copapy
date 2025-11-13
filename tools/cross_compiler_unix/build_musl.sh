@@ -1,23 +1,26 @@
 
 #!/bin/sh
 
+set -e
+set -v
+
 git clone --single-branch --branch master --depth 1 https://git.musl-libc.org/git/musl
 cd musl
 
-./configure CFLAGS="-O2 -fno-stack-protector -ffast-math"
-sh packobjs.sh x86_64
+#./configure CFLAGS="-O2 -fno-stack-protector -ffast-math"
 
-./configure CFLAGS="-O2 -fno-stack-protector" CC=i686-linux-gnu-gcc-13
-sh packobjs.sh x86
+sh ../packobjs.sh x86_64 gcc ld
 
-./configure CFLAGS="-O2 -fno-stack-protector" CC=aarch64-linux-gnu-gcc-13
-sh packobjs.sh arm64
+sh ../packobjs.sh x86 i686-linux-gnu-gcc-13 i686-linux-gnu-ld
 
-#./configure CFLAGS="-O2 -fno-stack-protector" CC=mips-linux-gnu-gcc-13
-#sh packobjs.sh mips
+sh ../packobjs.sh arm64 aarch64-linux-gnu-gcc-13 aarch64-linux-gnu-ld
 
-#./configure CFLAGS="-O2 -fno-stack-protector" CC=riscv64-linux-gnu-gcc-13
-#sh packobjs.sh riscv64
+#sh ../packobjs.sh mips mips-linux-gnu-gcc-13 mips-linux-gnu-ld
 
+#sh ../packobjs.sh riscv64 riscv64-linux-gnu-gcc-13 riscv64-linux-gnu-ld
+
+echo "- clean up..."
+rm -r ./*
+cd ..
 
 
