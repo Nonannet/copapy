@@ -22,5 +22,3 @@ sh ../packobjs.sh arm64 aarch64-linux-gnu-gcc-13 aarch64-linux-gnu-ld
 echo "- clean up..."
 rm -r ./*
 cd ..
-
-

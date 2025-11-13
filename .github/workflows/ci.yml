@@ -27,6 +27,11 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
+          name: musl-object-files
+          path: /object_files/musl_objects_*.o
+
+      - uses: actions/upload-artifact@v4
+        with:
           name: cross-runner
           path: build/runner/coparun-*
 
@@ -227,7 +232,8 @@ jobs:
         run: |
           set -v
           mkdir -p release
-          cp tmp/stencil-object-files/*.o release/
+          cp tmp/stencil-object-files/* release/
+          cp tmp/musl-object-files/* release/
           cp tmp/cross-runner/coparun-* release/
           cp tmp/runner-linux/coparun release/
           cp tmp/runner-linux-arm64/coparun release/
