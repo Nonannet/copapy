@@ -11,6 +11,10 @@ int floor_div(float arg1, float arg2) {
     return i;
 }
 
-float aux_get_42(float n) {
-    return n + 42.0;
+NOINLINE float auxsub_get_42(int n) {
+    return n * 5.0f + 21.0f;
+}
+
+NOINLINE float aux_get_42(float n) {
+    return auxsub_get_42(n * 3.0f + 42.0f);
 }

@@ -215,9 +215,15 @@ def acos(x: NumLike) -> variable[float] | float:
     return math.pi / 2 - asin(x)
 
 
-def get_42() -> variable[float]:
+@overload
+def get_42(x: float | int) -> float: ...
+@overload
+def get_42(x: variable[Any]) -> variable[float]: ...
+def get_42(x: NumLike) -> variable[float] | float:
     """Returns the variable representing the constant 42"""
-    return add_op('get_42', [0.0, 0.0])
+    if isinstance(x, variable):
+        return add_op('get_42', [x, x])
+    return float((int(x) * 3.0 + 42.0) * 5.0 + 21.0)
 
 
 def abs(x: T) -> T:
