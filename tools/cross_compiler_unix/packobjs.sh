@@ -25,7 +25,8 @@ ar x ../../musl/lib/libc.a fabsf.lo scalbn.lo floor.lo exp2f_data.lo powf.lo pow
 ar x ../../musl/lib/libc.a __rem_pio2f.lo __math_invalidf.lo __stack_chk_fail.lo __math_divzerof.lo __math_oflowf.lo __rem_pio2_large.lo __math_uflowf.lo __math_xflowf.lo
 
 echo "- Merge objects"
-$LD_NAME -r *.lo -o ../musl_objects_$ARCH.o
+mkdir -p /object_files
+$LD_NAME -r *.lo -o /object_files/musl_objects_$ARCH.o
 
 rm ./*
 cd ../../musl
