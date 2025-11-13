@@ -63,15 +63,16 @@ def detect_process_arch() -> str:
 
 def get_return_function_type(symbol: elf_symbol) -> str:
     if symbol.relocations:
-        result_func = symbol.relocations[-1].symbol
-        if result_func.name.startswith('result_'):
-            return result_func.name[7:]
+        for reloc in reversed(symbol.relocations):
+            func_name = reloc.symbol.name
+            if func_name.startswith('result_'):
+                return func_name[7:]
     return 'void'
 
 
 def strip_function(func: elf_symbol) -> bytes:
     """Return stencil code by striped stancil function"""
-    assert func.relocations and func.relocations[-1].symbol.info == 'STT_NOTYPE', f"{func.name} is not a stencil function"
+    assert func.relocations and any(reloc.symbol.name.startswith('result_') for reloc in func.relocations), f"{func.name} is not a stencil function"
     start_index, end_index = get_stencil_position(func)
     return func.data[start_index:end_index]
 
@@ -206,6 +207,8 @@ class stencil_database():
         scale = 1
         mask = 0xFFFFFFFF  # 32 bit
 
+        #print("------- reloc ", pr.type, pr.target_section.name, pr.symbol.name)
+
         if pr.type.endswith('64_PC32') or pr.type.endswith('64_PLT32'):
             # S + A - P
             patch_value = symbol_address + pr.fields['r_addend'] - patch_offset
@@ -213,12 +216,12 @@ class stencil_database():
 
         elif pr.type == 'R_386_PC32':
             # S + A - P
-            patch_value = symbol_address + pr.fields['r_addend'] - patch_offset - 4
-            #print(f" *> {pr.type} {patch_value=} {symbol_address=} {pr.fields['r_addend']=} {pr.bits=}, {function_offset=} {patch_offset=}")
+            patch_value = symbol_address + pr.fields['r_addend'] - patch_offset
+            #print(f" *> {pr.type}     {pr.symbol.name} {patch_value=} {symbol_address=} {pr.fields['r_addend']=} {bin(pr.fields['r_addend'])} {pr.bits=}, {function_offset=} {patch_offset=}")
 
         elif pr.type == 'R_386_32':
             # R_386_32
-            # (S + A)
+            # S + A
             patch_value = symbol_address + pr.fields['r_addend']
             symbol_type = symbol_type + 0x03  # Relative to data section
             #print(f" *> {pr.type} {patch_value=} {symbol_address=} {pr.fields['r_addend']=} {pr.bits=}, {function_offset=} {patch_offset=}")
@@ -232,7 +235,6 @@ class stencil_database():
             scale = 4
 
         elif pr.type.endswith('_ADR_PREL_PG_HI21'):
-            # R_AARCH64_LDST32_ABS_LO12_NC
             # R_AARCH64_ADR_PREL_PG_HI21
             assert pr.file.byteorder == 'little', "Big endian not supported for ARM64"
             mask = 0  # Handled by runner
@@ -248,6 +250,15 @@ class stencil_database():
             patch_value = symbol_address + pr.fields['r_addend']
             symbol_type = symbol_type + 0x02  # Absolut value
             scale = 4
+            #print(f" *> {patch_value=} {symbol_address=} {pr.fields['r_addend']=}, {function_offset=}")
+
+        elif pr.type.endswith('_ADD_ABS_LO12_NC'):
+            # R_AARCH64_ADD_ABS_LO12_NC
+            # (S + A) & 0xFFF
+            mask = 0b11_1111_1111_1100_0000_0000
+            patch_value = symbol_address + pr.fields['r_addend']
+            symbol_type = symbol_type + 0x02  # Absolut value
+            scale = 1
             #print(f" *> {patch_value=} {symbol_address=} {pr.fields['r_addend']=}, {function_offset=}")
 
         elif pr.type.endswith('_LDST64_ABS_LO12_NC'):
@@ -288,10 +299,12 @@ class stencil_database():
         for name in names:
             #print('- get_sub_functions: ', name)
             if name not in name_set:
+                #print('||||', name)
                 # assert name in self.elf.symbols, f"Stencil {name} not found" <-- see: https://github.com/Nonannet/pelfy/issues/1
                 func = self.elf.symbols[name]
                 for r in func.relocations:
                     if r.symbol.info == 'STT_FUNC':
+                        #print('    ', r.symbol.name, r.symbol.section.type)
                         name_set.add(r.symbol.name)
                         name_set |= self.get_sub_functions([r.symbol.name])
         return name_set
