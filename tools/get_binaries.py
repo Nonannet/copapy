@@ -35,8 +35,10 @@ def main() -> None:
         url = asset["browser_download_url"]
         name: str = asset["name"]
 
-        if name.endswith('.o'):
+        if name.startswith('stencils_'):
             dest = 'src/copapy/obj'
+        elif name.startswith('musl_'):
+            dest = 'build/musl'
         elif name == 'coparun.exe' and os.name == 'nt':
             dest = 'build/runner'
         elif name == 'coparun' and os.name == 'posix':
