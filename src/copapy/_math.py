@@ -20,7 +20,7 @@ def exp(x: NumLike) -> variable[float] | float:
         result of e**x
     """
     if isinstance(x, variable):
-        return add_op('exp', [x, x])  # TODO: fix 2. dummy argument
+        return add_op('exp', [x])
     return float(math.exp(x))
 
 
@@ -38,7 +38,7 @@ def log(x: NumLike) -> variable[float] | float:
         result of ln(x)
     """
     if isinstance(x, variable):
-        return add_op('log', [x, x])  # TODO: fix 2. dummy argument
+        return add_op('log', [x])
     return float(math.log(x))
 
 
@@ -86,7 +86,7 @@ def sqrt(x: NumLike) -> variable[float] | float:
         Square root of x
     """
     if isinstance(x, variable):
-        return add_op('sqrt', [x, x])  # TODO: fix 2. dummy argument
+        return add_op('sqrt', [x])
     return float(math.sqrt(x))
 
 
@@ -104,7 +104,7 @@ def sin(x: NumLike) -> variable[float] | float:
         Square root of x
     """
     if isinstance(x, variable):
-        return add_op('sin', [x, x])  # TODO: fix 2. dummy argument
+        return add_op('sin', [x])
     return math.sin(x)
 
 
@@ -122,7 +122,7 @@ def cos(x: NumLike) -> variable[float] | float:
         Cosine of x
     """
     if isinstance(x, variable):
-        return add_op('cos', [x, x])  # TODO: fix 2. dummy argument
+        return add_op('cos', [x])
     return math.cos(x)
 
 
@@ -140,7 +140,7 @@ def tan(x: NumLike) -> variable[float] | float:
         Tangent of x
     """
     if isinstance(x, variable):
-        return add_op('tan', [x, x])  # TODO: fix 2. dummy argument
+        return add_op('tan', [x])
     return math.tan(x)
 
 
@@ -158,7 +158,7 @@ def atan(x: NumLike) -> variable[float] | float:
         Inverse tangent of x
     """
     if isinstance(x, variable):
-        return add_op('atan', [x, x])  # TODO: fix 2. dummy argument
+        return add_op('atan', [x])
     return math.atan(x)
 
 
@@ -177,7 +177,7 @@ def atan2(x: NumLike, y: NumLike) -> variable[float] | float:
         Result in radian
     """
     if isinstance(x, variable) or isinstance(y, variable):
-        return add_op('atan2', [x, y])  # TODO: fix 2. dummy argument
+        return add_op('atan2', [x, y])
     return math.atan2(x, y)
 
 
@@ -195,7 +195,7 @@ def asin(x: NumLike) -> variable[float] | float:
         Inverse sine of x
     """
     if isinstance(x, variable):
-        return add_op('asin', [x, x])  # TODO: fix 2. dummy argument
+        return add_op('asin', [x])
     return math.asin(x)
 
 

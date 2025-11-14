@@ -102,10 +102,10 @@ def get_func2(func_name: str, type1: str, type2: str) -> str:
 
 
 @norm_indent
-def get_math_func1(func_name: str, type1: str, type2: str) -> str:
+def get_math_func1(func_name: str, type1: str) -> str:
     return f"""
-    STENCIL void {func_name}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        result_float_{type2}({func_name}f((float)arg1), arg2);
+    STENCIL void {func_name}_{type1}({type1} arg1) {{
+        result_float({func_name}f((float)arg1));
     }}
     """
 
@@ -242,7 +242,7 @@ if __name__ == "__main__":
 
     fnames = ['sqrt', 'exp', 'log', 'sin', 'cos', 'tan', 'asin', 'atan']
     for fn, t1 in permutate(fnames, types):
-        code += get_math_func1(fn, t1, t1)
+        code += get_math_func1(fn, t1)
 
     fnames = ['atan2', 'pow']
     for fn, t1, t2 in permutate(fnames, types, types):
