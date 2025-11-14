@@ -8,6 +8,7 @@ import warnings
 import re
 import struct
 import pytest
+import copapy as cp
 
 if os.name == 'nt':
     # On Windows wsl and qemu-user is required:
@@ -87,8 +88,8 @@ def test_compile():
     c_f = variable(1.111)
     c_b = variable(True)
 
-    ret_test = function1(c_i) + function1(c_f) + function2(c_i) + function2(c_f) + function3(c_i) + function4(c_i) + function5(c_b) + [variable(9) % 2] + iiftests(c_i) + iiftests(c_f)
-    ret_ref = function1(9) + function1(1.111) + function2(9) + function2(1.111) + function3(9) + function4(9) + function5(True) + [9 % 2] + iiftests(9) + iiftests(1.111)
+    ret_test = function1(c_i) + function1(c_f) + function2(c_i) + function2(c_f) + function3(c_i) + function4(c_i) + function5(c_b) + [variable(9) % 2] + iiftests(c_i) + iiftests(c_f) + [cp.asin(c_i/10)]
+    ret_ref = function1(9) + function1(1.111) + function2(9) + function2(1.111) + function3(9) + function4(9) + function5(True) + [9 % 2] + iiftests(9) + iiftests(1.111) + [cp.asin(9/10)]
 
     out = [Write(r) for r in ret_test]
 
@@ -128,8 +129,13 @@ def test_compile():
         warnings.warn("aarch64 runner not found, aarch64 test skipped!", UserWarning)
         return
     
-    command = ['build/runner/coparun-aarch64', 'build/runner/test-arm64.copapy'] + ['build/runner/test-arm64.copapy.bin']
-    result = run_command(qemu_command + command)
+    command = qemu_command + ['build/runner/coparun-aarch64', 'build/runner/test-arm64.copapy'] + ['build/runner/test-arm64.copapy.bin']
+    #try:
+    result = run_command(command)
+    #except FileNotFoundError:
+    #    warnings.warn(f"Test skipped, executable not found.", UserWarning)
+    #    return
+
     print('* Output from runner:\n--')
     print(result)
     print('--')
@@ -153,9 +159,9 @@ def test_compile():
         else:
             raise Exception(f"Unknown type: {test.dtype}")
         print('+', val, ref, test.dtype, f"  addr={address}")
-        #for t in (int, float, bool):
-        #    assert isinstance(val, t) == isinstance(ref, t), f"Result type does not match for {val} and {ref}"
-        #assert val == pytest.approx(ref, 1e-5), f"Result does not match: {val} and reference: {ref}"  # pyright: ignore[reportUnknownMemberType]
+        for t in (int, float, bool):
+            assert isinstance(val, t) == isinstance(ref, t), f"Result type does not match for {val} and {ref}"
+            assert val == pytest.approx(ref, 1e-5), f"Result does not match: {val} and reference: {ref}"  # pyright: ignore[reportUnknownMemberType]
 
 
 if __name__ == "__main__":

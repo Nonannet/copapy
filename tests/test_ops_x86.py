@@ -77,15 +77,34 @@ def test_compile():
     t4 = ((t3 * t1) * 2).sum()
     t5 = ((t3 * t1) * 2).magnitude()
 
-
     c_i = variable(9)
     c_f = variable(1.111)
     c_b = variable(True)
 
-    ret_test = function1(c_i) + function1(c_f) + function2(c_i) + function2(c_f) + function3(c_i) + function4(c_i) + function5(c_b) + [c_i % 2, sin(c_f)] + iiftests(c_i) + iiftests(c_f)
-    ret_ref = function1(9) + function1(1.111) + function2(9) + function2(1.111) + function3(9) + function4(9) + function5(True) + [9 % 2, sin(1.111)] + iiftests(9) + iiftests(1.111)
+    #ret_test = function1(c_i) + function1(c_f) + function2(c_i) + function2(c_f) + function3(c_i) + function4(c_i) + function5(c_b) + [c_i % 2, sin(c_f)] + iiftests(c_i) + iiftests(c_f)
+    #ret_ref = function1(9) + function1(1.111) + function2(9) + function2(1.111) + function3(9) + function4(9) + function5(True) + [9 % 2, sin(1.111)] + iiftests(9) + iiftests(1.111)
 
-    out = [Write(r) for r in ret_test + [t2, t4, t5]]
+    #ret_test = [cp.sin(c_i), cp.asin(variable(0.0))]
+    #ret_ref = [cp.sin(9), cp.asin(0.0)]
+
+    ret_test: list[variable[float]] = []
+    ret_ref: list[float] = []
+    #sval = variable(8.0)
+    #tval = 8.0
+    #for i in range(20):
+    #    tval = (10-i)  / 12
+    #    sval = cp.asin(variable(tval))
+    #    tval = cp.asin(tval)
+    #    ret_test.append(sval)
+    #    ret_ref.append(tval)
+
+    #ret_test = [cp.sin(c_i)]
+    #ret_ref = [cp.sin(9)]
+
+    ret_test = [cp.get_42(c_i)]
+    ret_ref = [cp.get_42(9)]
+
+    out = [Write(r) for r in ret_test]    
 
     #ret_test += [c_i, v2]
     #ret_ref += [9, 4.44, -4.44]
@@ -111,8 +130,8 @@ def test_compile():
 
     dw.write_com(_binwrite.Command.END_COM)
 
-    print('* Data to runner:')
-    dw.print()
+    #print('* Data to runner:')
+    #dw.print()
 
     dw.to_file('build/runner/test-x86.copapy')
 
