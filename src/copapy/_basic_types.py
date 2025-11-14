@@ -333,7 +333,7 @@ def add_op(op: str, args: list[variable[Any] | int | float], commutative: bool =
     arg_nets = [a if isinstance(a, Net) else net_from_value(a) for a in args]
 
     if commutative:
-        arg_nets = sorted(arg_nets, key=lambda a: a.dtype)
+        arg_nets = sorted(arg_nets, key=lambda a: a.dtype)  # TODO: update the stencil generator to generate only sorted order
 
     typed_op = '_'.join([op] + [transl_type(a.dtype) for a in arg_nets])
 

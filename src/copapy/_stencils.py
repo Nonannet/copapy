@@ -13,7 +13,6 @@ class relocation_entry:
     """
     A dataclass for representing a relocation entry
     """
-
     target_symbol_name: str
     target_symbol_info: str
     target_symbol_offset: int
@@ -30,8 +29,8 @@ class patch_entry:
 
     Attributes:
         addr (int): address of first byte to patch relative to the start of the symbol
-        type (RelocationType): relocation type"""
-
+        type (RelocationType): relocation type
+    """
     mask: int
     address: int
     value: int
@@ -70,13 +69,6 @@ def get_return_function_type(symbol: elf_symbol) -> str:
     return 'void'
 
 
-def strip_function(func: elf_symbol) -> bytes:
-    """Return stencil code by striped stancil function"""
-    assert func.relocations and any(reloc.symbol.name.startswith('result_') for reloc in func.relocations), f"{func.name} is not a stencil function"
-    start_index, end_index = get_stencil_position(func)
-    return func.data[start_index:end_index]
-
-
 def get_stencil_position(func: elf_symbol) -> tuple[int, int]:
     start_index = 0  # There must be no prolog
     # Find last relocation in function
@@ -107,11 +99,6 @@ def get_op_after_last_call_in_function(func: elf_symbol) -> int:
     reloc = func.relocations[-1]
     assert reloc.bits <= 32, "Relocation segment might be larger then 32 bit"
     return reloc.fields['r_offset'] - func.fields['st_value'] + 4
-
-
-def symbol_is_stencil(sym: elf_symbol) -> bool:
-    return (sym.info == 'STT_FUNC' and len(sym.relocations) > 0 and
-            sym.relocations[-1].symbol.info == 'STT_NOTYPE')
 
 
 class stencil_database():
@@ -153,6 +140,9 @@ class stencil_database():
         #    sym.relocations
         #    self.elf.symbols[name].data
 
+        self._relocation_cache: dict[tuple[str, bool], list[relocation_entry]] = {}
+        self._stencil_cache: dict[str, tuple[int, int]] = {}
+
     def const_sections_from_functions(self, symbol_names: Iterable[str]) -> list[int]:
         ret: set[int] = set()
 
@@ -165,6 +155,17 @@ class stencil_database():
         return list(ret)
 
     def get_relocations(self, symbol_name: str, stencil: bool = False) -> Generator[relocation_entry, None, None]:
+        cache_key = (symbol_name, stencil)
+        if cache_key in self._relocation_cache:
+            # cache hit:
+            for reloc_entry in self._relocation_cache[cache_key]:
+                yield reloc_entry
+            return
+
+        # cache miss:
+        cache: list[relocation_entry] = []
+        self._relocation_cache[cache_key] = cache
+        
         symbol = self.elf.symbols[symbol_name]
         if stencil:
             start_index, end_index = get_stencil_position(symbol)
@@ -178,13 +179,15 @@ class stencil_database():
             patch_offset = reloc.fields['r_offset'] - symbol.fields['st_value'] - start_index
 
             if patch_offset < end_index - start_index:  # Exclude the call to the result_* function
-                yield relocation_entry(reloc.symbol.name,
+                reloc_entry = relocation_entry(reloc.symbol.name,
                                        reloc.symbol.info,
                                        reloc.symbol.fields['st_value'],
                                        reloc.symbol.fields['st_shndx'],
                                        symbol.fields['st_value'],
                                        start_index,
                                        reloc)
+                cache.append(reloc_entry)
+                yield reloc_entry
 
     def get_patch(self, relocation: relocation_entry, symbol_address: int, function_offset: int, symbol_type: int) -> patch_entry:
         """Return patch positions for a provided symbol (function or object)
@@ -275,7 +278,6 @@ class stencil_database():
 
         return patch_entry(mask, patch_offset, patch_value, scale, symbol_type)
 
-
     def get_stencil_code(self, name: str) -> bytes:
         """Return the striped function code for a provided function name
 
@@ -285,7 +287,17 @@ class stencil_database():
         Returns:
             Striped function code
         """
-        return strip_function(self.elf.symbols[name])
+        if name in self._stencil_cache:
+            start_index, lengths = self._stencil_cache[name]
+        else:
+            func = self.elf.symbols[name]
+            start_stencil, end_stencil = get_stencil_position(func)
+            assert func.section
+            start_index = func.section['sh_offset'] + func['st_value'] + start_stencil
+            lengths = end_stencil - start_stencil
+            self._stencil_cache[name] = (start_index, lengths)
+
+        return self.elf.read_bytes(start_index, lengths)
 
     def get_sub_functions(self, names: Iterable[str]) -> set[str]:
         """Return recursively all functions called by stencils or by other functions

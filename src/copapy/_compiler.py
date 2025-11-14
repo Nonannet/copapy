@@ -99,7 +99,7 @@ def add_read_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], No
     for node in node_list:
         if not isinstance(node, CPConstant):
             for i, net in enumerate(node.args):
-                if id(net) != id(registers[i]):
+                if id(net) != id(registers[i]):  # TODO: consider register swap and commutative ops
                     #if net in registers:
                     #    print('x  swap registers')
                     type_list = ['int' if r is None else transl_type(r.dtype) for r in registers]
@@ -108,8 +108,11 @@ def add_read_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], No
                     registers[i] = net
 
             if node in net_lookup:
-                yield net_lookup[node], node
-                registers[0] = net_lookup[node]
+                result_net = net_lookup[node]
+                yield result_net, node
+                registers[0] = result_net
+                if len(node.args) < 2:  # Reset virtual register for single argument functions
+                    registers[1] = None
             else:
                 yield None, node
 
@@ -267,9 +270,9 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
     # Get all nets/variables associated with heap memory
     variable_list = get_nets([[const_net_list]], extended_output_ops)
 
-    stencil_names = [node.name for _, node in extended_output_ops]
+    stencil_names = {node.name for _, node in extended_output_ops}
     aux_function_names = sdb.get_sub_functions(stencil_names)
-    used_sections = sdb.const_sections_from_functions(aux_function_names | set(stencil_names))
+    used_sections = sdb.const_sections_from_functions(aux_function_names | stencil_names)
 
     # Write data
     section_mem_layout, sections_length = get_section_layout(used_sections, sdb)
