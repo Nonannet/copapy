@@ -8,7 +8,7 @@ SRC=build/stencils/stencils.c
 STMP=build/stencils/stencils.o
 DEST=src/copapy/obj
 OPT=O3
-FLAGS="-fno-pic"
+FLAGS="-fno-pic -ffunction-sections"
 
 mkdir -p $DEST
 
