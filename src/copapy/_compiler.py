@@ -270,9 +270,9 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
     # Get all nets/variables associated with heap memory
     variable_list = get_nets([[const_net_list]], extended_output_ops)
 
-    stencil_names = [node.name for _, node in extended_output_ops]
+    stencil_names = {node.name for _, node in extended_output_ops}
     aux_function_names = sdb.get_sub_functions(stencil_names)
-    used_sections = sdb.const_sections_from_functions(aux_function_names | set(stencil_names))
+    used_sections = sdb.const_sections_from_functions(aux_function_names | stencil_names)
 
     # Write data
     section_mem_layout, sections_length = get_section_layout(used_sections, sdb)
