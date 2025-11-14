@@ -12,7 +12,7 @@ cd musl
 
 sh ../packobjs.sh gcc ld /object_files/musl_objects_x86_64.o
 
-sh ../packobjs.sh i686-linux-gnu-gcc-13 i686-linux-gnu-ld /object_files/musl_objects_x86.o
+sh ../packobjs.sh i686-linux-gnu-gcc-13 i686-linux-gnu-ld /object_files/musl_objects_x86.o -fno-pic
 
 sh ../packobjs.sh aarch64-linux-gnu-gcc-13 aarch64-linux-gnu-ld /object_files/musl_objects_arm64.o
 

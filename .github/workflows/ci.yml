@@ -28,7 +28,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: musl-object-files
-          path: /object_files/musl_objects_*.o
+          path: /object_files/musl_objects_*.*o
 
       - uses: actions/upload-artifact@v4
         with:
