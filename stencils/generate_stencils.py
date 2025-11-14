@@ -10,7 +10,7 @@ op_signs = {'add': '+', 'sub': '-', 'mul': '*', 'div': '/', 'pow': '**',
 
 entry_func_prefix = ''
 
-stack_size = 64
+stack_size = 128
 
 includes = ['stencil_helper.h', 'aux_functions.c']
 
