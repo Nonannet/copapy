@@ -24,6 +24,7 @@
 #define PATCH_OBJECT_HI21 0x2001
 #define PATCH_OBJECT_ABS  0x2002
 #define PATCH_OBJECT_REL  0x2003
+#define PATCH_OBJECT_ARM32_ABS 0x2004
 #define ENTRY_POINT       7
 #define RUN_PROG         64
 #define READ_DATA        65
