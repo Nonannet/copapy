@@ -49,7 +49,8 @@ def detect_process_arch() -> str:
     elif arch in ('arm64', 'aarch64'):
         arch_family = 'arm64'
     elif 'arm' in arch:
-        arch_family = 'arm'
+        # Detect specific ARM version for Raspberry Pi (v6, v7, etc.)
+        arch_family = _detect_arm_version()
     elif 'mips' in arch:
         arch_family = 'mips64' if bits == 64 else 'mips'
     elif 'riscv' in arch:
@@ -58,6 +59,23 @@ def detect_process_arch() -> str:
         raise NotImplementedError(f"Platform {arch} with {bits} bits is not supported.")
 
     return arch_family
+
+
+def _detect_arm_version() -> str:
+    """Detect specific ARM version from /proc/cpuinfo on Linux.
+    """
+    with open('/proc/cpuinfo', 'r') as f:
+        cpuinfo = f.read()
+        # Look for "CPU Architecture:" field which contains version info
+        for line in cpuinfo.split('\n'):
+            if line.startswith('CPU Architecture:'):
+                # Extracts "ARMv6", "ARMv7", "ARMv8", etc.
+                arch_str = line.split(':')[1].strip().lower()
+                if 'armv6' in arch_str:
+                    return 'armv6'
+                elif 'armv7' in arch_str or 'armv8' in arch_str:
+                    return 'armv7' # ARMv8 in 32-bit -> armv7 compatible
+        raise NotImplementedError(f"Unsupported ARM architecture version. CPU info: {cpuinfo}")
 
 
 def get_return_function_type(symbol: elf_symbol) -> str:
@@ -273,8 +291,23 @@ class stencil_database():
             scale = 8
             #print(f" *> {patch_value=} {symbol_address=} {pr.fields['r_addend']=}, {function_offset=}")
 
+        elif pr.type.endswith('_MOVW_ABS_NC'):
+            # R_ARM_MOVW_ABS_NC
+            # (S + A) & 0xFFFF
+            mask = 0xFFFF
+            patch_value = symbol_address + pr.fields['r_addend']
+            symbol_type = symbol_type + 0x04  # Absolut value
+
+        elif pr.type.endswith('_MOVT_ABS'):
+            # R_ARM_MOVT_ABS
+            # (S + A) & 0xFFFF0000
+            mask = 0xFFFF0000
+            patch_value = symbol_address + pr.fields['r_addend']
+            symbol_type = symbol_type + 0x04  # Absolut value
+            scale = 0x10000
+
         else:
-            raise NotImplementedError(f"Relocation type {pr.type} not implemented")
+            raise NotImplementedError(f"Relocation type {pr.type} in {relocation.pelfy_reloc.target_section.name} pointing to {relocation.pelfy_reloc.symbol.name} not implemented")
 
         return patch_entry(mask, patch_offset, patch_value, scale, symbol_type)
 
