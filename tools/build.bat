@@ -29,18 +29,38 @@ echo - Build runner for linux x86 32 bit...
 wsl i686-linux-gnu-gcc-12 -static -Wall -Wextra -Wconversion -Wsign-conversion -Wshadow -Wstrict-overflow -O3 -DENABLE_LOGGING src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c -o build/runner/coparun-x86
 
 echo - Build stencils x86 32 bit...
-REM  sh ../copapy/tools/cross_compiler_unix/packobjs.sh i686-linux-gnu-gcc-12 i686-linux-gnu-ld ../copapy/build/musl/musl_objects_x86.o
+REM  sh ../copapy/tools/cross_compiler_unix/packobjs.sh i686-linux-gnu-gcc-12 i686-linux-gnu-ld ../copapy/build/musl/musl_objects_x86.o  -fno-pic
 wsl i686-linux-gnu-gcc-12 -fno-pic -ffunction-sections -c build/stencils/stencils.c -O3 -o build/stencils/stencils.o
 wsl i686-linux-gnu-ld -r build/stencils/stencils.o build/musl/musl_objects_x86.o -o src/copapy/obj/stencils_x86_O3.o
 wsl i686-linux-gnu-objdump -d -x src/copapy/obj/stencils_x86_O3.o > build/stencils/stencils_x86_O3.asm
 
 
 echo --------------arm64  64 bit----------------
-echo - Build stencils for aarch64...
 wsl aarch64-linux-gnu-gcc-12 -fno-pic -ffunction-sections -c build/stencils/stencils.c -O3 -o build/stencils/stencils.o
 wsl aarch64-linux-gnu-ld -r build/stencils/stencils.o build/musl/musl_objects_arm64.o -o src/copapy/obj/stencils_arm64_O3.o
 wsl aarch64-linux-gnu-objdump -d -x src/copapy/obj/stencils_arm64_O3.o > build/stencils/stencils_arm64_O3.asm
-
 echo ------------------------------
 echo - Build runner for Aarch64...
 wsl aarch64-linux-gnu-gcc-12 -static -Wall -Wextra -Wconversion -Wsign-conversion -Wshadow -Wstrict-overflow -O3 -DENABLE_LOGGING src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c -o build/runner/coparun-aarch64
+
+
+echo --------------arm-v6  32 bit----------------
+REM  sh ../copapy/tools/cross_compiler_unix/packobjs.sh arm-none-eabi-gcc arm-none-eabi-ld ../copapy/build/musl/musl_objects_armv6.o "-march=armv6 -mfpu=vfp -marm"
+wsl arm-none-eabi-gcc -fno-pic -ffunction-sections -march=armv6 -mfpu=vfp -marm -c build/stencils/stencils.c -O3 -o build/stencils/stencils.o
+wsl arm-none-eabi-ld -r build/stencils/stencils.o build/musl/musl_objects_armv6.o -o src/copapy/obj/stencils_armv6_O3.o
+wsl arm-none-eabi-objdump -d -x src/copapy/obj/stencils_armv6_O3.o > build/stencils/stencils_armv6_O3.asm
+echo ------------------------------
+REM echo - Build runner
+REM wsl arm-none-eabi-gcc -march=armv6 -mfpu=vfp -marm -static -Wall -Wextra -Wconversion -Wsign-conversion -Wshadow -Wstrict-overflow -O3 -DENABLE_LOGGING src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c -o build/runner/coparun-armv6
+
+
+
+echo --------------arm-v7  32 bit----------------
+REM  sh ../copapy/tools/cross_compiler_unix/packobjs.sh arm-none-eabi-gcc arm-none-eabi-ld ../copapy/build/musl/musl_objects_armv7.o "-march=armv7-a -mfpu=neon-vfpv3 -marm"
+wsl arm-none-eabi-gcc -fno-pic -ffunction-sections -march=armv7-a -mfpu=neon-vfpv3 -marm -c build/stencils/stencils.c -O3 -o build/stencils/stencils.o
+wsl arm-none-eabi-ld -r build/stencils/stencils.o build/musl/musl_objects_armv7.o -o src/copapy/obj/stencils_armv7_O3.o
+wsl arm-none-eabi-objdump -d -x src/copapy/obj/stencils_armv7_O3.o > build/stencils/stencils_armv7_O3.asm
+echo ------------------------------
+echo - Build runner
+wsl arm-linux-gnueabihf-gcc -march=armv7-a -mfpu=neon-vfpv3 -marm -static -Wall -Wextra -Wconversion -Wsign-conversion -Wshadow -Wstrict-overflow -O3 -DENABLE_LOGGING src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c -o build/runner/coparun-armv7
+
