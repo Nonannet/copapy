@@ -240,7 +240,7 @@ if __name__ == "__main__":
     for fn, t1 in permutate(fnames, types):
         code += get_func1(fn, t1, t1)
 
-    fnames = ['sqrt', 'exp', 'log', 'sin', 'cos', 'tan', 'asin', 'atan']
+    fnames = ['sqrt', 'exp', 'log', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan']
     for fn, t1 in permutate(fnames, types):
         code += get_math_func1(fn, t1)
 

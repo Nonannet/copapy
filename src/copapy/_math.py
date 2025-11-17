@@ -1,16 +1,20 @@
+from . import vector
+from ._vectors import VecNumLike
 from . import variable, NumLike
-from typing import TypeVar, Any, overload
+from typing import TypeVar, Any, overload, Callable
 from ._basic_types import add_op
 import math
 
 T = TypeVar("T", int, float, variable[int], variable[float])
-
+U = TypeVar("U", int, float)
 
 @overload
 def exp(x: float | int) -> float: ...
 @overload
 def exp(x: variable[Any]) -> variable[float]: ...
-def exp(x: NumLike) -> variable[float] | float:
+@overload
+def exp(x: vector[Any]) -> vector[float]: ...
+def exp(x: Any) -> Any:
     """Exponential function to basis e
 
     Arguments:
@@ -21,6 +25,8 @@ def exp(x: NumLike) -> variable[float] | float:
     """
     if isinstance(x, variable):
         return add_op('exp', [x])
+    if isinstance(x, vector):
+        return x.map(exp)
     return float(math.exp(x))
 
 
@@ -28,7 +34,9 @@ def exp(x: NumLike) -> variable[float] | float:
 def log(x: float | int) -> float: ...
 @overload
 def log(x: variable[Any]) -> variable[float]: ...
-def log(x: NumLike) -> variable[float] | float:
+@overload
+def log(x: vector[Any]) -> vector[float]: ...
+def log(x: Any) -> Any:
     """Logarithm to basis e
 
     Arguments:
@@ -39,6 +47,8 @@ def log(x: NumLike) -> variable[float] | float:
     """
     if isinstance(x, variable):
         return add_op('log', [x])
+    if isinstance(x, vector):
+        return x.map(log)
     return float(math.log(x))
 
 
@@ -48,7 +58,9 @@ def pow(x: float | int, y: float | int) -> float: ...
 def pow(x: variable[Any], y: NumLike) -> variable[float]: ...
 @overload
 def pow(x: NumLike, y: variable[Any]) -> variable[float]: ...
-def pow(x: NumLike, y: NumLike) -> NumLike:
+@overload
+def pow(x: vector[Any], y: Any) -> vector[float]: ...
+def pow(x: VecNumLike, y: VecNumLike) -> Any:
     """x to the power of y
 
     Arguments:
@@ -57,6 +69,8 @@ def pow(x: NumLike, y: NumLike) -> NumLike:
     Returns:
         result of x**y
     """
+    if isinstance(x, vector) or isinstance(y, vector):
+        return map2(x, y, pow)
     if isinstance(y, int) and 0 <= y < 8:
         if y == 0:
             return 1
@@ -76,7 +90,9 @@ def pow(x: NumLike, y: NumLike) -> NumLike:
 def sqrt(x: float | int) -> float: ...
 @overload
 def sqrt(x: variable[Any]) -> variable[float]: ...
-def sqrt(x: NumLike) -> variable[float] | float:
+@overload
+def sqrt(x: vector[Any]) -> vector[float]: ...
+def sqrt(x: Any) -> Any:
     """Square root function
 
     Arguments:
@@ -87,6 +103,8 @@ def sqrt(x: NumLike) -> variable[float] | float:
     """
     if isinstance(x, variable):
         return add_op('sqrt', [x])
+    if isinstance(x, vector):
+        return x.map(sqrt)
     return float(math.sqrt(x))
 
 
@@ -94,7 +112,9 @@ def sqrt(x: NumLike) -> variable[float] | float:
 def sin(x: float | int) -> float: ...
 @overload
 def sin(x: variable[Any]) -> variable[float]: ...
-def sin(x: NumLike) -> variable[float] | float:
+@overload
+def sin(x: vector[Any]) -> vector[float]: ...
+def sin(x: Any) -> Any:
     """Sine function
 
     Arguments:
@@ -105,6 +125,8 @@ def sin(x: NumLike) -> variable[float] | float:
     """
     if isinstance(x, variable):
         return add_op('sin', [x])
+    if isinstance(x, vector):
+        return x.map(sin)
     return math.sin(x)
 
 
@@ -112,7 +134,9 @@ def sin(x: NumLike) -> variable[float] | float:
 def cos(x: float | int) -> float: ...
 @overload
 def cos(x: variable[Any]) -> variable[float]: ...
-def cos(x: NumLike) -> variable[float] | float:
+@overload
+def cos(x: vector[Any]) -> vector[float]: ...
+def cos(x: Any) -> Any:
     """Cosine function
 
     Arguments:
@@ -123,6 +147,8 @@ def cos(x: NumLike) -> variable[float] | float:
     """
     if isinstance(x, variable):
         return add_op('cos', [x])
+    if isinstance(x, vector):
+        return x.map(cos)
     return math.cos(x)
 
 
@@ -130,7 +156,9 @@ def cos(x: NumLike) -> variable[float] | float:
 def tan(x: float | int) -> float: ...
 @overload
 def tan(x: variable[Any]) -> variable[float]: ...
-def tan(x: NumLike) -> variable[float] | float:
+@overload
+def tan(x: vector[Any]) -> vector[float]: ...
+def tan(x: Any) -> Any:
     """Tangent function
 
     Arguments:
@@ -141,6 +169,9 @@ def tan(x: NumLike) -> variable[float] | float:
     """
     if isinstance(x, variable):
         return add_op('tan', [x])
+    if isinstance(x, vector):
+        #return x.map(tan)
+        return x.map(tan)
     return math.tan(x)
 
 
@@ -148,7 +179,9 @@ def tan(x: NumLike) -> variable[float] | float:
 def atan(x: float | int) -> float: ...
 @overload
 def atan(x: variable[Any]) -> variable[float]: ...
-def atan(x: NumLike) -> variable[float] | float:
+@overload
+def atan(x: vector[Any]) -> vector[float]: ...
+def atan(x: Any) -> Any:
     """Inverse tangent function
 
     Arguments:
@@ -159,14 +192,22 @@ def atan(x: NumLike) -> variable[float] | float:
     """
     if isinstance(x, variable):
         return add_op('atan', [x])
+    if isinstance(x, vector):
+        return x.map(atan)
     return math.atan(x)
 
 
 @overload
 def atan2(x: float | int, y: float | int) -> float: ...
 @overload
-def atan2(x: variable[Any], y: variable[Any]) -> variable[float]: ...
-def atan2(x: NumLike, y: NumLike) -> variable[float] | float:
+def atan2(x: variable[Any], y: NumLike) -> variable[float]: ...
+@overload
+def atan2(x: NumLike, y: variable[Any]) -> variable[float]: ...
+@overload
+def atan2(x: vector[float], y: VecNumLike) -> vector[float]: ...
+@overload
+def atan2(x: VecNumLike, y: vector[float]) -> vector[float]: ...
+def atan2(x: VecNumLike, y: VecNumLike) -> Any:
     """2-argument arctangent
 
     Arguments:
@@ -176,6 +217,8 @@ def atan2(x: NumLike, y: NumLike) -> variable[float] | float:
     Returns:
         Result in radian
     """
+    if isinstance(x, vector) or isinstance(y, vector):
+        return map2(x, y, atan2)
     if isinstance(x, variable) or isinstance(y, variable):
         return add_op('atan2', [x, y])
     return math.atan2(x, y)
@@ -185,7 +228,9 @@ def atan2(x: NumLike, y: NumLike) -> variable[float] | float:
 def asin(x: float | int) -> float: ...
 @overload
 def asin(x: variable[Any]) -> variable[float]: ...
-def asin(x: NumLike) -> variable[float] | float:
+@overload
+def asin(x: vector[Any]) -> vector[float]: ...
+def asin(x: Any) -> Any:
     """Inverse sine function
 
     Arguments:
@@ -196,6 +241,8 @@ def asin(x: NumLike) -> variable[float] | float:
     """
     if isinstance(x, variable):
         return add_op('asin', [x])
+    if isinstance(x, vector):
+        return x.map(asin)
     return math.asin(x)
 
 
@@ -203,7 +250,9 @@ def asin(x: NumLike) -> variable[float] | float:
 def acos(x: float | int) -> float: ...
 @overload
 def acos(x: variable[Any]) -> variable[float]: ...
-def acos(x: NumLike) -> variable[float] | float:
+@overload
+def acos(x: vector[Any]) -> vector[float]: ...
+def acos(x: Any) -> Any:
     """Inverse cosine function
 
     Arguments:
@@ -212,7 +261,11 @@ def acos(x: NumLike) -> variable[float] | float:
     Returns:
         Inverse cosine of x
     """
-    return math.pi / 2 - asin(x)
+    if isinstance(x, variable):
+        return add_op('acos', [x])
+    if isinstance(x, vector):
+        return x.map(acos)
+    return math.asin(x)
 
 
 @overload
@@ -237,3 +290,15 @@ def abs(x: T) -> T:
     """
     ret = (x < 0) * -x + (x >= 0) * x
     return ret  # pyright: ignore[reportReturnType]
+
+
+def map2(self: VecNumLike, other: VecNumLike, func: Callable[[Any, Any], variable[U] | U]) -> vector[U]:
+    """Applies a function to each element of the vector and a second vector or scalar."""
+    if isinstance(self, vector) and isinstance(other, vector):
+        return vector(func(x, y) for x, y in zip(self.values, other.values))
+    elif isinstance(self, vector):
+        return vector(func(x, other) for x in self.values)
+    elif isinstance(other, vector):
+        return vector(func(self, x) for x in other.values)
+    else:
+        return vector([func(self, other)])

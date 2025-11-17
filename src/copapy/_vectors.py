@@ -1,11 +1,12 @@
 from . import variable
-from typing import Generic, TypeVar, Iterable, Any, overload, TypeAlias
-from ._math import sqrt
+from typing import Generic, TypeVar, Iterable, Any, overload, TypeAlias, Callable
+import copapy as cp
 
-VecNumLike: TypeAlias = 'vector[int] | vector[float] | variable[int] | variable[float] | int | float'
+VecNumLike: TypeAlias = 'vector[int] | vector[float] | variable[int] | variable[float] | variable[bool] | int | float | bool'
 VecIntLike: TypeAlias = 'vector[int] | variable[int] | int'
 VecFloatLike: TypeAlias = 'vector[float] | variable[float] | float'
 T = TypeVar("T", int, float)
+U = TypeVar("U", int, float)
 
 epsilon = 1e-20
 
@@ -155,7 +156,7 @@ class vector(Generic[T]):
     def magnitude(self) -> 'float | variable[float]':
         """Magnitude (length) of the vector."""
         s = sum(a * a for a in self.values)
-        return sqrt(s) if isinstance(s, variable) else sqrt(s)
+        return cp.sqrt(s) if isinstance(s, variable) else cp.sqrt(s)
 
     def normalize(self) -> 'vector[float]':
         """Returns a normalized (unit length) version of the vector."""
@@ -164,3 +165,7 @@ class vector(Generic[T]):
 
     def __iter__(self) -> Iterable[variable[T] | T]:
         return iter(self.values)
+
+    def map(self, func: Callable[[Any], variable[U] | U]) -> 'vector[U]':
+        """Applies a function to each element of the vector and returns a new vector."""
+        return vector(func(x) for x in self.values)

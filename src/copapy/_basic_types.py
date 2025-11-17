@@ -9,7 +9,7 @@ uniint: TypeAlias = 'variable[int] | int'
 unibool: TypeAlias = 'variable[bool] | bool'
 
 TCPNum = TypeVar("TCPNum", bound='variable[Any]')
-TNum = TypeVar("TNum", int, bool, float)
+TNum = TypeVar("TNum", int, float, bool)
 
 stencil_cache: dict[tuple[str, str], stencil_database] = {}
 
