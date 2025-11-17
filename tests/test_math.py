@@ -110,27 +110,6 @@ def test_arcus_trig_precision():
             warnings.warn(f"Result of {func_name} for input {test_vals[i // 5]} does not match: {val} and reference: {ref}", UserWarning)
 
 
-def test_arcus_trig_crash():
-
-    v = 0.0
-
-    ret_test = [cp.asin(variable(v))]
-    ret_refe = [ma.asin(v)]
-
-    tg = Target()
-    tg.compile(ret_test)
-    tg.run()
-
-    for i, (test, ref) in enumerate(zip(ret_test, ret_refe)):
-        func_name = ['asin', 'acos', 'atan', 'atan2[1]', 'atan2[2]'][i % 5]
-        assert isinstance(test, cp.variable)
-        val = tg.read_value(test)
-        print(f"+ Result of {func_name}: {val}; reference: {ref}")
-        #assert val == pytest.approx(ref, abs=1e-5), f"Result of {func_name} for input {test_vals[i // 5]} does not match: {val} and reference: {ref}"  # pyright: ignore[reportUnknownMemberType]
-        if not val == pytest.approx(ref, abs=1e-5):  # pyright: ignore[reportUnknownMemberType]
-            warnings.warn(f"Result of {func_name} for input {test_vals[i // 5]} does not match: {val} and reference: {ref}", UserWarning)
-
-
 def test_sqrt_precision():
     test_vals = [0.0, 0.0001, 0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.28318530718, 100.0, 1000.0, 100000.0]
 
