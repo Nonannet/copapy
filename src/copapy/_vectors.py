@@ -81,7 +81,7 @@ class vector(Generic[T]):
     @overload
     def __mul__(self: 'vector[int]', other: VecIntLike) -> 'vector[int]': ...
     @overload
-    def __mul__(self: 'vector[float]', other: 'vector[int] | float | int | variable[int]') -> 'vector[float]': ...
+    def __mul__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
     @overload
     def __mul__(self, other: VecNumLike) -> 'vector[int] | vector[float]': ...
     def __mul__(self, other: VecNumLike) -> Any:
@@ -118,7 +118,7 @@ class vector(Generic[T]):
     @overload
     def dot(self, other: 'vector[int] | vector[float]') -> float | int | variable[float] | variable[int]: ...
     def dot(self, other: 'vector[int] | vector[float]') -> Any:
-        assert len(self.values) == len(other.values)
+        assert len(self.values) == len(other.values), "Vectors must be of same length."
         return sum(a * b for a, b in zip(self.values, other.values))
 
     # @ operator
@@ -135,7 +135,7 @@ class vector(Generic[T]):
 
     def cross(self: 'vector[float]', other: 'vector[float]') -> 'vector[float]':
         """3D cross product"""
-        assert len(self.values) == 3 and len(other.values) == 3
+        assert len(self.values) == 3 and len(other.values) == 3, "Both vectors must be 3-dimensional."
         a1, a2, a3 = self.values
         b1, b2, b3 = other.values
         return vector([
@@ -162,6 +162,9 @@ class vector(Generic[T]):
         """Returns a normalized (unit length) version of the vector."""
         mag = self.magnitude() + epsilon
         return self / mag
+    
+    def __neg__(self) -> 'vector[float] | vector[int]':
+        return vector(-a for a in self.values)
 
     def __iter__(self) -> Iterable[variable[T] | T]:
         return iter(self.values)
@@ -169,3 +172,56 @@ class vector(Generic[T]):
     def map(self, func: Callable[[Any], variable[U] | U]) -> 'vector[U]':
         """Applies a function to each element of the vector and returns a new vector."""
         return vector(func(x) for x in self.values)
+
+
+# Utility functions for 3D vectors with two arguments
+
+def cross_product(v1: vector[float], v2: vector[float]) -> vector[float]:
+    """Calculate the cross product of two 3D vectors."""
+    return v1.cross(v2)
+
+
+def dot_product(v1: vector[float], v2: vector[float]) -> 'float | variable[float]':
+    """Calculate the dot product of two vectors."""
+    return v1.dot(v2)
+
+
+def distance(v1: vector[float], v2: vector[float]) -> 'float | variable[float]':
+    """Calculate the Euclidean distance between two vectors."""
+    diff = v1 - v2
+    return diff.magnitude()
+
+
+def scalar_projection(v1: vector[float], v2: vector[float]) -> 'float | variable[float]':
+    """Calculate the scalar projection of v1 onto v2."""
+    dot_prod = v1.dot(v2)
+    mag_v2 = v2.magnitude() + epsilon
+    return dot_prod / mag_v2
+
+
+def vector_projection(v1: vector[float], v2: vector[float]) -> vector[float]:
+    """Calculate the vector projection of v1 onto v2."""
+    dot_prod = v1.dot(v2)
+    mag_v2_squared = v2.magnitude() ** 2 + epsilon
+    scalar_proj = dot_prod / mag_v2_squared
+    return v2 * scalar_proj
+
+
+def angle_between(v1: vector[float], v2: vector[float]) -> 'float | variable[float]':
+    """Calculate the angle in radians between two vectors."""
+    dot_prod = v1.dot(v2)
+    mag_v1 = v1.magnitude()
+    mag_v2 = v2.magnitude()
+    cos_angle = dot_prod / (mag_v1 * mag_v2 + epsilon)
+    return cp.acos(cos_angle)
+
+
+def rotate_vector(v: vector[float], axis: vector[float], angle: 'float | variable[float]') -> vector[float]:
+    """Rotate vector v around a given axis by a specified angle using Rodrigues' rotation formula."""
+    k = axis.normalize()
+    cos_angle = cp.cos(angle)
+    sin_angle = cp.sin(angle)
+    term1 = v * cos_angle
+    term2 = k.cross(v) * sin_angle
+    term3 = k * (k.dot(v)) * (1 - cos_angle)
+    return term1 + term2 + term3
