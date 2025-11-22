@@ -7,9 +7,11 @@ NumLike: TypeAlias = 'variable[int] | variable[float] | variable[bool] | int | f
 unifloat: TypeAlias = 'variable[float] | float'
 uniint: TypeAlias = 'variable[int] | int'
 unibool: TypeAlias = 'variable[bool] | bool'
+uniboolint: TypeAlias = 'variable[bool] | bool | variable[int] | int'
 
 TCPNum = TypeVar("TCPNum", bound='variable[Any]')
 TNum = TypeVar("TNum", int, float, bool)
+TVarNumb: TypeAlias = 'variable[Any] | int | float | bool'
 
 stencil_cache: dict[tuple[str, str], stencil_database] = {}
 
@@ -113,6 +115,8 @@ class variable(Generic[TNum], Net):
     @overload
     def __add__(self, other: NumLike) -> 'variable[float] | variable[int]': ...
     def __add__(self, other: NumLike) -> Any:
+        if isinstance(other, int | float) and other == 0:
+            return self
         return add_op('add', [self, other], True)
 
     @overload
@@ -120,6 +124,8 @@ class variable(Generic[TNum], Net):
     @overload
     def __radd__(self, other: float) -> 'variable[float]': ...
     def __radd__(self, other: NumLike) -> Any:
+        if isinstance(other, int | float) and other == 0:
+            return self
         return add_op('add', [self, other], True)
 
     @overload
@@ -185,27 +191,27 @@ class variable(Generic[TNum], Net):
     def __neg__(self: TCPNum) -> TCPNum:
         return cast(TCPNum, add_op('sub', [variable(0), self]))
 
-    def __gt__(self, other: NumLike) -> 'variable[bool]':
+    def __gt__(self, other: TVarNumb) -> 'variable[bool]':
         ret = add_op('gt', [self, other])
         return variable(ret.source, dtype='bool')
 
-    def __lt__(self, other: NumLike) -> 'variable[bool]':
+    def __lt__(self, other: TVarNumb) -> 'variable[bool]':
         ret = add_op('gt', [other, self])
         return variable(ret.source, dtype='bool')
 
-    def __ge__(self, other: NumLike) -> 'variable[bool]':
+    def __ge__(self, other: TVarNumb) -> 'variable[bool]':
         ret = add_op('ge', [self, other])
         return variable(ret.source, dtype='bool')
 
-    def __le__(self, other: NumLike) -> 'variable[bool]':
+    def __le__(self, other: TVarNumb) -> 'variable[bool]':
         ret = add_op('ge', [other, self])
         return variable(ret.source, dtype='bool')
 
-    def __eq__(self, other: NumLike) -> 'variable[bool]':  # type: ignore
+    def __eq__(self, other: TVarNumb) -> 'variable[bool]':  # type: ignore
         ret = add_op('eq', [self, other], True)
         return variable(ret.source, dtype='bool')
 
-    def __ne__(self, other: NumLike) -> 'variable[bool]':  # type: ignore
+    def __ne__(self, other: TVarNumb) -> 'variable[bool]':  # type: ignore
         ret = add_op('ne', [self, other], True)
         return variable(ret.source, dtype='bool')
 
@@ -249,34 +255,34 @@ class variable(Generic[TNum], Net):
         return super().__hash__()
 
     # Bitwise and shift operations for cp[int]
-    def __lshift__(self, other: uniint) -> 'variable[int]':
+    def __lshift__(self, other: uniboolint) -> 'variable[int]':
         return add_op('lshift', [self, other])
 
-    def __rlshift__(self, other: uniint) -> 'variable[int]':
+    def __rlshift__(self, other: uniboolint) -> 'variable[int]':
         return add_op('lshift', [other, self])
 
-    def __rshift__(self, other: uniint) -> 'variable[int]':
+    def __rshift__(self, other: uniboolint) -> 'variable[int]':
         return add_op('rshift', [self, other])
 
-    def __rrshift__(self, other: uniint) -> 'variable[int]':
+    def __rrshift__(self, other: uniboolint) -> 'variable[int]':
         return add_op('rshift', [other, self])
 
-    def __and__(self, other: uniint) -> 'variable[int]':
+    def __and__(self, other: uniboolint) -> 'variable[int]':
         return add_op('bwand', [self, other], True)
 
-    def __rand__(self, other: uniint) -> 'variable[int]':
+    def __rand__(self, other: uniboolint) -> 'variable[int]':
         return add_op('rwand', [other, self], True)
 
-    def __or__(self, other: uniint) -> 'variable[int]':
+    def __or__(self, other: uniboolint) -> 'variable[int]':
         return add_op('bwor', [self, other], True)
 
-    def __ror__(self, other: uniint) -> 'variable[int]':
+    def __ror__(self, other: uniboolint) -> 'variable[int]':
         return add_op('bwor', [other, self], True)
 
-    def __xor__(self, other: uniint) -> 'variable[int]':
+    def __xor__(self, other: uniboolint) -> 'variable[int]':
         return add_op('bwxor', [self, other], True)
 
-    def __rxor__(self, other: uniint) -> 'variable[int]':
+    def __rxor__(self, other: uniboolint) -> 'variable[int]':
         return add_op('bwxor', [other, self], True)
 
 

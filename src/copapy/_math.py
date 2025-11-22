@@ -70,7 +70,7 @@ def pow(x: VecNumLike, y: VecNumLike) -> Any:
         result of x**y
     """
     if isinstance(x, vector) or isinstance(y, vector):
-        return map2(x, y, pow)
+        return _map2(x, y, pow)
     if isinstance(y, int) and 0 <= y < 8:
         if y == 0:
             return 1
@@ -218,7 +218,7 @@ def atan2(x: VecNumLike, y: VecNumLike) -> Any:
         Result in radian
     """
     if isinstance(x, vector) or isinstance(y, vector):
-        return map2(x, y, atan2)
+        return _map2(x, y, atan2)
     if isinstance(x, variable) or isinstance(y, variable):
         return add_op('atan2', [x, y])
     return math.atan2(x, y)
@@ -278,8 +278,11 @@ def get_42(x: NumLike) -> variable[float] | float:
         return add_op('get_42', [x, x])
     return float((int(x) * 3.0 + 42.0) * 5.0 + 21.0)
 
-
-def abs(x: T) -> T:
+@overload
+def abs(x: U) -> U: ...
+@overload
+def abs(x: variable[U]) -> variable[U]: ...
+def abs(x: U | variable[U]) -> Any:
     """Absolute value function
 
     Arguments:
@@ -292,7 +295,93 @@ def abs(x: T) -> T:
     return ret  # pyright: ignore[reportReturnType]
 
 
-def map2(self: VecNumLike, other: VecNumLike, func: Callable[[Any, Any], variable[U] | U]) -> vector[U]:
+@overload
+def clamp(x: variable[U], min_value: U | variable[U], max_value: U | variable[U]) -> variable[U]: ...
+@overload
+def clamp(x: U | variable[U], min_value: variable[U], max_value: U | variable[U]) -> variable[U]: ...
+@overload
+def clamp(x: U | variable[U], min_value: U | variable[U], max_value: variable[U]) -> variable[U]: ...
+@overload
+def clamp(x: U, min_value: U, max_value: U) -> U: ...
+@overload
+def clamp(x: vector[U], min_value: 'U | variable[U]', max_value: 'U | variable[U]') -> vector[U]: ...
+def clamp(x: U | variable[U] | vector[U], min_value: U | variable[U], max_value:  U | variable[U]) -> Any:
+    """Clamp function to limit a value between a minimum and maximum.
+
+    Arguments:
+        x: Input value
+        min_value: Minimum limit
+        max_value: Maximum limit
+    
+    Returns:
+        Clamped value of x
+    """
+    if isinstance(x, vector):
+        return vector(clamp(comp, min_value, max_value) for comp in x.values)
+    
+    return (x < min_value) * min_value + \
+          (x > max_value) * max_value + \
+          ((x >= min_value) & (x <= max_value)) * x
+
+
+@overload
+def min(x: variable[U], y: U | variable[U]) -> variable[U]: ...
+@overload
+def min(x: U | variable[U], y: variable[U]) -> variable[U]: ...
+@overload
+def min(x: U, y: U) -> U: ...
+def min(x: U | variable[U], y: U | variable[U]) -> Any:
+    """Minimum function to get the smaller of two values.
+
+    Arguments:
+        x: First value
+        y: Second value
+
+    Returns:
+        Minimum of x and y
+    """
+    return (x < y) * x + (x >= y) * y
+
+
+@overload
+def max(x: variable[U], y: U | variable[U]) -> variable[U]: ...
+@overload
+def max(x: U | variable[U], y: variable[U]) -> variable[U]: ...
+@overload
+def max(x: U, y: U) -> U: ...
+def max(x: U | variable[U], y: U | variable[U]) -> Any:
+    """Maximum function to get the larger of two values.
+
+    Arguments:
+        x: First value
+        y: Second value
+
+    Returns:
+        Maximum of x and y
+    """
+    return (x > y) * x + (x <= y) * y
+
+
+@overload
+def lerp(v1: variable[U], v2: U | variable[U], t: U | variable[U]) -> variable[U]: ...
+@overload
+def lerp(v1: U | variable[U], v2: variable[U], t: U | variable[U]) -> variable[U]: ...
+@overload
+def lerp(v1: U | variable[U], v2: U | variable[U], t: variable[U]) -> variable[U]: ...
+@overload
+def lerp(v1: U, v2: U, t: U) -> U: ...
+@overload
+def lerp(v1: vector[U], v2: vector[U], t: 'U | variable[U]') -> vector[U]: ...
+def lerp(v1: U | variable[U] | vector[U], v2: U | variable[U] | vector[U], t:  U | variable[U]) -> Any:
+    """Linearly interpolate between two values or vectors v1 and v2 by a factor t."""
+    if isinstance(v1, vector) or isinstance(v2, vector):
+        assert isinstance(v1, vector) and isinstance(v2, vector), "None or both v1 and v2 must be vectors."
+        assert len(v1.values) == len(v2.values), "Vectors must be of the same length."
+        return vector(lerp(vv1, vv2, t) for vv1, vv2 in zip(v1.values, v2.values))
+    return v1 * (1 - t) + v2 * t
+
+
+def _map2(self: VecNumLike, other: VecNumLike, func: Callable[[Any, Any], variable[U] | U]) -> vector[U]:
     """Applies a function to each element of the vector and a second vector or scalar."""
     if isinstance(self, vector) and isinstance(other, vector):
         return vector(func(x, y) for x, y in zip(self.values, other.values))
