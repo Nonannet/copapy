@@ -42,24 +42,18 @@ void patch_hi21(uint8_t *patch_addr, int32_t page_offset) {
 
 void patch_arm32_abs(uint8_t *patch_addr, uint32_t imm16)
 {
-    uint32_t i    = (imm16 >> 11) & 0x1;
-    uint32_t imm4 = (imm16 >> 12) & 0xF;
-    uint32_t imm3 = (imm16 >> 8)  & 0x7;
-    uint32_t imm8 =  imm16        & 0xFF;
-
     uint32_t instr = *((uint32_t *)patch_addr);
 
-    // Clear the fields we are going to replace:
-    // imm4  → bits 19:16
-    // imm3  → bits 14:12
-    // i     → bit 26
-    // imm8  → bits 7:0
-    instr &= ~(uint32_t)((0xF << 16) | (0x7 << 12) | (1 << 26) | 0xFF);
+    // Split the 16-bit immediate into A1 MOVT fields
+    uint32_t imm4  = (imm16 >> 12) & 0xF;
+    uint32_t imm12 =  imm16        & 0xFFF;
 
+    // Clear the immediate fields: imm4 (bits 19:16) and imm12 (bits 11:0)
+    instr &= ~(uint32_t)((0xF << 16) | 0xFFF);
+
+    // Set new immediate fields
     instr |= (imm4 << 16);
-    instr |= (imm3 << 12);
-    instr |= (i    << 26);
-    instr |= (imm8);
+    instr |= imm12;
 
     *((uint32_t *)patch_addr) = instr;
 }
@@ -188,8 +182,8 @@ int parse_commands(uint8_t *bytes) {
                 patch_mask = *(uint32_t*)bytes; bytes += 4;
                 patch_scale = *(int32_t*)bytes; bytes += 4;
                 value = *(int32_t*)bytes; bytes += 4;
-                LOG("PATCH_OBJECT_MOVW_ABS patch_offs=%i value=%i\n",
-                    offs, value);
+                LOG("PATCH_OBJECT_ARM32_ABS patch_offs=%i patch_mask=%#08x scale=%i value=%i imm16=%#04x\n",
+                    offs, patch_mask, patch_scale, value, (uint32_t)((uintptr_t)(data_memory + value) & patch_mask) / (uint32_t)patch_scale);
                 patch_arm32_abs(executable_memory + offs, (uint32_t)((uintptr_t)(data_memory + value) & patch_mask) / (uint32_t)patch_scale);
                 break;
 
