@@ -5,7 +5,8 @@ set -v
 
 mkdir -p /object_files
 
-git clone --single-branch --branch master --depth 1 https://git.musl-libc.org/git/musl
+#git clone --single-branch --branch master --depth 1 https://git.musl-libc.org/git/musl
+git clone --single-branch --branch master --depth 1 https://repo.or.cz/musl.git
 cd musl
 
 #./configure CFLAGS="-O2 -fno-stack-protector -ffast-math"
