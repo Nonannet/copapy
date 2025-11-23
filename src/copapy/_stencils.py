@@ -48,9 +48,10 @@ def detect_process_arch() -> str:
         arch_family = 'x86'
     elif arch in ('arm64', 'aarch64'):
         arch_family = 'arm64'
-    elif 'arm' in arch:
-        # Detect specific ARM version for Raspberry Pi (v6, v7, etc.)
-        arch_family = _detect_arm_version()
+    elif 'armv7' in arch or 'armv8' in arch:
+        arch_family = 'armv7'  # Treat armv8 (64 bit CPU) as armv7 for 32 bit
+    elif 'armv6' in arch:
+        arch_family = 'armv6'
     elif 'mips' in arch:
         arch_family = 'mips64' if bits == 64 else 'mips'
     elif 'riscv' in arch:
@@ -59,23 +60,6 @@ def detect_process_arch() -> str:
         raise NotImplementedError(f"Platform {arch} with {bits} bits is not supported.")
 
     return arch_family
-
-
-def _detect_arm_version() -> str:
-    """Detect specific ARM version from /proc/cpuinfo on Linux.
-    """
-    with open('/proc/cpuinfo', 'r') as f:
-        cpuinfo = f.read()
-        # Look for "CPU Architecture:" field which contains version info
-        for line in cpuinfo.split('\n'):
-            if line.startswith('CPU Architecture:'):
-                # Extracts "ARMv6", "ARMv7", "ARMv8", etc.
-                arch_str = line.split(':')[1].strip().lower()
-                if 'armv6' in arch_str:
-                    return 'armv6'
-                elif 'armv7' in arch_str or 'armv8' in arch_str:
-                    return 'armv7' # ARMv8 in 32-bit -> armv7 compatible
-        raise NotImplementedError(f"Unsupported ARM architecture version. CPU info: {cpuinfo}")
 
 
 def get_return_function_type(symbol: elf_symbol) -> str:
