@@ -13,7 +13,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-  "pelfy>=1.0.5"
+  "pelfy>=1.0.7"
 ]
 
 [project.urls]
