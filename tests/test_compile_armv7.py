@@ -43,16 +43,14 @@ def function(c1: NumLike, c2: NumLike) -> tuple[NumLike, ...]:
 
 @pytest.mark.runner
 def test_compile():
-    #t1 = cp.vector([10, 11, 12]) + cp.vector(cp.variable(v) for v in range(3))
-    #t2 = t1.sum()
+    t1 = cp.vector([10, 11, 12]) + cp.vector(cp.variable(v) for v in range(3))
+    t2 = t1.sum()
 
-    #t3 = cp.vector(cp.variable(1 / (v + 1)) for v in range(3))
-    #t4 = ((t3 * t1) * 2).sum()
-    #t5 = ((t3 * t1) * 2).magnitude()
+    t3 = cp.vector(cp.variable(1 / (v + 1)) for v in range(3))
+    t4 = ((t3 * t1) * 2).sum()
+    t5 = ((t3 * t1) * 2).magnitude()
 
-    #ret = (t2, t4, t5)
-
-    ret = (cp.variable(5) * 5 + 8,)
+    ret = (t2, t4, t5)
 
     out = [Write(r) for r in ret]
 
@@ -69,15 +67,15 @@ def test_compile():
 
     il.write_com(_binwrite.Command.END_COM)
 
-    print('* Data to runner:')
-    il.print()
+    #print('* Data to runner:')
+    #il.print()
 
     il.to_file('build/runner/test-armv7.copapy')
 
     if not check_for_qemu():
-        warnings.warn("qemu-aarch64 not found, aarch64 test skipped!", UserWarning)
-    elif not os.path.isfile('build/runner/coparun-aarch64'):
-        warnings.warn("aarch64 runner not found, aarch64 test skipped!", UserWarning)
+        warnings.warn("qemu-armv7 not found, aarch64 test skipped!", UserWarning)
+    elif not os.path.isfile('build/runner/coparun-armv7'):
+        warnings.warn("armv7 runner not found, aarch64 test skipped!", UserWarning)
     else:
         command = ['build/runner/coparun-armv7', 'build/runner/test-armv7.copapy', 'build/runner/test-armv7.copapy.bin']
         result = run_command(qemu_command + command)
