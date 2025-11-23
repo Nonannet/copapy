@@ -51,7 +51,7 @@ wsl arm-none-eabi-ld -r build/stencils/stencils.o build/musl/musl_objects_armv6.
 wsl arm-none-eabi-objdump -d -x src/copapy/obj/stencils_armv6_O3.o > build/stencils/stencils_armv6_O3.asm
 echo ------------------------------
 REM echo - Build runner
-REM wsl arm-none-eabi-gcc -march=armv6 -mfpu=vfp -marm -static -Wall -Wextra -Wconversion -Wsign-conversion -Wshadow -Wstrict-overflow -O3 -DENABLE_LOGGING src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c -o build/runner/coparun-armv6
+REM wsl arm-linux-gnueabihf-gcc -march=armv6 -mfpu=vfp -marm -static -Wall -Wextra -Wconversion -Wsign-conversion -Wshadow -Wstrict-overflow -O3 -DENABLE_LOGGING src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c -o build/runner/coparun-armv6
 
 
 
