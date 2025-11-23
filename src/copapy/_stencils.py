@@ -247,6 +247,13 @@ class stencil_database():
             symbol_type = symbol_type + 0x03  # Relative to data section
             #print(f" *> {pr.type} {patch_value=} {symbol_address=} {pr.fields['r_addend']=} {pr.bits=}, {function_offset=} {patch_offset=}")
 
+        elif pr.type.endswith('_ARM_JUMP24') or pr.type.endswith('_ARM_CALL'):
+            # R_ARM_JUMP24 & R_ARM_CALL
+            # ((S + A) - P) >> 2
+            mask = 0xffffff  # 24 bit
+            patch_value = symbol_address + pr.fields['r_addend'] - patch_offset
+            scale = 4
+
         elif pr.type.endswith('_CALL26') or pr.type.endswith('_JUMP26'):
             # R_AARCH64_CALL26
             # ((S + A) - P) >> 2
@@ -297,6 +304,7 @@ class stencil_database():
             mask = 0xFFFF
             patch_value = symbol_address + pr.fields['r_addend']
             symbol_type = symbol_type + 0x04  # Absolut value
+            #print(f" *> {pr.type} {patch_value=} {symbol_address=}, {function_offset=}")
 
         elif pr.type.endswith('_MOVT_ABS'):
             # R_ARM_MOVT_ABS
