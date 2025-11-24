@@ -31,9 +31,15 @@ i686-linux-gnu-ld -r $STMP /object_files/musl_objects_x86.o -o $DEST/stencils_x8
 aarch64-linux-gnu-gcc-13 $FLAGS -$OPT -c $SRC -o $STMP
 aarch64-linux-gnu-ld -r $STMP /object_files/musl_objects_arm64.o -o $DEST/stencils_arm64_$OPT.o
 
-# ARMv7
-#arm-linux-gnueabihf-gcc-13 $FLAGS -$OPT -c $SRC -o $STMP
-#arm-linux-gnu-ld -r $STMP /object_files/musl_objects_arm.o -o $DEST/stencils_arm_$OPT.o
+# ARMv6 hardware fp
+arm-none-eabi-gcc -march=armv6 -mfpu=vfp -mfloat-abi=hard -marm $FLAGS -$OPT -c $SRC -o $STMP
+LIBGCC=$(arm-none-eabi-gcc -print-libgcc-file-name)
+arm-none-eabi-ld -r $STMP /object_files/musl_objects_armv6.o $LIBGCC -o $DEST/stencils_armv6_$OPT.o
+
+# ARMv7 hardware fp
+arm-none-eabi-gcc -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -marm $FLAGS -$OPT -c $SRC -o $STMP
+LIBGCC=$(arm-none-eabi-gcc -print-libgcc-file-name)
+arm-none-eabi-ld -r $STMP /object_files/musl_objects_armv7.o $LIBGCC -o $DEST/stencils_armv7_$OPT.o
 
 # PowerPC64LE
 # powerpc64le-linux-gnu-gcc-13 $FLAGS -$OPT -c $SRC -o $DEST/stencils_ppc64le_$OPT.o

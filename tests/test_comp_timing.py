@@ -6,7 +6,7 @@ import copapy.backend as cpbe
 import copapy as cp
 import copapy._binwrite as binw
 from copapy._compiler import get_nets, get_section_layout, get_data_layout
-from copapy._compiler import patch_entry, CPConstant, get_aux_function_mem_layout
+from copapy._compiler import patch_entry, CPConstant, get_aux_func_layout
 
 def test_timing_compiler():
     t1 = cp.vector([10, 11]*128) + cp.vector(cp.variable(v) for v in range(256))
@@ -88,7 +88,7 @@ def test_timing_compiler():
     print('-- get_section_layout:')
     t0 = time.time()
     section_mem_layout, sections_length = get_section_layout(used_sections, sdb)
-    variable_mem_layout, variables_data_lengths = get_data_layout(variable_list, sdb, sections_length)
+    variable_mem_layout, _ = get_data_layout(variable_list, sdb, sections_length)
     t1 = time.time()
     print(f"time: {t1-t0:.6f}s")
 
@@ -123,8 +123,7 @@ def test_timing_compiler():
 
 
     # prep auxiliary_functions
-    aux_function_mem_layout, aux_function_lengths = get_aux_function_mem_layout(aux_function_names, sdb)
-    aux_func_addr_lookup = {name: offs for name, offs, _ in aux_function_mem_layout}
+    _, aux_func_addr_lookup, aux_function_lengths = get_aux_func_layout(aux_function_names, sdb)
 
     # Prepare program code and relocations
     object_addr_lookup = {net: offs for net, offs, _ in variable_mem_layout}
@@ -179,7 +178,7 @@ def test_timing_compiler():
     print('-- relocate aux functions:')
     t0 = time.time()
     # Patch aux functions
-    for name, start, _ in aux_function_mem_layout:
+    for name, start in aux_func_addr_lookup.items():
         for reloc in sdb.get_relocations(name):
 
             #assert reloc.target_symbol_info != 'STT_FUNC', "Not tested yet!"

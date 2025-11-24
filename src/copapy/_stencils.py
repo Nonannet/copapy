@@ -48,8 +48,10 @@ def detect_process_arch() -> str:
         arch_family = 'x86'
     elif arch in ('arm64', 'aarch64'):
         arch_family = 'arm64'
-    elif 'arm' in arch:
-        arch_family = 'arm'
+    elif 'armv7' in arch or 'armv8' in arch:
+        arch_family = 'armv7'  # Treat armv8 (64 bit CPU) as armv7 for 32 bit
+    elif 'armv6' in arch:
+        arch_family = 'armv6'
     elif 'mips' in arch:
         arch_family = 'mips64' if bits == 64 else 'mips'
     elif 'riscv' in arch:
@@ -229,6 +231,13 @@ class stencil_database():
             symbol_type = symbol_type + 0x03  # Relative to data section
             #print(f" *> {pr.type} {patch_value=} {symbol_address=} {pr.fields['r_addend']=} {pr.bits=}, {function_offset=} {patch_offset=}")
 
+        elif pr.type.endswith('_ARM_JUMP24') or pr.type.endswith('_ARM_CALL'):
+            # R_ARM_JUMP24 & R_ARM_CALL
+            # ((S + A) - P) >> 2
+            mask = 0xffffff  # 24 bit
+            patch_value = symbol_address + pr.fields['r_addend'] - patch_offset
+            scale = 4
+
         elif pr.type.endswith('_CALL26') or pr.type.endswith('_JUMP26'):
             # R_AARCH64_CALL26
             # ((S + A) - P) >> 2
@@ -273,8 +282,24 @@ class stencil_database():
             scale = 8
             #print(f" *> {patch_value=} {symbol_address=} {pr.fields['r_addend']=}, {function_offset=}")
 
+        elif pr.type.endswith('_MOVW_ABS_NC'):
+            # R_ARM_MOVW_ABS_NC
+            # (S + A) & 0xFFFF
+            mask = 0xFFFF
+            patch_value = symbol_address + pr.fields['r_addend']
+            symbol_type = symbol_type + 0x04  # Absolut value
+            #print(f" *> {pr.type} {patch_value=} {symbol_address=}, {function_offset=}")
+
+        elif pr.type.endswith('_MOVT_ABS'):
+            # R_ARM_MOVT_ABS
+            # (S + A) & 0xFFFF0000
+            mask = 0xFFFF0000
+            patch_value = symbol_address + pr.fields['r_addend']
+            symbol_type = symbol_type + 0x04  # Absolut value
+            scale = 0x10000
+
         else:
-            raise NotImplementedError(f"Relocation type {pr.type} not implemented")
+            raise NotImplementedError(f"Relocation type {pr.type} in {relocation.pelfy_reloc.target_section.name} pointing to {relocation.pelfy_reloc.symbol.name} not implemented")
 
         return patch_entry(mask, patch_offset, patch_value, scale, symbol_type)
 
@@ -328,6 +353,14 @@ class stencil_database():
     def get_symbol_size(self, name: str) -> int:
         """Returns the size of a specified symbol name."""
         return self.elf.symbols[name].fields['st_size']
+    
+    def get_symbol_offset(self, name: str) -> int:
+        """Returns the offset of a specified symbol in the section."""
+        return self.elf.symbols[name].fields['st_value']
+    
+    def get_symbol_section_index(self, name: str) -> int:
+        """Returns the section index for a specified symbol name."""
+        return self.elf.symbols[name].fields['st_shndx']
 
     def get_section_size(self, index: int) -> int:
         """Returns the size of a section specified by index."""
