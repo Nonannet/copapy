@@ -221,7 +221,7 @@ def get_section_layout(section_indexes: Iterable[int], sdb: stencil_database, of
     return section_list, offset
 
 
-def get_aux_function_mem_layout(function_names: Iterable[str], sdb: stencil_database, offset: int = 0) -> tuple[list[tuple[str, int, int]], int]:
+def get_aux_func_layout(function_names: Iterable[str], sdb: stencil_database, offset: int = 0) -> tuple[list[tuple[int, int, int]], dict[str, int], int]:
     """Get memory layout for the provided auxiliary functions
 
     Arguments:
@@ -230,17 +230,28 @@ def get_aux_function_mem_layout(function_names: Iterable[str], sdb: stencil_data
         offset: Starting offset for layout
 
     Returns:
-        Tuple of list of (function_name, start_offset, length) and total length
+        Tuple of list of (section_id, start_offset, length), function address lookup dictionary, and total length
     """
-    function_list: list[tuple[str, int, int]] = []
+    function_lookup: dict[str, int] = {}
+    section_list: list[tuple[int, int, int]] = []
+    section_cache: dict[int, int] = {}
 
     for name in function_names:
-        lengths = sdb.get_symbol_size(name)
-        offset = (offset + 15) // 16 * 16
-        function_list.append((name, offset, lengths))
-        offset += lengths
+        index = sdb.get_symbol_section_index(name)
 
-    return function_list, offset
+        if index in section_cache:
+            section_offset = section_cache[index]
+            function_lookup[name] = section_offset + sdb.get_symbol_offset(name)
+        else:
+            lengths = sdb.get_section_size(index)
+            alignment = sdb.get_section_alignment(index)
+            offset = (offset + alignment - 1) // alignment * alignment
+            section_list.append((index, offset, lengths))
+            section_cache[index] = offset           
+            function_lookup[name] = offset + sdb.get_symbol_offset(name)
+            offset += lengths
+
+    return section_list, function_lookup, offset
 
 
 def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[binw.data_writer, dict[Net, tuple[int, int, str]]]:
@@ -272,10 +283,10 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
 
     stencil_names = {node.name for _, node in extended_output_ops}
     aux_function_names = sdb.get_sub_functions(stencil_names)
-    used_sections = sdb.const_sections_from_functions(aux_function_names | stencil_names)
+    used_const_sections = sdb.const_sections_from_functions(aux_function_names | stencil_names)
 
     # Write data
-    section_mem_layout, sections_length = get_section_layout(used_sections, sdb)
+    section_mem_layout, sections_length = get_section_layout(used_const_sections, sdb)
     variable_mem_layout, variables_data_lengths = get_data_layout(variable_list, sdb, sections_length)
     dw.write_com(binw.Command.ALLOCATE_DATA)
     dw.write_int(variables_data_lengths)
@@ -298,8 +309,7 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
             #print(f'+ {net.dtype} {net.source.value}')
 
     # prep auxiliary_functions
-    aux_function_mem_layout, aux_function_lengths = get_aux_function_mem_layout(aux_function_names, sdb)
-    aux_func_addr_lookup = {name: offs for name, offs, _ in aux_function_mem_layout}
+    code_section_layout, func_addr_lookup, aux_func_len = get_aux_func_layout(aux_function_names, sdb)
 
     # Prepare program code and relocations
     object_addr_lookup = {net: offs for net, offs, _ in variable_mem_layout}
@@ -308,7 +318,7 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
     # assemble stencils to main program and patch stencils
     data = sdb.get_function_code('entry_function_shell', 'start')
     data_list.append(data)
-    offset = aux_function_lengths + len(data)
+    offset = aux_func_len + len(data)
 
     for associated_net, node in extended_output_ops:
         assert node.name in sdb.stencil_definitions, f"- Warning: {node.name} stencil not found"
@@ -336,7 +346,7 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
                     #print('* constants stancils', patch.type, patch.patch_address, binw.Command.PATCH_OBJECT, node.name)
 
             elif reloc.target_symbol_info == 'STT_FUNC':
-                func_addr = aux_func_addr_lookup[reloc.target_symbol_name]
+                func_addr = func_addr_lookup[reloc.target_symbol_name]
                 patch = sdb.get_patch(reloc, func_addr, offset, binw.Command.PATCH_FUNC.value)
                 #print(patch.type, patch.addr, binw.Command.PATCH_FUNC, node.name, '->', patch.target_symbol_name)
             else:
@@ -355,42 +365,44 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
     dw.write_int(offset)
 
     # write aux functions code
-    for name, start, lengths in aux_function_mem_layout:
+    for i, start, lengths in code_section_layout:
         dw.write_com(binw.Command.COPY_CODE)
         dw.write_int(start)
         dw.write_int(lengths)
-        dw.write_bytes(sdb.get_function_code(name))
+        dw.write_bytes(sdb.get_section_data(i))
 
     # Patch aux functions
-    for name, start, _ in aux_function_mem_layout:
+    for name, start in func_addr_lookup.items():
+        #print('--> ', name, list(sdb.get_relocations(name)))
         for reloc in sdb.get_relocations(name):
 
             #assert reloc.target_symbol_info != 'STT_FUNC', "Not tested yet!"
 
-            if reloc.target_symbol_info in {'STT_OBJECT', 'STT_NOTYPE', 'STT_SECTION'}:
+            if not reloc.target_section_index:
+                assert reloc.pelfy_reloc.type == 'R_ARM_V4BX'
+
+            elif reloc.target_symbol_info in {'STT_OBJECT', 'STT_NOTYPE', 'STT_SECTION'}:
                 # Patch constants/variable addresses on heap
-                #print('--> DATA ', name, reloc.pelfy_reloc.symbol.name, reloc.pelfy_reloc.symbol.info, reloc.pelfy_reloc.symbol.section.name)
+                #print('--> DATA ', name, reloc.pelfy_reloc.symbol, reloc.pelfy_reloc.symbol.info, reloc.pelfy_reloc.symbol.section.name)
                 assert reloc.target_section_index in section_addr_lookup, f"- Function or object in {name} missing: {reloc.pelfy_reloc.symbol.name}"
                 obj_addr = reloc.target_symbol_offset + section_addr_lookup[reloc.target_section_index]
                 patch = sdb.get_patch(reloc, obj_addr, start, binw.Command.PATCH_OBJECT.value)
+                patch_list.append(patch)
 
             elif reloc.target_symbol_info == 'STT_FUNC':
                 #print('--> FUNC', name, reloc.pelfy_reloc.symbol.name, reloc.pelfy_reloc.symbol.info, reloc.pelfy_reloc.symbol.section.name)
-                func_addr = aux_func_addr_lookup[reloc.target_symbol_name]
+                func_addr = func_addr_lookup[reloc.target_symbol_name]
                 patch = sdb.get_patch(reloc, func_addr, start, binw.Command.PATCH_FUNC.value)
                 #print(f'    FUNC {func_addr=}     {start=}    {patch.address=}')
+                patch_list.append(patch)
 
             else:
                 raise ValueError(f"Unsupported: {name=} {reloc.target_symbol_info=} {reloc.target_symbol_name=} {reloc.target_section_index}")
 
-            patch_list.append(patch)
-
-    #assert False, aux_function_mem_layout
-
     # write entry function code
     dw.write_com(binw.Command.COPY_CODE)
-    dw.write_int(aux_function_lengths)
-    dw.write_int(offset - aux_function_lengths)
+    dw.write_int(aux_func_len)
+    dw.write_int(offset - aux_func_len)
     dw.write_bytes(b''.join(data_list))
 
     # write patch operations
@@ -402,6 +414,6 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
         dw.write_int(patch.value, signed=True)
 
     dw.write_com(binw.Command.ENTRY_POINT)
-    dw.write_int(aux_function_lengths)
+    dw.write_int(aux_func_len)
 
     return dw, variables
