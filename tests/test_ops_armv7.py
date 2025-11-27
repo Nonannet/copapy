@@ -17,6 +17,7 @@ if os.name == 'nt':
 else:
     qemu_command = ['qemu-arm']
 
+
 def parse_results(log_text: str) -> dict[int, bytes]:
     regex = r"^READ_DATA offs=(\d*) size=(\d*) data=(.*)$"
     matches = re.finditer(regex, log_text, re.MULTILINE)
@@ -31,6 +32,7 @@ def parse_results(log_text: str) -> dict[int, bytes]:
 
     return var_dict
 
+
 def run_command(command: list[str]) -> str:
     result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf8', check=False)
     assert result.returncode != 11, f"SIGSEGV (segmentation fault)\n -Error occurred: {result.stderr}\n -Output: {result.stdout}"
@@ -41,7 +43,7 @@ def run_command(command: list[str]) -> str:
 def check_for_qemu() -> bool:
     command = qemu_command + ['--version']
     try:
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf8', check=False)
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     except:
         return False
     return result.returncode == 0

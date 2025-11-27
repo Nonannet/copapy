@@ -26,7 +26,7 @@ def run_command(command: list[str]) -> str:
 def check_for_qemu() -> bool:
     command = qemu_command + ['--version']
     try:
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf8', check=False)
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     except Exception:
         return False
     return result.returncode == 0
