@@ -1,10 +1,12 @@
-from typing import Iterable, overload
+from typing import Iterable, overload, TypeVar, Any
 from . import _binwrite as binw
 from coparun_module import coparun, read_data_mem
 import struct
 from ._basic_types import stencil_db_from_package
 from ._basic_types import variable, Net, Node, Write, NumLike
 from ._compiler import compile_to_dag
+
+T = TypeVar("T", int, float)
 
 
 def add_read_command(dw: binw.data_writer, variables: dict[Net, tuple[int, int, str]], net: Net) -> None:
@@ -41,6 +43,7 @@ class Target():
                     assert isinstance(net, Net), f"The folowing element is not a Net: {net}"
                     nodes.append(Write(net))
             else:
+                assert isinstance(s, Net), f"The folowing element is not a Net: {s}"
                 nodes.append(Write(s))
 
         dw, self._variables = compile_to_dag(nodes, self.sdb)
@@ -56,12 +59,12 @@ class Target():
         assert coparun(dw.get_data()) > 0
 
     @overload
-    def read_value(self, net: variable[float]) -> float: ...
-    @overload
-    def read_value(self, net: variable[int]) -> int: ...
+    def read_value(self, net: variable[T]) -> T: ...
     @overload
     def read_value(self, net: NumLike) -> float | int | bool: ...
-    def read_value(self, net: NumLike) -> float | int | bool:
+    @overload
+    def read_value(self, net: Iterable[T | variable[T]]) -> list[T]: ...
+    def read_value(self, net: NumLike | variable[T] | Iterable[T | variable[T]]) -> Any:
         """Reads the value of a variable.
 
         Arguments:
@@ -70,6 +73,13 @@ class Target():
         Returns:
             Value of the variable
         """
+        if isinstance(net, Iterable):
+            return [self.read_value(ni) if isinstance(ni, variable) else ni for ni in net]
+        
+        if isinstance(net, float | int):
+            print(f"Warning: value is not a copypy value")
+            return net
+        
         assert isinstance(net, Net), "Variable must be a copapy variable object"
         assert net in self._variables, f"Variable {net} not found. It might not have been compiled for the target."
         addr, lengths, var_type = self._variables[net]
