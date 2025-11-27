@@ -1,7 +1,7 @@
 import math
 import copapy as cp
 import pytest
-
+from copapy import filters
 
 def test_vectors_init():
     tt1 = cp.vector(range(3)) + cp.vector([1.1, 2.2, 3.3])
@@ -95,12 +95,27 @@ def test_non_compiled_vector_operations():
     assert rotated.values[2] == pytest.approx(3.0, abs=1e-6)  # pyright: ignore[reportUnknownMemberType]
 
 
-if __name__ == "__main__":
-    test_vectors_init()
-    test_compiled_vectors()
-    test_vector_operations()
-    print('Finished!')
+def test_sort_vector():
+    vlist = [50, 21, 20, 10, 22, 1, 80, 70, 90]
+    t1 = cp.vector(cp.variable(v) for v in vlist)
+    #t1 = cp.vector(v for v in vlist)
+
+    t2 = filters.median(t1)
+
+    tg = cp.Target()
+    tg.compile(t2)
+    tg.run()
+
+    result = tg.read_value(t2)
+
+    ref = sorted(vlist)[len(vlist) // 2]
+    print(sorted(vlist))
+
+    assert ref == result
+
 
 if __name__ == "__main__":
-    test_compiled_vectors()
+    #test_vectors_init()
+    #test_compiled_vectors()
+    test_sort_vector()
     print('Finished!')
