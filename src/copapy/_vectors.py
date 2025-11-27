@@ -2,7 +2,7 @@ from . import variable
 from typing import Generic, TypeVar, Iterable, Any, overload, TypeAlias, Callable
 import copapy as cp
 
-VecNumLike: TypeAlias = 'vector[int] | vector[float] | variable[int] | variable[float] | variable[bool] | int | float | bool'
+VecNumLike: TypeAlias = 'vector[int] | vector[float] | variable[int] | variable[float] | int | float | bool'
 VecIntLike: TypeAlias = 'vector[int] | variable[int] | int'
 VecFloatLike: TypeAlias = 'vector[float] | variable[float] | float'
 T = TypeVar("T", int, float)

@@ -28,7 +28,7 @@ class Target():
         self.sdb = stencil_db_from_package(arch, optimization)
         self._variables: dict[Net, tuple[int, int, str]] = {}
 
-    def compile(self, *variables: int | float | variable[int] | variable[float] | variable[bool] | Iterable[int | float | variable[int] | variable[float] | variable[bool]]) -> None:
+    def compile(self, *variables: int | float | variable[int] | variable[float] | Iterable[int | float | variable[int] | variable[float]]) -> None:
         """Compiles the code to compute the given variables.
 
         Arguments:
@@ -56,21 +56,11 @@ class Target():
         assert coparun(dw.get_data()) > 0
 
     @overload
-    def read_value(self, net: variable[bool]) -> bool:
-        ...
-
+    def read_value(self, net: variable[float]) -> float: ...
     @overload
-    def read_value(self, net: variable[float]) -> float:
-        ...
-
+    def read_value(self, net: variable[int]) -> int: ...
     @overload
-    def read_value(self, net: variable[int]) -> int:
-        ...
-
-    @overload
-    def read_value(self, net: NumLike) -> float | int | bool:
-        ...
-
+    def read_value(self, net: NumLike) -> float | int | bool: ...
     def read_value(self, net: NumLike) -> float | int | bool:
         """Reads the value of a variable.
 
