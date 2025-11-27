@@ -1,5 +1,5 @@
 from . import variable
-from typing import Generic, TypeVar, Iterable, Any, overload, TypeAlias, Callable
+from typing import Generic, TypeVar, Iterable, Any, overload, TypeAlias, Callable, Iterator
 import copapy as cp
 
 VecNumLike: TypeAlias = 'vector[int] | vector[float] | variable[int] | variable[float] | int | float | bool'
@@ -30,6 +30,12 @@ class vector(Generic[T]):
 
     def __getitem__(self, index: int) -> variable[T] | T:
         return self.values[index]
+
+    def __neg__(self) -> 'vector[float] | vector[int]':
+        return vector(-a for a in self.values)
+
+    def __iter__(self) -> Iterator[variable[T] | T]:
+        return iter(self.values)
 
     @overload
     def __add__(self: 'vector[int]', other: VecFloatLike) -> 'vector[float]': ...
@@ -163,11 +169,11 @@ class vector(Generic[T]):
         mag = self.magnitude() + epsilon
         return self / mag
     
-    def __neg__(self) -> 'vector[float] | vector[int]':
-        return vector(-a for a in self.values)
-
-    def __iter__(self) -> Iterable[variable[T] | T]:
-        return iter(self.values)
+    def homogenize(self) -> 'vector[T]':
+        if any(isinstance(val, variable) for val in self.values):
+            return vector(variable(val) if not isinstance(val, variable) else val for val in self.values)
+        else:
+            return self
 
     def map(self, func: Callable[[Any], variable[U] | U]) -> 'vector[U]':
         """Applies a function to each element of the vector and returns a new vector."""
