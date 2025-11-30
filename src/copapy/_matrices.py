@@ -199,7 +199,7 @@ class matrix(Generic[TT]):
         )
     
     @property
-    def T(self):
+    def T(self) ->  'matrix[TT]':
         return self.transpose()
 
     def row(self, index: int) -> vector[TT]:
