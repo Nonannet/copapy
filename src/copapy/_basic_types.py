@@ -163,6 +163,8 @@ class variable(Generic[TNum], Net):
     @overload
     def __mul__(self, other: TVarNumb) -> 'variable[float] | variable[int]': ...
     def __mul__(self, other: TVarNumb) -> Any:
+        if self.dtype == 'float' and isinstance(other, int):
+            other = float(other)  # Prevent runtime conversion of consts; TODO: add this for other operations
         return add_op('mul', [self, other], True)
 
     @overload
