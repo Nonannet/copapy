@@ -278,6 +278,8 @@ def get_42(x: NumLike) -> variable[float] | float:
         return add_op('get_42', [x, x])
     return float((int(x) * 3.0 + 42.0) * 5.0 + 21.0)
 
+
+#TODO: Add vector support
 @overload
 def abs(x: U) -> U: ...
 @overload
@@ -292,7 +294,26 @@ def abs(x: U | variable[U]) -> Any:
         Absolute value of x
     """
     ret = (x < 0) * -x + (x >= 0) * x
-    return ret  # pyright: ignore[reportReturnType]
+    return ret  # REMpyright: ignore[reportReturnType]
+
+
+#TODO: Add vector support
+@overload
+def sign(x: U) -> U: ...
+@overload
+def sign(x: variable[U]) -> variable[U]: ...
+def sign(x: U | variable[U]) -> Any:
+    """Return 1 for positive numbers and -1 for negative numbers.
+    For an input of 0 the return value is 0.
+
+    Arguments:
+        x: Input value
+
+    Returns:
+        -1, 0 or 1
+    """
+    ret = (x > 0) - (x < 0)
+    return ret
 
 
 @overload
@@ -379,6 +400,17 @@ def lerp(v1: U | variable[U] | vector[U], v2: U | variable[U] | vector[U], t:  U
         assert len(v1.values) == len(v2.values), "Vectors must be of the same length."
         return vector(lerp(vv1, vv2, t) for vv1, vv2 in zip(v1.values, v2.values))
     return v1 * (1 - t) + v2 * t
+
+
+#TODO: Add vector support
+@overload
+def relu(x: U) -> U: ...
+@overload
+def relu(x: variable[U]) -> variable[U]: ...
+def relu(x: U | variable[U]) -> Any:
+    """Returns x for x > 0 and otherwise 0."""
+    ret = (x > 0) * x
+    return ret
 
 
 def _map2(self: VecNumLike, other: VecNumLike, func: Callable[[Any, Any], variable[U] | U]) -> vector[U]:
