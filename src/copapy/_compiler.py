@@ -64,9 +64,15 @@ def get_all_dag_edges(nodes: Iterable[Node]) -> Generator[tuple[Node, Node], Non
     Yields:
         Tuples of (source_node, target_node) representing edges in the DAG
     """
+    emitted_nodes: set[tuple[Node, Node]] = set()
+    
     for node in nodes:
         yield from get_all_dag_edges(net.source for net in node.args)
-        yield from ((net.source, node) for net in node.args)
+        for net in node.args:
+            edge = (net.source, node)
+            if edge not in emitted_nodes:
+                yield edge
+                emitted_nodes.add(edge)
 
 
 def get_const_nets(nodes: list[Node]) -> list[Net]:
