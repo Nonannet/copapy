@@ -1,5 +1,6 @@
 from . import variable, vector
-from ._basic_types import iif, unifloat, TNum
+from ._basic_types import iif, unifloat
+from._helper_types import TNum
 from typing import Any, Iterable
 
 
@@ -18,7 +19,7 @@ def _inv_argsort(input_vector: vector[TNum]) -> vector[int]:
 
 def argsort(input_vector: vector[TNum]) -> vector[int]:
     """
-    Perform an indirect sort. It returns an array of indices that index data 
+    Perform an indirect sort. It returns an array of indices that index data
     in sorted order.
 
     Args:

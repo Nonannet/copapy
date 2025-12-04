@@ -1,4 +1,4 @@
-from copapy import NumLike, iif, variable, sin
+from copapy import NumLike, iif, variable
 from copapy.backend import Write, compile_to_dag, add_read_command
 import subprocess
 from copapy import _binwrite
@@ -70,16 +70,16 @@ def iiftests(c1: NumLike) -> list[NumLike]:
 
 @pytest.mark.runner
 def test_compile():
-    t1 = cp.vector([10, 11, 12]) + cp.vector(cp.variable(v) for v in range(3))
-    t2 = t1.sum()
+    #t1 = cp.vector([10, 11, 12]) + cp.vector(cp.variable(v) for v in range(3))
+    #t2 = t1.sum()
 
-    t3 = cp.vector(cp.variable(1 / (v + 1)) for v in range(3))
-    t4 = ((t3 * t1) * 2).sum()
-    t5 = ((t3 * t1) * 2).magnitude()
+    #t3 = cp.vector(cp.variable(1 / (v + 1)) for v in range(3))
+    #t4 = ((t3 * t1) * 2).sum()
+    #t5 = ((t3 * t1) * 2).magnitude()
 
     c_i = variable(9)
-    c_f = variable(1.111)
-    c_b = variable(True)
+    #c_f = variable(1.111)
+    #c_b = variable(True)
 
     #ret_test = function1(c_i) + function1(c_f) + function2(c_i) + function2(c_f) + function3(c_i) + function4(c_i) + function5(c_b) + [c_i % 2, sin(c_f)] + iiftests(c_i) + iiftests(c_f)
     #ret_ref = function1(9) + function1(1.111) + function2(9) + function2(1.111) + function3(9) + function4(9) + function5(True) + [9 % 2, sin(1.111)] + iiftests(9) + iiftests(1.111)
@@ -104,7 +104,7 @@ def test_compile():
     ret_test = [cp.get_42(c_i)]
     ret_ref = [cp.get_42(9)]
 
-    out = [Write(r) for r in ret_test]    
+    out = [Write(r) for r in ret_test]
 
     #ret_test += [c_i, v2]
     #ret_ref += [9, 4.44, -4.44]
@@ -143,7 +143,7 @@ def test_compile():
         try:
             result = run_command(command)
         except FileNotFoundError:
-            warnings.warn(f"Test skipped, executable not found.", UserWarning)
+            warnings.warn("Test skipped, executable not found.", UserWarning)
             return
 
         print('* Output from runner:\n--')

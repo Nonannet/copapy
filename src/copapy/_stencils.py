@@ -167,7 +167,7 @@ class stencil_database():
         # cache miss:
         cache: list[relocation_entry] = []
         self._relocation_cache[cache_key] = cache
-        
+
         symbol = self.elf.symbols[symbol_name]
         if stencil:
             start_index, end_index = get_stencil_position(symbol)
@@ -353,11 +353,11 @@ class stencil_database():
     def get_symbol_size(self, name: str) -> int:
         """Returns the size of a specified symbol name."""
         return self.elf.symbols[name].fields['st_size']
-    
+
     def get_symbol_offset(self, name: str) -> int:
         """Returns the offset of a specified symbol in the section."""
         return self.elf.symbols[name].fields['st_value']
-    
+
     def get_symbol_section_index(self, name: str) -> int:
         """Returns the section index for a specified symbol name."""
         return self.elf.symbols[name].fields['st_shndx']
@@ -365,7 +365,7 @@ class stencil_database():
     def get_section_size(self, index: int) -> int:
         """Returns the size of a section specified by index."""
         return self.elf.sections[index].fields['sh_size']
-    
+
     def get_section_alignment(self, index: int) -> int:
         """Returns the required alignment of a section specified by index."""
         return self.elf.sections[index].fields['sh_addralign']

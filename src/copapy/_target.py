@@ -75,11 +75,11 @@ class Target():
         """
         if isinstance(net, Iterable):
             return [self.read_value(ni) if isinstance(ni, variable) else ni for ni in net]
-        
+
         if isinstance(net, float | int):
-            print(f"Warning: value is not a copypy value")
+            print("Warning: value is not a copypy value")
             return net
-        
+
         assert isinstance(net, Net), "Variable must be a copapy variable object"
         assert net in self._variables, f"Variable {net} not found. It might not have been compiled for the target."
         addr, lengths, var_type = self._variables[net]

@@ -42,7 +42,7 @@ def check_for_qemu() -> bool:
     command = qemu_command + ['--version']
     try:
         result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
-    except:
+    except Exception:
         return False
     return result.returncode == 0
 
@@ -128,7 +128,7 @@ def test_compile():
     if not os.path.isfile('build/runner/coparun-aarch64'):
         warnings.warn("aarch64 runner not found, aarch64 test skipped!", UserWarning)
         return
-    
+
     command = qemu_command + ['build/runner/coparun-aarch64', 'build/runner/test-arm64.copapy'] + ['build/runner/test-arm64.copapy.bin']
     #try:
     result = run_command(command)

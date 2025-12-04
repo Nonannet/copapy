@@ -44,7 +44,7 @@ def check_for_qemu() -> bool:
     command = qemu_command + ['--version']
     try:
         result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
-    except:
+    except Exception:
         return False
     return result.returncode == 0
 
@@ -130,7 +130,7 @@ def test_compile():
     if not os.path.isfile('build/runner/coparun-armv7'):
         warnings.warn("armv7 runner not found, armv7 test skipped!", UserWarning)
         return
-    
+
     command = qemu_command + ['build/runner/coparun-armv7', 'build/runner/test-armv7.copapy'] + ['build/runner/test-armv7.copapy.bin']
     #try:
     result = run_command(command)
