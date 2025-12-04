@@ -20,3 +20,4 @@ build/*
 /*.obj
 /src/*.pyd
 vc140.pdb
+benchmark_results*
