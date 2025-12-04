@@ -2,13 +2,13 @@ import pkgutil
 from typing import Any, Sequence, TypeVar, overload, TypeAlias, Generic, cast
 from ._stencils import stencil_database, detect_process_arch
 import copapy as cp
+from ._helper_types import TNum
 
 NumLike: TypeAlias = 'variable[int] | variable[float] | int | float'
 unifloat: TypeAlias = 'variable[float] | float'
 uniint: TypeAlias = 'variable[int] | int'
 
 TCPNum = TypeVar("TCPNum", bound='variable[Any]')
-TNum = TypeVar("TNum", int, float)
 TVarNumb: TypeAlias = 'variable[Any] | int | float'
 
 stencil_cache: dict[tuple[str, str], stencil_database] = {}
@@ -312,7 +312,7 @@ class variable(Generic[TNum], Net):
         return add_op('bwand', [self, other], True)
 
     def __rand__(self, other: uniint) -> 'variable[int]':
-        return add_op('rwand', [other, self], True)
+        return add_op('bwand', [other, self], True)
 
     def __or__(self, other: uniint) -> 'variable[int]':
         return add_op('bwor', [self, other], True)

@@ -1,19 +1,19 @@
 from . import variable
 from ._vectors import vector
 from ._mixed import mixed_sum
-from typing import Generic, TypeVar, Iterable, Any, overload, TypeAlias, Callable, Iterator
+from typing import TypeVar, Iterable, Any, overload, TypeAlias, Callable, Iterator, Generic
+from ._helper_types import TNum
 
 MatNumLike: TypeAlias = 'matrix[int] | matrix[float] | variable[int] | variable[float] | int | float'
 MatIntLike: TypeAlias = 'matrix[int] | variable[int] | int'
 MatFloatLike: TypeAlias = 'matrix[float] | variable[float] | float'
-TT = TypeVar("TT", int, float)
 U = TypeVar("U", int, float)
 
 
-class matrix(Generic[TT]):
+class matrix(Generic[TNum]):
     """Mathematical matrix class supporting basic operations and interactions with variables.
     """
-    def __init__(self, values: Iterable[Iterable[TT | variable[TT]]]):
+    def __init__(self, values: Iterable[Iterable[TNum | variable[TNum]]]):
         """Create a matrix with given values and variables.
 
         Args:
@@ -23,7 +23,7 @@ class matrix(Generic[TT]):
         if rows:
             row_len = len(rows[0])
             assert all(len(row) == row_len for row in rows), "All rows must have the same length"
-        self.values: tuple[tuple[variable[TT] | TT, ...], ...] = tuple(rows)
+        self.values: tuple[tuple[variable[TNum] | TNum, ...], ...] = tuple(rows)
         self.rows = len(self.values)
         self.cols = len(self.values[0]) if self.values else 0
 
@@ -33,13 +33,13 @@ class matrix(Generic[TT]):
     def __len__(self) -> int:
         return self.rows
 
-    def __getitem__(self, index: int) -> tuple[variable[TT] | TT, ...]:
+    def __getitem__(self, index: int) -> tuple[variable[TNum] | TNum, ...]:
         return self.values[index]
 
-    def __iter__(self) -> Iterator[tuple[variable[TT] | TT, ...]]:
+    def __iter__(self) -> Iterator[tuple[variable[TNum] | TNum, ...]]:
         return iter(self.values)
 
-    def __neg__(self) -> 'matrix[TT]':
+    def __neg__(self) -> 'matrix[TNum]':
         return matrix((-a for a in row) for row in self.values)
 
     @overload
@@ -165,23 +165,23 @@ class matrix(Generic[TT]):
         )
 
     @overload
-    def __matmul__(self: 'matrix[TT]', other: 'vector[TT]') -> 'vector[TT]': ...
+    def __matmul__(self: 'matrix[TNum]', other: 'vector[TNum]') -> 'vector[TNum]': ...
     @overload
-    def __matmul__(self: 'matrix[TT]', other: 'matrix[TT]') -> 'matrix[TT]': ...
-    def __matmul__(self: 'matrix[TT]', other: 'matrix[TT] | vector[TT]') -> 'matrix[TT] | vector[TT]':
+    def __matmul__(self: 'matrix[TNum]', other: 'matrix[TNum]') -> 'matrix[TNum]': ...
+    def __matmul__(self: 'matrix[TNum]', other: 'matrix[TNum] | vector[TNum]') -> 'matrix[TNum] | vector[TNum]':
         """Matrix multiplication using @ operator"""
         if isinstance(other, vector):
             assert self.cols == len(other.values), \
                 f"Matrix columns ({self.cols}) must match vector length ({len(other.values)})"
             vec_result = (mixed_sum(a * b for a, b in zip(row, other.values)) for row in self.values)
             return vector(vec_result)
-        else: 
+        else:
             assert isinstance(other, matrix), "Cannot multiply matrix with {type(other)}"
             assert self.cols == other.rows, \
                 f"Matrix columns ({self.cols}) must match other matrix rows ({other.rows})"
-            result: list[list[TT | variable[TT]]] = []
+            result: list[list[TNum | variable[TNum]]] = []
             for row in self.values:
-                new_row: list[TT | variable[TT]] = []
+                new_row: list[TNum | variable[TNum]] = []
                 for col_idx in range(other.cols):
                     col = tuple(other.values[i][col_idx] for i in range(other.rows))
                     element = sum(a * b for a, b in zip(row, col))
@@ -189,7 +189,7 @@ class matrix(Generic[TT]):
                 result.append(new_row)
             return matrix(result)
 
-    def transpose(self) -> 'matrix[TT]':
+    def transpose(self) -> 'matrix[TNum]':
         """Return the transpose of the matrix."""
         if not self.values:
             return matrix([])
@@ -197,23 +197,23 @@ class matrix(Generic[TT]):
             tuple(self.values[i][j] for i in range(self.rows))
             for j in range(self.cols)
         )
-    
+
     @property
-    def T(self) ->  'matrix[TT]':
+    def T(self) ->  'matrix[TNum]':
         return self.transpose()
 
-    def row(self, index: int) -> vector[TT]:
+    def row(self, index: int) -> vector[TNum]:
         """Get a row as a vector."""
         assert 0 <= index < self.rows, f"Row index {index} out of bounds"
         return vector(self.values[index])
 
-    def col(self, index: int) -> vector[TT]:
+    def col(self, index: int) -> vector[TNum]:
         """Get a column as a vector."""
         assert 0 <= index < self.cols, f"Column index {index} out of bounds"
         return vector(self.values[i][index] for i in range(self.rows))
 
     @overload
-    def trace(self: 'matrix[TT]') -> TT | variable[TT]: ...
+    def trace(self: 'matrix[TNum]') -> TNum | variable[TNum]: ...
     @overload
     def trace(self: 'matrix[int]') -> int | variable[int]: ...
     @overload
@@ -224,7 +224,7 @@ class matrix(Generic[TT]):
         return mixed_sum(self.values[i][i] for i in range(self.rows))
 
     @overload
-    def sum(self: 'matrix[TT]') -> TT | variable[TT]: ...
+    def sum(self: 'matrix[TNum]') -> TNum | variable[TNum]: ...
     @overload
     def sum(self: 'matrix[int]') -> int | variable[int]: ...
     @overload
@@ -240,7 +240,7 @@ class matrix(Generic[TT]):
             for row in self.values
         )
 
-    def homogenize(self) -> 'matrix[TT]':
+    def homogenize(self) -> 'matrix[TNum]':
         """Convert all elements to variables if any element is a variable."""
         if any(isinstance(val, variable) for row in self.values for val in row):
             return matrix(

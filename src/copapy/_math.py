@@ -2,11 +2,12 @@ from . import vector
 from ._vectors import VecNumLike
 from . import variable, NumLike
 from typing import TypeVar, Any, overload, Callable
-from ._basic_types import add_op
+from ._basic_types import add_op, unifloat
 import math
 
 T = TypeVar("T", int, float, variable[int], variable[float])
 U = TypeVar("U", int, float)
+
 
 @overload
 def exp(x: float | int) -> float: ...
@@ -284,7 +285,9 @@ def get_42(x: NumLike) -> variable[float] | float:
 def abs(x: U) -> U: ...
 @overload
 def abs(x: variable[U]) -> variable[U]: ...
-def abs(x: U | variable[U]) -> Any:
+@overload
+def abs(x: vector[U]) -> vector[U]: ...
+def abs(x: U | variable[U] | vector[U]) -> Any:
     """Absolute value function
 
     Arguments:
@@ -293,16 +296,18 @@ def abs(x: U | variable[U]) -> Any:
     Returns:
         Absolute value of x
     """
+    #tt = -x * (x < 0)
     ret = (x < 0) * -x + (x >= 0) * x
     return ret  # REMpyright: ignore[reportReturnType]
 
 
-#TODO: Add vector support
 @overload
 def sign(x: U) -> U: ...
 @overload
 def sign(x: variable[U]) -> variable[U]: ...
-def sign(x: U | variable[U]) -> Any:
+@overload
+def sign(x: vector[U]) -> vector[U]: ...
+def sign(x: U | variable[U] | vector[U]) -> Any:
     """Return 1 for positive numbers and -1 for negative numbers.
     For an input of 0 the return value is 0.
 
@@ -333,13 +338,13 @@ def clamp(x: U | variable[U] | vector[U], min_value: U | variable[U], max_value:
         x: Input value
         min_value: Minimum limit
         max_value: Maximum limit
-    
+
     Returns:
         Clamped value of x
     """
     if isinstance(x, vector):
         return vector(clamp(comp, min_value, max_value) for comp in x.values)
-    
+
     return (x < min_value) * min_value + \
           (x > max_value) * max_value + \
           ((x >= min_value) & (x <= max_value)) * x
@@ -384,16 +389,16 @@ def max(x: U | variable[U], y: U | variable[U]) -> Any:
 
 
 @overload
-def lerp(v1: variable[U], v2: U | variable[U], t: U | variable[U]) -> variable[U]: ...
+def lerp(v1: variable[U], v2: U | variable[U], t: unifloat) -> variable[U]: ...
 @overload
-def lerp(v1: U | variable[U], v2: variable[U], t: U | variable[U]) -> variable[U]: ...
+def lerp(v1: U | variable[U], v2: variable[U], t: unifloat) -> variable[U]: ...
 @overload
-def lerp(v1: U | variable[U], v2: U | variable[U], t: variable[U]) -> variable[U]: ...
+def lerp(v1: U | variable[U], v2: U | variable[U], t: variable[float]) -> variable[U]: ...
 @overload
-def lerp(v1: U, v2: U, t: U) -> U: ...
+def lerp(v1: U, v2: U, t: float) -> U: ...
 @overload
-def lerp(v1: vector[U], v2: vector[U], t: 'U | variable[U]') -> vector[U]: ...
-def lerp(v1: U | variable[U] | vector[U], v2: U | variable[U] | vector[U], t:  U | variable[U]) -> Any:
+def lerp(v1: vector[U], v2: vector[U], t: unifloat) -> vector[U]: ...
+def lerp(v1: U | variable[U] | vector[U], v2: U | variable[U] | vector[U], t:  unifloat) -> Any:
     """Linearly interpolate between two values or vectors v1 and v2 by a factor t."""
     if isinstance(v1, vector) or isinstance(v2, vector):
         assert isinstance(v1, vector) and isinstance(v2, vector), "None or both v1 and v2 must be vectors."
@@ -402,12 +407,13 @@ def lerp(v1: U | variable[U] | vector[U], v2: U | variable[U] | vector[U], t:  U
     return v1 * (1 - t) + v2 * t
 
 
-#TODO: Add vector support
 @overload
 def relu(x: U) -> U: ...
 @overload
 def relu(x: variable[U]) -> variable[U]: ...
-def relu(x: U | variable[U]) -> Any:
+@overload
+def relu(x: vector[U]) -> vector[U]: ...
+def relu(x: U | variable[U] | vector[U]) -> Any:
     """Returns x for x > 0 and otherwise 0."""
     ret = (x > 0) * x
     return ret

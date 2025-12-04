@@ -1,27 +1,28 @@
 from . import variable
 from ._mixed import mixed_sum, mixed_homogenize
-from typing import Generic, TypeVar, Iterable, Any, overload, TypeAlias, Callable, Iterator
+from typing import TypeVar, Iterable, Any, overload, TypeAlias, Callable, Iterator, Generic
 import copapy as cp
+from ._helper_types import TNum
 
-VecNumLike: TypeAlias = 'vector[int] | vector[float] | variable[int] | variable[float] | int | float | bool'
+#VecNumLike: TypeAlias = 'vector[int] | vector[float] | variable[int] | variable[float] | int | float | bool'
+VecNumLike: TypeAlias = 'vector[Any] | variable[Any] | int | float | bool'
 VecIntLike: TypeAlias = 'vector[int] | variable[int] | int'
 VecFloatLike: TypeAlias = 'vector[float] | variable[float] | float'
-T = TypeVar("T", int, float)
 U = TypeVar("U", int, float)
 
 epsilon = 1e-20
 
 
-class vector(Generic[T]):
+class vector(Generic[TNum]):
     """Mathematical vector class supporting basic operations and interactions with variables.
     """
-    def __init__(self, values: Iterable[T | variable[T]]):
+    def __init__(self, values: Iterable[TNum | variable[TNum]]):
         """Create a vector with given values and variables.
 
         Args:
             values: iterable of constant values and variables
         """
-        self.values: tuple[variable[T] | T, ...] = tuple(values)
+        self.values: tuple[variable[TNum] | TNum, ...] = tuple(values)
 
     def __repr__(self) -> str:
         return f"vector({self.values})"
@@ -29,13 +30,13 @@ class vector(Generic[T]):
     def __len__(self) -> int:
         return len(self.values)
 
-    def __getitem__(self, index: int) -> variable[T] | T:
+    def __getitem__(self, index: int) -> variable[TNum] | TNum:
         return self.values[index]
 
-    def __neg__(self) -> 'vector[T]':
+    def __neg__(self) -> 'vector[TNum]':
         return vector(-a for a in self.values)
 
-    def __iter__(self) -> Iterator[variable[T] | T]:
+    def __iter__(self) -> Iterator[variable[TNum] | TNum]:
         return iter(self.values)
 
     @overload
@@ -56,6 +57,8 @@ class vector(Generic[T]):
     def __radd__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
     @overload
     def __radd__(self: 'vector[int]', other: variable[int] | int) -> 'vector[int]': ...
+    @overload
+    def __radd__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __radd__(self, other: Any) -> Any:
         return self + other
 
@@ -77,6 +80,8 @@ class vector(Generic[T]):
     def __rsub__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
     @overload
     def __rsub__(self: 'vector[int]', other: variable[int] | int) -> 'vector[int]': ...
+    @overload
+    def __rsub__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __rsub__(self, other: VecNumLike) -> Any:
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
@@ -101,6 +106,8 @@ class vector(Generic[T]):
     def __rmul__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
     @overload
     def __rmul__(self: 'vector[int]', other: variable[int] | int) -> 'vector[int]': ...
+    @overload
+    def __rmul__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __rmul__(self, other: VecNumLike) -> Any:
         return self * other
 
@@ -150,6 +157,42 @@ class vector(Generic[T]):
             a3 * b1 - a1 * b3,
             a1 * b2 - a2 * b1
         ])
+    
+    def __gt__(self, other: VecNumLike) -> 'vector[int]':
+        if isinstance(other, vector):
+            assert len(self.values) == len(other.values)
+            return vector(a > b for a, b in zip(self.values, other.values))
+        return vector(a > other for a in self.values)
+
+    def __lt__(self, other: VecNumLike) -> 'vector[int]':
+        if isinstance(other, vector):
+            assert len(self.values) == len(other.values)
+            return vector(a < b for a, b in zip(self.values, other.values))
+        return vector(a < other for a in self.values)
+
+    def __ge__(self, other: VecNumLike) -> 'vector[int]':
+        if isinstance(other, vector):
+            assert len(self.values) == len(other.values)
+            return vector(a >= b for a, b in zip(self.values, other.values))
+        return vector(a >= other for a in self.values)
+
+    def __le__(self, other: VecNumLike) -> 'vector[int]':
+        if isinstance(other, vector):
+            assert len(self.values) == len(other.values)
+            return vector(a <= b for a, b in zip(self.values, other.values))
+        return vector(a <= other for a in self.values)
+
+    def __eq__(self, other: VecNumLike) -> 'vector[int]':  # type: ignore
+        if isinstance(other, vector):
+            assert len(self.values) == len(other.values)
+            return vector(a == b for a, b in zip(self.values, other.values))
+        return vector(a == other for a in self.values)
+
+    def __ne__(self, other: VecNumLike) -> 'vector[int]':  # type: ignore
+        if isinstance(other, vector):
+            assert len(self.values) == len(other.values)
+            return vector(a != b for a, b in zip(self.values, other.values))
+        return vector(a != other for a in self.values)
 
     @overload
     def sum(self: 'vector[int]') -> int | variable[int]: ...
@@ -168,8 +211,8 @@ class vector(Generic[T]):
         """Returns a normalized (unit length) version of the vector."""
         mag = self.magnitude() + epsilon
         return self / mag
-    
-    def homogenize(self) -> 'vector[T]':
+
+    def homogenize(self) -> 'vector[TNum]':
         if any(isinstance(val, variable) for val in self.values):
             return vector(mixed_homogenize(self))
         else:

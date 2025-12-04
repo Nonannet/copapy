@@ -65,7 +65,7 @@ def get_all_dag_edges(nodes: Iterable[Node]) -> Generator[tuple[Node, Node], Non
         Tuples of (source_node, target_node) representing edges in the DAG
     """
     emitted_nodes: set[tuple[Node, Node]] = set()
-    
+
     for node in nodes:
         yield from get_all_dag_edges(net.source for net in node.args)
         for net in node.args:
@@ -138,7 +138,7 @@ def add_write_ops(net_node_list: list[tuple[Net | None, Node]], const_nets: list
     read_back_nets = {
         net for net, node in net_node_list
         if net and node.name.startswith('read_')}
-    
+
     registers: list[Net | None] = [None, None]
 
     for net, node in net_node_list:
@@ -253,7 +253,7 @@ def get_aux_func_layout(function_names: Iterable[str], sdb: stencil_database, of
             alignment = sdb.get_section_alignment(index)
             offset = (offset + alignment - 1) // alignment * alignment
             section_list.append((index, offset, lengths))
-            section_cache[index] = offset           
+            section_cache[index] = offset
             function_lookup[name] = offset + sdb.get_symbol_offset(name)
             offset += lengths
 
