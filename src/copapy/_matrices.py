@@ -13,13 +13,16 @@ U = TypeVar("U", int, float)
 class matrix(Generic[TNum]):
     """Mathematical matrix class supporting basic operations and interactions with variables.
     """
-    def __init__(self, values: Iterable[Iterable[TNum | variable[TNum]]]):
+    def __init__(self, values: Iterable[Iterable[TNum | variable[TNum]]] | vector[TNum]):
         """Create a matrix with given values and variables.
 
         Args:
             values: iterable of iterable of constant values and variables
         """
-        rows = tuple(tuple(row) for row in values)
+        if isinstance(values, vector):
+            rows = (values.values,)
+        else:
+            rows = tuple(tuple(row) for row in values)
         if rows:
             row_len = len(rows[0])
             assert all(len(row) == row_len for row in rows), "All rows must have the same length"
@@ -33,8 +36,11 @@ class matrix(Generic[TNum]):
     def __len__(self) -> int:
         return self.rows
 
-    def __getitem__(self, index: int) -> tuple[variable[TNum] | TNum, ...]:
-        return self.values[index]
+    def __getitem__(self, key: tuple[int, int]) -> variable[TNum] | TNum:
+        assert len(key) == 2
+        row = key[0]
+        col = key[1]
+        return self.values[row][col]
 
     def __iter__(self) -> Iterator[tuple[variable[TNum] | TNum, ...]]:
         return iter(self.values)
@@ -251,8 +257,6 @@ class matrix(Generic[TNum]):
             return self
 
 
-# Utility functions for matrices
-
 def identity(size: int) -> matrix[int]:
     """Create an identity matrix of given size."""
     return matrix(
@@ -274,6 +278,15 @@ def ones(rows: int, cols: int) -> matrix[int]:
     return matrix(
         tuple(1 for _ in range(cols))
         for _ in range(rows)
+    )
+
+
+def eye(rows: int, cols: int | None = None) -> matrix[int]:
+    """Create a matrix with ones on the diagonal and zeros elsewhere."""
+    cols = cols if cols else rows
+    return matrix(
+        tuple(1 if i == j else 0 for j in range(cols))
+        for i in range(rows)
     )
 
 

@@ -223,8 +223,6 @@ class vector(Generic[TNum]):
         return vector(func(x) for x in self.values)
 
 
-# Utility functions for 3D vectors with two arguments
-
 def cross_product(v1: vector[float], v2: vector[float]) -> vector[float]:
     """Calculate the cross product of two 3D vectors."""
     return v1.cross(v2)
