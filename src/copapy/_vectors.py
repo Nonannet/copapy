@@ -193,6 +193,11 @@ class vector(Generic[TNum]):
             assert len(self.values) == len(other.values)
             return vector(a != b for a, b in zip(self.values, other.values))
         return vector(a != other for a in self.values)
+    
+    @property
+    def shape(self) -> tuple[int]:
+        """Return the shape of the vector as (length,)."""
+        return (len(self.values),)
 
     @overload
     def sum(self: 'vector[int]') -> int | variable[int]: ...

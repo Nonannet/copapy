@@ -34,13 +34,26 @@ class matrix(Generic[TNum]):
         return f"matrix({self.values})"
 
     def __len__(self) -> int:
+        """Return the number of rows in the matrix."""
         return self.rows
 
-    def __getitem__(self, key: tuple[int, int]) -> variable[TNum] | TNum:
-        assert len(key) == 2
-        row = key[0]
-        col = key[1]
-        return self.values[row][col]
+    @overload
+    def __getitem__(self, key: int) -> vector[TNum]: ...
+    @overload
+    def __getitem__(self, key: tuple[int, int]) -> variable[TNum] | TNum: ...
+    def __getitem__(self, key: int | tuple[int, int]) -> Any:
+        """Get a row as a vector or a specific element.
+            Args:
+                key: row index or (row, col) tuple
+            
+            Returns:
+                vector if row index is given, else the element at (row, col)
+        """
+        if isinstance(key, tuple):
+            assert len(key) == 2
+            return self.values[key[0]][key[1]]
+        else:
+            return vector(self.values[key])
 
     def __iter__(self) -> Iterator[tuple[variable[TNum] | TNum, ...]]:
         return iter(self.values)
@@ -203,6 +216,11 @@ class matrix(Generic[TNum]):
             tuple(self.values[i][j] for i in range(self.rows))
             for j in range(self.cols)
         )
+    
+    @property
+    def shape(self) -> tuple[int, int]:
+        """Return the shape of the matrix as (rows, cols)."""
+        return (self.rows, self.cols)
 
     @property
     def T(self) ->  'matrix[TNum]':
