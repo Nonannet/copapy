@@ -30,11 +30,6 @@ jobs:
           name: musl-object-files
           path: /object_files/musl_objects_*.*o
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: cross-runner
-          path: build/runner/coparun-*
-
   build-ubuntu:
     needs: [build_stencils]
     runs-on: ubuntu-latest
@@ -52,11 +47,6 @@ jobs:
         name: stencil-object-files
         path: src/copapy/obj
 
-    #- uses: actions/download-artifact@v4
-    #  with:
-    #    name: cross-runner
-    #    path: build/runner
-
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
@@ -65,46 +55,23 @@ jobs:
     - name: Install Python dependencies
       run: python -m pip install -e .[dev]
 
-    #- name: Install ARM binutils and qemu
-    #  if: strategy.job-index == 0
-    #  run: |
-    #    echo "set man-db/auto-update false" | sudo debconf-communicate
-    #    sudo dpkg-reconfigure man-db
-    #    sudo apt-get update
-    #    sudo apt-get install --no-install-recommends --no-install-suggests binutils-aarch64-linux-gnu qemu-user gcc-aarch64-linux-gnu libc6-dev-arm64-cross
-
     - name: Compile coparun
       run: |
         mkdir -p build/runner
         gcc -O3 -DENABLE_BASIC_LOGGING -o build/runner/coparun src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c
-     #   aarch64-linux-gnu-gcc -O3 -static -DENABLE_BASIC_LOGGING src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c -o build/runner/coparun-aarch64
 
     - name: Generate debug asm files
       if: strategy.job-index == 0
       run: |
         set -e
         set -v
-        python tools/make_example.py
+        bash tools/create_asm.sh
 
-        echo "- Patch code..."
-        build/runner/coparun build/runner/test.copapy build/runner/test.copapy.bin
-        #qemu-aarch64 build/runner/coparun-aarch64 build/runner/test-arm64.copapy build/runner/test-arm64.copapy.bin
+        echo '<p>example</p>' >> $GITHUB_STEP_SUMMARY
+        python tools/clean_asm.py build/asm/example.asm >> $GITHUB_STEP_SUMMARY
 
-        objdump -D -b binary -m i386:x86-64 --adjust-vma=0x1000 build/runner/test.copapy.bin > build/runner/test.copapy.asm
-        echo '<p>test.copapy.asm</p>' >> $GITHUB_STEP_SUMMARY
-        python tools/clean_asm.py build/runner/test.copapy.asm >> $GITHUB_STEP_SUMMARY
-
-        #aarch64-linux-gnu-objdump -D -b binary -m aarch64 --adjust-vma=0x1000 build/runner/test-arm64.copapy.bin > build/runner/test-arm64.copapy.asm
-        #echo '<p>test-arm64.copapy.asm</p>' >> $GITHUB_STEP_SUMMARY
-        #python tools/clean_asm.py build/runner/test-arm64.copapy.asm >> $GITHUB_STEP_SUMMARY
-
-        objdump -d -x src/copapy/obj/stencils_x86_64_O3.o > build/runner/stencils_x86_64_O3.asm
-        echo '<p>stencils_x86_64_O3.asm</p>' >> $GITHUB_STEP_SUMMARY
-        python tools/clean_asm.py build/runner/stencils_x86_64_O3.asm >> $GITHUB_STEP_SUMMARY
-
-        #aarch64-linux-gnu-objdump -d -x src/copapy/obj/stencils_arm64_O3.o > build/runner/stencils_arm64_O3.asm
-        #echo '<p>stencils_arm64_O3.asm</p>' >> $GITHUB_STEP_SUMMARY
-        #python tools/clean_asm.py build/runner/stencils_arm64_O3.asm >> $GITHUB_STEP_SUMMARY
+        echo '<p>stencils_x86_64_O3.o</p>' >> $GITHUB_STEP_SUMMARY
+        python tools/clean_asm.py build/asm/stencils.asm >> $GITHUB_STEP_SUMMARY
 
     - name: Run tests with pytest
       run: pytest
@@ -142,7 +109,8 @@ jobs:
                   mkdir -p build/runner && \
                   gcc -O3 -DENABLE_LOGGING -o build/runner/coparun src/coparun/runmem.c \
                   src/coparun/coparun.c src/coparun/mem_man.c && \
-                  pytest"
+                  pytest && \
+                  bash tools/create_asm.sh"
 
     - uses: actions/upload-artifact@v4
       with:
@@ -170,7 +138,8 @@ jobs:
                   mkdir -p build/runner && \
                   gcc -O3 -DENABLE_LOGGING -o build/runner/coparun src/coparun/runmem.c \
                   src/coparun/coparun.c src/coparun/mem_man.c && \
-                  pytest"
+                  pytest && \
+                  bash tools/create_asm.sh"
 
     - uses: actions/upload-artifact@v4
       with:
@@ -219,12 +188,6 @@ jobs:
     - name: Run tests with pytest
       run: pytest
 
-    - name: Type checking with mypy
-      run: mypy
-
-    #- name: Lint code with flake8
-    #  run: flake8
-
     - uses: actions/upload-artifact@v4
       if: strategy.job-index == 0
       with:
@@ -234,7 +197,7 @@ jobs:
   release-stencils:
     needs: [build_stencils, build-ubuntu, build-windows, build-arm64, build-armv7]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
       contents: write
     steps:
@@ -262,7 +225,6 @@ jobs:
           mkdir -p release
           cp tmp/stencil-object-files/* release/
           cp tmp/musl-object-files/* release/
-          cp tmp/cross-runner/coparun-* release/
           cp tmp/runner-linux/coparun release/
           cp tmp/runner-linux-arm64/coparun release/coparun-aarch64
           cp tmp/runner-linux-armv7/coparun release/coparun-armv7
