@@ -9,11 +9,11 @@ Embedded systems comes with a variety of CPU architectures. The **copy and patch
 
 The summarized main features are:
 - Fast to write & easy to read
-- Memory and type safety, minimal set of runtime errors [^1]
+- Memory and type safety, minimal set of runtime errors
 - deterministic execution
 - Auto grad for efficient realtime optimizations
-- Optimized machine code for the target architectures x68_64, Aarch64 and ARMv7 [^3]
-- Very portable to new architectures [^2]
+- Optimized machine code for the target architectures x68_64, Aarch64 and ARMv7
+- Very portable to new architectures
 - Small python package, minimal dependencies, no cross compile toolchain required
 
 ## Current state
@@ -24,21 +24,23 @@ Currently worked on:
 - For targeting Crossover‑MCUs, support for Thumb instructions required by ARM*-M is on the way.
 - Constant-regrouping for symbolic optimization of the computation graph.
 
-## Getting started & example
+## Install
 To install copapy, you can use pip. Precompiled wheels are available for Linux (x86_64, Aarch64 and ARMv7), Windows (x86_64) and Mac OS (x86_64, Aarch64):
 
 ```bash
 pip install copapy
 ```
 
+## Examples
+### Basic example
 A very simple example program using copapy can look like this:
 
 ```python
 import copapy as cp
 
 # Define variables
-a = cp.variable(0.25)
-b = cp.variable(0.87)
+a = cp.value(0.25)
+b = cp.value(0.87)
 
 # Define computations
 c = a + b * 2.0
@@ -56,6 +58,7 @@ print("Result d:", tg.read_value(d))
 print("Result e:", tg.read_value(e))
 ```
 
+### Inverse kinematics
 An other example using autograd in copapy. Here for for implementing
 gradient descent to solve a reverse kinematic problem for
 a two joint 2D arm:
@@ -80,15 +83,14 @@ def forward_kinematics(theta1, theta2):
     return joint, end_effector
 
 # Start values
-theta = cp.vector([cp.variable(0.0), cp.variable(0.0)])
+theta = cp.vector([cp.value(0.0), cp.value(0.0)])
 
 # Iterative inverse kinematic
 for _ in range(48):
     joint, effector = forward_kinematics(theta[0], theta[1])
     error = ((target - effector) ** 2).sum()
 
-    grad_vec = cp.grad(error, theta)
-    theta -= alpha * grad_vec
+    theta -= alpha * cp.grad(error, theta)
 
 tg = cp.Target()
 tg.compile(error, theta, joint)
