@@ -21,3 +21,5 @@ build/*
 /src/*.pyd
 vc140.pdb
 benchmark_results*
+docs/build
+docs/source/api

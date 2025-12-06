@@ -36,6 +36,12 @@ dev = [
     "mypy",
     "pytest"
 ]
+doc_build = [
+  "sphinx",
+  "pydata_sphinx_theme",
+  "sphinx-autodoc-typehints",
+  "myst-parser"
+]
 
 [tool.mypy]
 files = ["src", "tools", "stencils"]
