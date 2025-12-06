@@ -40,11 +40,11 @@ class Target():
         for s in variables:
             if isinstance(s, Iterable):
                 for net in s:
-                    assert isinstance(net, Net), f"The folowing element is not a Net: {net}"
-                    nodes.append(Write(net))
+                    if isinstance(net, Net):
+                        nodes.append(Write(net))
             else:
-                assert isinstance(s, Net), f"The folowing element is not a Net: {s}"
-                nodes.append(Write(s))
+                if isinstance(s, Net):
+                    nodes.append(Write(s))
 
         dw, self._variables = compile_to_dag(nodes, self.sdb)
         dw.write_com(binw.Command.END_COM)

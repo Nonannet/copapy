@@ -20,9 +20,10 @@ class matrix(Generic[TNum]):
             values: iterable of iterable of constant values and variables
         """
         if isinstance(values, vector):
-            rows = (values.values,)
+            rows = [values.values]
         else:
-            rows = tuple(tuple(row) for row in values)
+            rows = [tuple(row) for row in values]
+
         if rows:
             row_len = len(rows[0])
             assert all(len(row) == row_len for row in rows), "All rows must have the same length"

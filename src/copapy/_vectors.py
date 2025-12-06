@@ -30,7 +30,13 @@ class vector(Generic[TNum]):
     def __len__(self) -> int:
         return len(self.values)
 
-    def __getitem__(self, index: int) -> variable[TNum] | TNum:
+    @overload
+    def __getitem__(self, index: int) -> variable[TNum] | TNum: ...
+    @overload
+    def __getitem__(self, index: slice) -> 'vector[TNum]': ...
+    def __getitem__(self, index: int | slice) -> 'vector[TNum] | variable[TNum] | TNum':
+        if isinstance(index, slice):
+            return vector(self.values[index])
         return self.values[index]
 
     def __neg__(self) -> 'vector[TNum]':
@@ -110,6 +116,29 @@ class vector(Generic[TNum]):
     def __rmul__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __rmul__(self, other: VecNumLike) -> Any:
         return self * other
+
+    @overload
+    def __pow__(self: 'vector[int]', other: VecFloatLike) -> 'vector[float]': ...
+    @overload
+    def __pow__(self: 'vector[int]', other: VecIntLike) -> 'vector[int]': ...
+    @overload
+    def __pow__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
+    @overload
+    def __pow__(self, other: VecNumLike) -> 'vector[int] | vector[float]': ...
+    def __pow__(self, other: VecNumLike) -> Any:
+        if isinstance(other, vector):
+            assert len(self.values) == len(other.values)
+            return vector(a ** b for a, b in zip(self.values, other.values))
+        return vector(a ** other for a in self.values)
+
+    @overload
+    def __rpow__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
+    @overload
+    def __rpow__(self: 'vector[int]', other: variable[int] | int) -> 'vector[int]': ...
+    @overload
+    def __rpow__(self, other: VecNumLike) -> 'vector[Any]': ...
+    def __rpow__(self, other: VecNumLike) -> Any:
+        return self ** other
 
     def __truediv__(self, other: VecNumLike) -> 'vector[float]':
         if isinstance(other, vector):
