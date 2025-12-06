@@ -20,8 +20,8 @@ def cp_vs_python(path: str):
 
     results: list[dict[str, str | float | int]] = []
 
-    for _ in range(7):
-        for v_size in [10, 20, 40, 60] + list(range(100, 500, 50)):
+    for _ in range(15):
+        for v_size in [10, 30, 60] + list(range(100, 600, 100)):
 
             sum_size = 10
             #v_size = 400
@@ -51,7 +51,7 @@ def cp_vs_python(path: str):
 
             time.sleep(0.1)
             t0 = time.perf_counter()
-            for _ in range(iter_size//10):
+            for _ in range(iter_size//100):
                 v3 = sum((v1 + i) @ v2 for i in range(sum_size))
 
             elapsed_python = time.perf_counter() - t0
@@ -84,16 +84,25 @@ def cp_vs_python_sparse(path: str = 'benchmark_results_001_sparse.json'):
     results: list[dict[str, str | float | int]] = []
 
     for _ in range(7):
-        for v_size in [10, 20, 40, 60] + list(range(100, 500, 50)):
+        for v_size in [8, 8, 16, 20, 24, 32]:
+
+            n_ones = int((v_size ** 2) * 0.5)
+            n_zeros = (v_size ** 2) - n_ones
+            mask = np.array([1] * n_ones + [0] * n_zeros).reshape((v_size, v_size))
+            np.random.shuffle(mask)
 
             sum_size = 10
             #v_size = 400
-            iter_size = 30000
+            iter_size = 3000
 
             v1 = cp.vector(cp.variable(float(v)) for v in range(v_size))
             v2 = cp.vector(cp.variable(float(v)) for v in [5]*v_size)
 
-            v3 = sum((cp.diagonal(v1) + i) @ v2 for i in range(sum_size))
+            test = cp.vector(np.linspace(0, 1, v_size))
+
+            assert False, test * v2
+
+            v3 = sum(((cp.diagonal(v1) + i) * cp.matrix(mask)) @ v2 for i in range(sum_size))
 
             tg = cp.Target()
             tg.compile(v3)
@@ -114,8 +123,8 @@ def cp_vs_python_sparse(path: str = 'benchmark_results_001_sparse.json'):
 
             time.sleep(0.1)
             t0 = time.perf_counter()
-            for _ in range(iter_size//10):
-                v3 = sum((cp.diagonal(v1) + i) @ v2 for i in range(sum_size))
+            for _ in range(iter_size//1000):
+                v3 = sum(((cp.diagonal(v1) + i) * cp.matrix(mask)) @ v2 for i in range(sum_size))
 
             elapsed_python = time.perf_counter() - t0
 
@@ -124,12 +133,13 @@ def cp_vs_python_sparse(path: str = 'benchmark_results_001_sparse.json'):
 
             v1 = np.array(list(range(v_size)), dtype=np.float32)
             v2 = np.array([5]*v_size, dtype=np.float32)
-            i = np.array(list(range(sum_size)), dtype=np.int32).reshape([sum_size, 1, 1])
+            i_arr = np.array(list(range(sum_size)), dtype=np.int32).reshape([sum_size, 1, 1])
+            tmp1 = v1 * np.eye(v_size) + i_arr
 
             time.sleep(0.1)
             t0 = time.perf_counter()
             for _ in range(iter_size):
-                v3 = np.sum((v1 * np.eye(v_size) + i) @ v2)
+                v3 = np.sum(((tmp1) * mask) @ v2)
 
             elapsed_np = time.perf_counter() - t0
 
@@ -205,10 +215,10 @@ if __name__ == "__main__":
         subprocess.run([sys.executable, "tests/benchmark.py"])
     elif 'plot' in sys.argv[1:]:
         plot_results(path1)
-        plot_results(path2)
+        #plot_results(path2)
     else:
         cp_vs_python(path1)
         plot_results(path1)
 
-        cp_vs_python_sparse(path2)
-        plot_results(path2)
+        #cp_vs_python_sparse(path2)
+        #plot_results(path2)
