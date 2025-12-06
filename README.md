@@ -56,6 +56,56 @@ print("Result d:", tg.read_value(d))
 print("Result e:", tg.read_value(e))
 ```
 
+An other example using autograd in copapy. Here for for implementing
+gradient descent to solve a reverse kinematic problem for
+a two joint 2D arm:
+
+```python
+import copapy as cp
+
+# Arm lengths
+l1, l2 = 1.8, 2.0
+
+# Target position
+target = cp.vector([0.7, 0.7])
+
+# Learning rate for iterative adjustment
+alpha = 0.1
+
+def forward_kinematics(theta1, theta2):
+    """Return positions of joint and end-effector."""
+    joint = cp.vector([l1 * cp.cos(theta1), l1 * cp.sin(theta1)])
+    end_effector = joint + cp.vector([l2 * cp.cos(theta1 + theta2),
+                                    l2 * cp.sin(theta1 + theta2)])
+    return joint, end_effector
+
+# Start values
+theta = cp.vector([cp.variable(0.0), cp.variable(0.0)])
+
+# Iterative inverse kinematic
+for _ in range(48):
+    joint, effector = forward_kinematics(theta[0], theta[1])
+    error = ((target - effector) ** 2).sum()
+
+    grad_vec = cp.grad(error, theta)
+    theta -= alpha * grad_vec
+
+tg = cp.Target()
+tg.compile(error, theta, joint)
+tg.run()
+
+print(f"Joint angles: {tg.read_value(theta)}")
+print(f"Joint position: {tg.read_value(joint)}")
+print(f"End-effector position: {tg.read_value(effector)}")
+print(f"quadratic error = {tg.read_value(error)}")
+```
+```
+Joint angles: [-0.7221821546554565, 2.6245293617248535]
+Joint position: [1.3509329557418823, -1.189529299736023]       
+End-effector position: [0.6995794177055359, 0.7014330625534058]
+quadratic error = 2.2305819129542215e-06
+```
+
 ## How it works
 The **Compilation** step starts with tracing the python code to generate an acyclic directed graph (DAG) of variables and operations. The DAG can be optimized and gets than linearized to a sequence of operations. Each operation gets mapped to a pre-compiled stencil, which is a piece of machine code with placeholders for memory addresses. The compiler generates patch instructions to fill the placeholders with the correct memory addresses. The binary code build from the stencils, data for constants and the patch instructions are than passed to the runner for execution. The runner allocates memory for the code and data, applies the patch instructions to correct memory addresses and finally executes the code.
 
