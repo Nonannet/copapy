@@ -1,11 +1,10 @@
-import numpy as np
 import copapy as cp
 
 # Arm lengths
 l1, l2 = 1.8, 2.0
 
 # Target position
-target = np.array([0.7, 0.7])
+target = cp.vector([0.7, 0.7])
 
 # Learning rate for iterative adjustment
 alpha = 0.1
@@ -41,7 +40,8 @@ def test_two_arms():
 
     print(f"Joint angles: {tg.read_value(theta)}")
     print(f"Joint position: {tg.read_value(joint)}")
-    print(f"End-effector position: {tg.read_value(effector)}     quadratic error = {tg.read_value(error)}")
+    print(f"End-effector position: {tg.read_value(effector)}")
+    print(f"quadratic error = {tg.read_value(error)}")
 
 
 if __name__ == '__main__':
