@@ -27,8 +27,8 @@ def cp_vs_python(path: str):
             #v_size = 400
             iter_size = 30000
 
-            v1 = cp.vector(cp.variable(float(v)) for v in range(v_size))
-            v2 = cp.vector(cp.variable(float(v)) for v in [5]*v_size)
+            v1 = cp.vector(cp.value(float(v)) for v in range(v_size))
+            v2 = cp.vector(cp.value(float(v)) for v in [5]*v_size)
 
             v3 = sum((v1 + i) @ v2 for i in range(sum_size))
 
@@ -95,8 +95,8 @@ def cp_vs_python_sparse(path: str = 'benchmark_results_001_sparse.json'):
             #v_size = 400
             iter_size = 3000
 
-            v1 = cp.vector(cp.variable(float(v)) for v in range(v_size))
-            v2 = cp.vector(cp.variable(float(v)) for v in [5]*v_size)
+            v1 = cp.vector(cp.value(float(v)) for v in range(v_size))
+            v2 = cp.vector(cp.value(float(v)) for v in [5]*v_size)
 
             test = cp.vector(np.linspace(0, 1, v_size))
 

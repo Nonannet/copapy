@@ -1,4 +1,4 @@
-from . import variable, vector, matrix
+from . import value, vector, matrix
 import copapy.backend as cpb
 from typing import Any, Sequence, overload
 import copapy as cp
@@ -6,14 +6,14 @@ from ._basic_types import Net, unifloat
 
 
 @overload
-def grad(x: Any, y: variable[Any]) -> unifloat: ...
+def grad(x: Any, y: value[Any]) -> unifloat: ...
 @overload
 def grad(x: Any, y: vector[Any]) -> vector[float]: ...
 @overload
-def grad(x: Any, y: Sequence[variable[Any]]) -> list[unifloat]: ...
+def grad(x: Any, y: Sequence[value[Any]]) -> list[unifloat]: ...
 @overload
 def grad(x: Any, y: matrix[Any]) -> matrix[float]: ...
-def grad(x: Any, y: variable[Any] | Sequence[variable[Any]] | vector[Any] | matrix[Any]) -> Any:
+def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | matrix[Any]) -> Any:
     """Returns the partial derivative dx/dy where x needs to be a scalar
     and y might be a scalar, a list of scalars, a vector or matrix.
 
@@ -24,9 +24,9 @@ def grad(x: Any, y: variable[Any] | Sequence[variable[Any]] | vector[Any] | matr
     Returns:
         Derivative of x with the type and dimensions of y
     """
-    assert isinstance(x, variable), f"Argument x for grad function must be a variable but is {type(x)}."
+    assert isinstance(x, value), f"Argument x for grad function must be a copapy value but is {type(x)}."
 
-    if isinstance(y, variable):
+    if isinstance(y, value):
         y_set = {y}
     if isinstance(y, matrix):
         y_set = {v for row in y for v in row}
@@ -40,7 +40,7 @@ def grad(x: Any, y: variable[Any] | Sequence[variable[Any]] | vector[Any] | matr
     net_lookup = {net.source: net for node in ordered_ops for net in node.args}
     grad_dict: dict[Net, unifloat] = dict()
 
-    def add_grad(val: variable[Any], gradient_value: unifloat) -> None:
+    def add_grad(val: value[Any], gradient_value: unifloat) -> None:
         grad_dict[val] = grad_dict.get(val, 0.0) + gradient_value
 
     for node in reversed(ordered_ops):
@@ -49,8 +49,8 @@ def grad(x: Any, y: variable[Any] | Sequence[variable[Any]] | vector[Any] | matr
             args: Sequence[Any] = list(node.args)
             g = 1.0 if node is x.source else grad_dict[net_lookup[node]]
             opn = node.name.split('_')[0]
-            a: variable[Any] = args[0]
-            b: variable[Any] = args[1] if len(args) > 1 else a
+            a: value[Any] = args[0]
+            b: value[Any] = args[1] if len(args) > 1 else a
 
             if opn in ['ge', 'gt', 'eq', 'ne', 'floordiv', 'bwand', 'bwor', 'bwxor']:
                 pass  # Derivative is 0 for all ops returning integers
@@ -117,10 +117,10 @@ def grad(x: Any, y: variable[Any] | Sequence[variable[Any]] | vector[Any] | matr
             else:
                 raise ValueError(f"Operation {opn} not yet supported for auto diff.")
 
-    if isinstance(y, variable):
+    if isinstance(y, value):
         return grad_dict[y]
     if isinstance(y, vector):
-        return vector(grad_dict[yi] if isinstance(yi, variable) else 0.0 for yi in y)
+        return vector(grad_dict[yi] if isinstance(yi, value) else 0.0 for yi in y)
     if isinstance(y, matrix):
-        return matrix((grad_dict[yi] if isinstance(yi, variable) else 0.0 for yi in row) for row in y)
+        return matrix((grad_dict[yi] if isinstance(yi, value) else 0.0 for yi in row) for row in y)
     return [grad_dict[yi] for yi in y]

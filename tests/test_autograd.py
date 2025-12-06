@@ -1,4 +1,4 @@
-from copapy import variable, grad
+from copapy import value, grad
 import copapy as cp
 import pytest
 
@@ -6,8 +6,8 @@ import pytest
 def test_autograd():
     # Validate against micrograd results from Andrej Karpathy
     # https://github.com/karpathy/micrograd/blob/master/test/test_engine.py
-    a = variable(-4.0)
-    b = variable(2.0)
+    a = value(-4.0)
+    b = value(2.0)
     c = a + b
     d = a * b + b**3
     c += c + 1

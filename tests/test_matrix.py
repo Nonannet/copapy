@@ -13,11 +13,11 @@ def test_matrix_init():
 
 def test_matrix_with_variables():
     """Test matrix initialization with variables"""
-    m1 = cp.matrix([[cp.variable(1), 2], [3, cp.variable(4)]])
+    m1 = cp.matrix([[cp.value(1), 2], [3, cp.value(4)]])
     assert m1.rows == 2
     assert m1.cols == 2
-    assert isinstance(m1[0][0], cp.variable)
-    assert isinstance(m1[1][1], cp.variable)
+    assert isinstance(m1[0][0], cp.value)
+    assert isinstance(m1[1][1], cp.value)
 
 
 def test_matrix_addition():
@@ -201,12 +201,12 @@ def test_matrix_map():
 
 def test_matrix_homogenize():
     """Test homogenizing matrix (converting to all variables)"""
-    m = cp.matrix([[1, cp.variable(2)], [3, 4]])
+    m = cp.matrix([[1, cp.value(2)], [3, 4]])
     m_homo = m.homogenize()
 
     for row in m_homo:
         for elem in row:
-            assert isinstance(elem, cp.variable)
+            assert isinstance(elem, cp.value)
 
 
 def test_identity_matrix():
@@ -254,8 +254,8 @@ def test_diagonal_matrix():
 
 def test_matrix_with_variables_compiled():
     """Test matrix operations with variables in compilation"""
-    m = cp.matrix([[cp.variable(1), 2], [3, cp.variable(4)]])
-    v = cp.vector([cp.variable(5), 6])
+    m = cp.matrix([[cp.value(1), 2], [3, cp.value(4)]])
+    v = cp.vector([cp.value(5), 6])
     result = m @ v
 
     # result[0] = 1*5 + 2*6 = 17

@@ -1,4 +1,4 @@
-from copapy import variable, NumLike
+from copapy import value, NumLike
 from copapy.backend import Write, compile_to_dag
 import copapy
 import subprocess
@@ -22,7 +22,7 @@ def function(c1: NumLike) -> list[NumLike]:
 @pytest.mark.runner
 def test_compile():
 
-    c1 = variable(16)
+    c1 = value(16)
 
     ret = function(c1)
 

@@ -1,4 +1,4 @@
-from copapy import variable
+from copapy import value
 from copapy.backend import Write, compile_to_dag, add_read_command
 import copapy as cp
 import subprocess
@@ -20,7 +20,7 @@ def test_compile():
     test_vals = [0.0, -1.5, -2.0, -2.5, -3.0]
 
     # Function with no passing-on-jump as last instruction:
-    ret_test = [r for v in test_vals for r in (cp.tan(variable(v)),)]
+    ret_test = [r for v in test_vals for r in (cp.tan(value(v)),)]
 
     out = [Write(r) for r in ret_test]
 

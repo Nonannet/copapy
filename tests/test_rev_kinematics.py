@@ -10,7 +10,7 @@ target = cp.vector([0.7, 0.7])
 alpha = 0.1
 
 
-def forward_kinematics(theta1: cp.variable[float] | float, theta2: cp.variable[float] | float) -> tuple[cp.vector[float], cp.vector[float]]:
+def forward_kinematics(theta1: cp.value[float] | float, theta2: cp.value[float] | float) -> tuple[cp.vector[float], cp.vector[float]]:
     """Return positions of joint and end-effector."""
     joint = cp.vector([l1 * cp.cos(theta1), l1 * cp.sin(theta1)])
     end_effector = joint + cp.vector([l2 * cp.cos(theta1 + theta2),
@@ -20,7 +20,7 @@ def forward_kinematics(theta1: cp.variable[float] | float, theta2: cp.variable[f
 
 def test_two_arms():    
     target_vec = cp.vector(target)
-    theta = cp.vector([cp.variable(0.0), cp.variable(0.0)])
+    theta = cp.vector([cp.value(0.0), cp.value(0.0)])
 
     joint = cp.vector([0.0, 0.0])
     effector = cp.vector([0.0, 0.0])

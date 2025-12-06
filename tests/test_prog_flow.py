@@ -1,11 +1,11 @@
-from copapy import variable, Target, iif
+from copapy import value, Target, iif
 import pytest
 import copapy
 
 
 def test_compile():
-    c_i = variable(9)
-    c_f = variable(2.5)
+    c_i = value(9)
+    c_f = value(2.5)
     # c_b = variable(True)
 
     ret_test = (iif(c_f > 5, c_f, -1), iif(c_i > 5, c_f, 8.8), iif(c_i > 2, c_i, 1))
@@ -19,7 +19,7 @@ def test_compile():
     print('* finished')
 
     for test, ref in zip(ret_test, ret_ref):
-        assert isinstance(test, copapy.variable)
+        assert isinstance(test, copapy.value)
         val = tg.read_value(test)
         print('+', val, ref, type(val), test.dtype)
         #for t in (int, float, bool):

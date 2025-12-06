@@ -1,4 +1,4 @@
-from copapy import NumLike, iif, variable
+from copapy import NumLike, iif, value
 from copapy.backend import Write, compile_to_dag, add_read_command
 import subprocess
 from copapy import _binwrite
@@ -84,11 +84,11 @@ def iiftests(c1: NumLike) -> list[NumLike]:
 
 @pytest.mark.runner
 def test_compile():
-    c_i = variable(9)
-    c_f = variable(1.111)
-    c_b = variable(True)
+    c_i = value(9)
+    c_f = value(1.111)
+    c_b = value(True)
 
-    ret_test = function1(c_i) + function1(c_f) + function2(c_i) + function2(c_f) + function3(c_i) + function4(c_i) + function5(c_b) + [variable(9) % 2] + iiftests(c_i) + iiftests(c_f) + [cp.asin(c_i/10)]
+    ret_test = function1(c_i) + function1(c_f) + function2(c_i) + function2(c_f) + function3(c_i) + function4(c_i) + function5(c_b) + [value(9) % 2] + iiftests(c_i) + iiftests(c_f) + [cp.asin(c_i/10)]
     ret_ref = function1(9) + function1(1.111) + function2(9) + function2(1.111) + function3(9) + function4(9) + function5(True) + [9 % 2] + iiftests(9) + iiftests(1.111) + [cp.asin(9/10)]
 
     out = [Write(r) for r in ret_test]
@@ -145,7 +145,7 @@ def test_compile():
     result_data = parse_results(result)
 
     for test, ref in zip(ret_test, ret_ref):
-        assert isinstance(test, variable)
+        assert isinstance(test, value)
         address = variables[test][0]
         data = result_data[address]
         if test.dtype == 'int':

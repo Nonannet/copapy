@@ -1,4 +1,4 @@
-from copapy import NumLike, iif, variable
+from copapy import NumLike, iif, value
 from copapy.backend import Write, compile_to_dag, add_read_command
 import subprocess
 from copapy import _binwrite
@@ -77,7 +77,7 @@ def test_compile():
     #t4 = ((t3 * t1) * 2).sum()
     #t5 = ((t3 * t1) * 2).magnitude()
 
-    c_i = variable(9)
+    c_i = value(9)
     #c_f = variable(1.111)
     #c_b = variable(True)
 
@@ -87,7 +87,7 @@ def test_compile():
     #ret_test = [cp.sin(c_i), cp.asin(variable(0.0))]
     #ret_ref = [cp.sin(9), cp.asin(0.0)]
 
-    ret_test: list[variable[float]] = []
+    ret_test: list[value[float]] = []
     ret_ref: list[float] = []
     #sval = variable(8.0)
     #tval = 8.0
@@ -155,7 +155,7 @@ def test_compile():
         result_data = parse_results(result)
 
         for test, ref in zip(ret_test, ret_ref):
-            assert isinstance(test, variable)
+            assert isinstance(test, value)
             address = variables[test][0]
             data = result_data[address]
             if test.dtype == 'int':

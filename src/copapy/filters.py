@@ -1,15 +1,15 @@
-from . import variable, vector
+from . import value, vector
 from ._basic_types import iif, unifloat
 from._helper_types import TNum
 from typing import Any, Iterable
 
 
-def homogenize_vector(input_values: Iterable[TNum | variable[TNum]]) -> Iterable[TNum] | Iterable[variable[TNum]]:
+def homogenize_vector(input_values: Iterable[TNum | value[TNum]]) -> Iterable[TNum] | Iterable[value[TNum]]:
     input_list = list(input_values)
-    if any(isinstance(val, variable) for val in input_list):
-        return (v if isinstance(v, variable) else variable(v) for v in input_list)
+    if any(isinstance(val, value) for val in input_list):
+        return (v if isinstance(v, value) else value(v) for v in input_list)
     else:
-        return (v for v in input_list if not isinstance(v, variable))
+        return (v for v in input_list if not isinstance(v, value))
 
 
 def _inv_argsort(input_vector: vector[TNum]) -> vector[int]:
@@ -31,7 +31,7 @@ def argsort(input_vector: vector[TNum]) -> vector[int]:
     return _inv_argsort(_inv_argsort(input_vector))
 
 
-def median(input_vector: vector[TNum]) -> TNum | variable[TNum]:
+def median(input_vector: vector[TNum]) -> TNum | value[TNum]:
     """
     Applies a median filter to the input vector and returns the median as a unifloat.
 

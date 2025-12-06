@@ -9,9 +9,9 @@ from copapy._compiler import patch_entry, CPConstant, get_aux_func_layout
 
 
 def test_timing_compiler():
-    t1 = cp.vector([10, 11]*128) + cp.vector(cp.variable(v) for v in range(256))
+    t1 = cp.vector([10, 11]*128) + cp.vector(cp.value(v) for v in range(256))
     #t2 = t1.sum()
-    t3 = cp.vector(cp.variable(1 / (v + 1)) for v in range(256))
+    t3 = cp.vector(cp.value(1 / (v + 1)) for v in range(256))
     t5 = ((t3 * t1) * 2).magnitude()
     out = [Write(t5)]
 

@@ -3,8 +3,8 @@ import pytest
 
 def test_readme_example():
     # Define variables
-    a = cp.variable(0.25)
-    b = cp.variable(0.87)
+    a = cp.value(0.25)
+    b = cp.value(0.87)
 
     # Define computations
     c = a + b * 2.0

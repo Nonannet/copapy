@@ -1,4 +1,4 @@
-from copapy import variable
+from copapy import value
 from copapy.backend import Write, compile_to_dag, stencil_db_from_package
 from copapy._binwrite import Command
 import copapy as cp
@@ -6,7 +6,7 @@ import copapy as cp
 
 def compile_to_x86_64() -> None:
     """Test compilation of a simple program for x86_64."""
-    c1 = variable(9.0)
+    c1 = value(9.0)
 
     #ret = [c1 / 4, c1 / -4, c1 // 4, c1 // -4, (c1 * -1) // 4]
     ret = [c1 // 3.3 + 5]
@@ -29,14 +29,14 @@ def compile_to_x86_64() -> None:
 
 def compile_to_x86() -> None:
     """Test compilation of a simple program for x86 32 bit."""
-    c1 = variable(9.0)
+    c1 = value(9.0)
 
     #ret = [c1 / 4, c1 / -4, c1 // 4, c1 // -4, (c1 * -1) // 4]
     ret = [c1 // 3.3 + 5]
     #ret = [cp.sqrt(c1)]
     #c2 = cp._math.get_42()
     #ret = [c2]
-    ret = [cp.sin(variable(2.5))]
+    ret = [cp.sin(value(2.5))]
 
     out = [Write(r) for r in ret]
 
@@ -53,7 +53,7 @@ def compile_to_x86() -> None:
 
 def compile_to_aarch64() -> None:
     """Test compilation of a simple program for arm64."""
-    c1 = variable(9.0)
+    c1 = value(9.0)
 
     #ret = [c1 / 4, c1 / -4, c1 // 4, c1 // -4, (c1 * -1) // 4]
     #ret = [cp.sin(c1), cp.sqrt(c1) + 5]

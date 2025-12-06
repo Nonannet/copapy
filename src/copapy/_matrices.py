@@ -1,23 +1,23 @@
-from . import variable
+from . import value
 from ._vectors import vector
 from ._mixed import mixed_sum
 from typing import TypeVar, Iterable, Any, overload, TypeAlias, Callable, Iterator, Generic
 from ._helper_types import TNum
 
-MatNumLike: TypeAlias = 'matrix[int] | matrix[float] | variable[int] | variable[float] | int | float'
-MatIntLike: TypeAlias = 'matrix[int] | variable[int] | int'
-MatFloatLike: TypeAlias = 'matrix[float] | variable[float] | float'
+MatNumLike: TypeAlias = 'matrix[int] | matrix[float] | value[int] | value[float] | int | float'
+MatIntLike: TypeAlias = 'matrix[int] | value[int] | int'
+MatFloatLike: TypeAlias = 'matrix[float] | value[float] | float'
 U = TypeVar("U", int, float)
 
 
 class matrix(Generic[TNum]):
-    """Mathematical matrix class supporting basic operations and interactions with variables.
+    """Mathematical matrix class supporting basic operations and interactions with values.
     """
-    def __init__(self, values: Iterable[Iterable[TNum | variable[TNum]]] | vector[TNum]):
-        """Create a matrix with given values and variables.
+    def __init__(self, values: Iterable[Iterable[TNum | value[TNum]]] | vector[TNum]):
+        """Create a matrix with given values.
 
         Args:
-            values: iterable of iterable of constant values and variables
+            values: iterable of iterable of constant values
         """
         if isinstance(values, vector):
             rows = [values.values]
@@ -27,7 +27,7 @@ class matrix(Generic[TNum]):
         if rows:
             row_len = len(rows[0])
             assert all(len(row) == row_len for row in rows), "All rows must have the same length"
-        self.values: tuple[tuple[variable[TNum] | TNum, ...], ...] = tuple(rows)
+        self.values: tuple[tuple[value[TNum] | TNum, ...], ...] = tuple(rows)
         self.rows = len(self.values)
         self.cols = len(self.values[0]) if self.values else 0
 
@@ -41,7 +41,7 @@ class matrix(Generic[TNum]):
     @overload
     def __getitem__(self, key: int) -> vector[TNum]: ...
     @overload
-    def __getitem__(self, key: tuple[int, int]) -> variable[TNum] | TNum: ...
+    def __getitem__(self, key: tuple[int, int]) -> value[TNum] | TNum: ...
     def __getitem__(self, key: int | tuple[int, int]) -> Any:
         """Get a row as a vector or a specific element.
             Args:
@@ -56,7 +56,7 @@ class matrix(Generic[TNum]):
         else:
             return vector(self.values[key])
 
-    def __iter__(self) -> Iterator[tuple[variable[TNum] | TNum, ...]]:
+    def __iter__(self) -> Iterator[tuple[value[TNum] | TNum, ...]]:
         return iter(self.values)
 
     def __neg__(self) -> 'matrix[TNum]':
@@ -86,7 +86,7 @@ class matrix(Generic[TNum]):
     @overload
     def __radd__(self: 'matrix[float]', other: MatNumLike) -> 'matrix[float]': ...
     @overload
-    def __radd__(self: 'matrix[int]', other: variable[int] | int) -> 'matrix[int]': ...
+    def __radd__(self: 'matrix[int]', other: value[int] | int) -> 'matrix[int]': ...
     def __radd__(self, other: Any) -> Any:
         return self + other
 
@@ -114,7 +114,7 @@ class matrix(Generic[TNum]):
     @overload
     def __rsub__(self: 'matrix[float]', other: MatNumLike) -> 'matrix[float]': ...
     @overload
-    def __rsub__(self: 'matrix[int]', other: variable[int] | int) -> 'matrix[int]': ...
+    def __rsub__(self: 'matrix[int]', other: value[int] | int) -> 'matrix[int]': ...
     def __rsub__(self, other: MatNumLike) -> Any:
         if isinstance(other, matrix):
             assert self.rows == other.rows and self.cols == other.cols, \
@@ -153,7 +153,7 @@ class matrix(Generic[TNum]):
     @overload
     def __rmul__(self: 'matrix[float]', other: MatNumLike) -> 'matrix[float]': ...
     @overload
-    def __rmul__(self: 'matrix[int]', other: variable[int] | int) -> 'matrix[int]': ...
+    def __rmul__(self: 'matrix[int]', other: value[int] | int) -> 'matrix[int]': ...
     def __rmul__(self, other: MatNumLike) -> Any:
         return self * other
 
@@ -199,9 +199,9 @@ class matrix(Generic[TNum]):
             assert isinstance(other, matrix), "Cannot multiply matrix with {type(other)}"
             assert self.cols == other.rows, \
                 f"Matrix columns ({self.cols}) must match other matrix rows ({other.rows})"
-            result: list[list[TNum | variable[TNum]]] = []
+            result: list[list[TNum | value[TNum]]] = []
             for row in self.values:
-                new_row: list[TNum | variable[TNum]] = []
+                new_row: list[TNum | value[TNum]] = []
                 for col_idx in range(other.cols):
                     col = tuple(other.values[i][col_idx] for i in range(other.rows))
                     element = sum(a * b for a, b in zip(row, col))
@@ -238,27 +238,27 @@ class matrix(Generic[TNum]):
         return vector(self.values[i][index] for i in range(self.rows))
 
     @overload
-    def trace(self: 'matrix[TNum]') -> TNum | variable[TNum]: ...
+    def trace(self: 'matrix[TNum]') -> TNum | value[TNum]: ...
     @overload
-    def trace(self: 'matrix[int]') -> int | variable[int]: ...
+    def trace(self: 'matrix[int]') -> int | value[int]: ...
     @overload
-    def trace(self: 'matrix[float]') -> float | variable[float]: ...
+    def trace(self: 'matrix[float]') -> float | value[float]: ...
     def trace(self) -> Any:
         """Calculate the trace (sum of diagonal elements)."""
         assert self.rows == self.cols, "Trace is only defined for square matrices"
         return mixed_sum(self.values[i][i] for i in range(self.rows))
 
     @overload
-    def sum(self: 'matrix[TNum]') -> TNum | variable[TNum]: ...
+    def sum(self: 'matrix[TNum]') -> TNum | value[TNum]: ...
     @overload
-    def sum(self: 'matrix[int]') -> int | variable[int]: ...
+    def sum(self: 'matrix[int]') -> int | value[int]: ...
     @overload
-    def sum(self: 'matrix[float]') -> float | variable[float]: ...
+    def sum(self: 'matrix[float]') -> float | value[float]: ...
     def sum(self) -> Any:
         """Calculate the sum of all elements."""
         return mixed_sum(a for row in self.values for a in row)
 
-    def map(self, func: Callable[[Any], variable[U] | U]) -> 'matrix[U]':
+    def map(self, func: Callable[[Any], value[U] | U]) -> 'matrix[U]':
         """Applies a function to each element of the matrix and returns a new matrix."""
         return matrix(
             tuple(func(a) for a in row)
@@ -266,10 +266,10 @@ class matrix(Generic[TNum]):
         )
 
     def homogenize(self) -> 'matrix[TNum]':
-        """Convert all elements to variables if any element is a variable."""
-        if any(isinstance(val, variable) for row in self.values for val in row):
+        """Convert all elements to copapy values if any element is a copapy value."""
+        if any(isinstance(val, value) for row in self.values for val in row):
             return matrix(
-                tuple(variable(val) if not isinstance(val, variable) else val for val in row)
+                tuple(value(val) if not isinstance(val, value) else val for val in row)
                 for row in self.values
             )
         else:
