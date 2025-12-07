@@ -26,7 +26,7 @@ def run_command(command: list[str]) -> str:
 def check_for_qemu() -> bool:
     command = qemu_command + ['--version']
     try:
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf8', check=False)
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     except Exception:
         return False
     return result.returncode == 0
@@ -43,10 +43,10 @@ def function(c1: NumLike, c2: NumLike) -> tuple[NumLike, ...]:
 
 @pytest.mark.runner
 def test_compile():
-    t1 = cp.vector([10, 11, 12]) + cp.vector(cp.variable(v) for v in range(3))
+    t1 = cp.vector([10, 11, 12]) + cp.vector(cp.value(v) for v in range(3))
     t2 = t1.sum()
 
-    t3 = cp.vector(cp.variable(1 / (v + 1)) for v in range(3))
+    t3 = cp.vector(cp.value(1 / (v + 1)) for v in range(3))
     t4 = ((t3 * t1) * 2).sum()
     t5 = ((t3 * t1) * 2).magnitude()
 

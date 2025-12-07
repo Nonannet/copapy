@@ -58,10 +58,3 @@ arm-none-eabi-ld -r $STMP /object_files/musl_objects_armv7.o $LIBGCC -o $DEST/st
 
 # RISCV 64 Bit
 #riscv64-linux-gnu-gcc-13 $FLAGS -$OPT -c $SRC -o $DEST/stencils_riscv64_$OPT.o
-
-
-# -------------- Cross compile runner --------------
-mkdir -p build/runner
-
-# Aarch64
-aarch64-linux-gnu-gcc-13 -static -O3 -DENABLE_LOGGING -o build/runner/coparun-aarch64 src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c

@@ -1,4 +1,4 @@
-from copapy import variable
+from copapy import value
 from copapy.backend import Write, compile_to_dag, add_read_command
 import copapy as cp
 import subprocess
@@ -18,7 +18,7 @@ def run_command(command: list[str]) -> str:
 def test_compile_sqrt():
     test_vals = [0.0, 0.0001, 0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.28318530718, 100.0, 1000.0, 100000.0]
 
-    ret = [r for v in test_vals for r in (cp.sqrt(variable(v)),)]
+    ret = [r for v in test_vals for r in (cp.sqrt(value(v)),)]
 
 
     out = [Write(r) for r in ret]
@@ -52,7 +52,7 @@ def test_compile_sqrt():
 def test_compile_log():
     test_vals = [0.0, 0.0001, 0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.28318530718, 100.0, 1000.0, 100000.0]
 
-    ret = [r for v in test_vals for r in (cp.log(variable(v)),)]
+    ret = [r for v in test_vals for r in (cp.log(value(v)),)]
 
 
     out = [Write(r) for r in ret]
@@ -86,7 +86,7 @@ def test_compile_log():
 def test_compile_sin():
     test_vals = [0.0, 0.0001, 0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.28318530718, 100.0, 1000.0, 100000.0]
 
-    ret = [r for v in test_vals for r in (cp.sin(variable(v)),)]
+    ret = [r for v in test_vals for r in (cp.sin(value(v)),)]
 
 
     out = [Write(r) for r in ret]

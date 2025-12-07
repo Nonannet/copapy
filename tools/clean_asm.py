@@ -28,7 +28,7 @@ def main() -> None:
         if outp_flag:
             print(line + '<br>')
 
-        if "Disassembly of section .text:" in line:
+        if "Disassembly of section .text" in line:
             outp_flag = True
 
     print('</code>')

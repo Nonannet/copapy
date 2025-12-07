@@ -1,17 +1,17 @@
 import time
-from copapy import variable
 from copapy import backend
 from copapy.backend import Write, stencil_db_from_package
-import copapy.backend as cpbe
+import copapy.backend as cpb
 import copapy as cp
 import copapy._binwrite as binw
 from copapy._compiler import get_nets, get_section_layout, get_data_layout
 from copapy._compiler import patch_entry, CPConstant, get_aux_func_layout
 
+
 def test_timing_compiler():
-    t1 = cp.vector([10, 11]*128) + cp.vector(cp.variable(v) for v in range(256))
-    t2 = t1.sum()
-    t3 = cp.vector(cp.variable(1 / (v + 1)) for v in range(256))
+    t1 = cp.vector([10, 11]*128) + cp.vector(cp.value(v) for v in range(256))
+    #t2 = t1.sum()
+    t3 = cp.vector(cp.value(1 / (v + 1)) for v in range(256))
     t5 = ((t3 * t1) * 2).magnitude()
     out = [Write(t5)]
 
@@ -19,7 +19,7 @@ def test_timing_compiler():
 
     print('-- get_edges:')
     t0 = time.time()
-    edges = list(cpbe.get_all_dag_edges(out))
+    edges = list(cpb.get_all_dag_edges(out))
     t1 = time.time()
     print(f'   found {len(edges)} edges')
     #for p in edges:
@@ -28,7 +28,7 @@ def test_timing_compiler():
 
     print('-- get_ordered_ops:')
     t0 = time.time()
-    ordered_ops = list(cpbe.stable_toposort(edges))
+    ordered_ops = cpb.stable_toposort(edges)
     t1 = time.time()
     print(f'   found {len(ordered_ops)} ops')
     #for p in ordered_ops:
@@ -37,7 +37,7 @@ def test_timing_compiler():
 
     print('-- get_consts:')
     t0 = time.time()
-    const_net_list = cpbe.get_const_nets(ordered_ops)
+    const_net_list = cpb.get_const_nets(ordered_ops)
     t1 = time.time()
     #for p in const_list:
     #    print('#', p)
@@ -45,7 +45,7 @@ def test_timing_compiler():
 
     print('-- add_read_ops:')
     t0 = time.time()
-    output_ops = list(cpbe.add_read_ops(ordered_ops))
+    output_ops = list(cpb.add_read_ops(ordered_ops))
     t1 = time.time()
     #for p in output_ops:
     #    print('#', p)
@@ -53,7 +53,7 @@ def test_timing_compiler():
 
     print('-- add_write_ops:')
     t0 = time.time()
-    extended_output_ops = list(cpbe.add_write_ops(output_ops, const_net_list))
+    extended_output_ops = list(cpb.add_write_ops(output_ops, const_net_list))
     t1 = time.time()
     #for p in extended_output_ops:
     #    print('#', p)

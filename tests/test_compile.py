@@ -49,10 +49,10 @@ def test_compile():
     #ret = function(c1, c2)
     #ret = [c1 // 3.3 + 5]
 
-    t1 = cp.vector([10, 11, 12]) + cp.vector(cp.variable(v) for v in range(3))
+    t1 = cp.vector([10, 11, 12]) + cp.vector(cp.value(v) for v in range(3))
     t2 = t1.sum()
 
-    t3 = cp.vector(cp.variable(1 / (v + 1)) for v in range(3))
+    t3 = cp.vector(cp.value(1 / (v + 1)) for v in range(3))
     t4 = ((t3 * t1) * 2).sum()
     t5 = ((t3 * t1) * 2).magnitude()
 

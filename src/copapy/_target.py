@@ -1,10 +1,12 @@
-from typing import Iterable, overload
+from typing import Iterable, overload, TypeVar, Any
 from . import _binwrite as binw
 from coparun_module import coparun, read_data_mem
 import struct
 from ._basic_types import stencil_db_from_package
-from ._basic_types import variable, Net, Node, Write, NumLike
+from ._basic_types import value, Net, Node, Write, NumLike
 from ._compiler import compile_to_dag
+
+T = TypeVar("T", int, float)
 
 
 def add_read_command(dw: binw.data_writer, variables: dict[Net, tuple[int, int, str]], net: Net) -> None:
@@ -26,24 +28,25 @@ class Target():
             optimization: Optimization level
         """
         self.sdb = stencil_db_from_package(arch, optimization)
-        self._variables: dict[Net, tuple[int, int, str]] = {}
+        self._values: dict[Net, tuple[int, int, str]] = {}
 
-    def compile(self, *variables: int | float | variable[int] | variable[float] | variable[bool] | Iterable[int | float | variable[int] | variable[float] | variable[bool]]) -> None:
-        """Compiles the code to compute the given variables.
+    def compile(self, *values: int | float | value[int] | value[float] | Iterable[int | float | value[int] | value[float]]) -> None:
+        """Compiles the code to compute the given values.
 
         Arguments:
-            variables: Variables to compute
+            values: Values to compute
         """
         nodes: list[Node] = []
-        for s in variables:
+        for s in values:
             if isinstance(s, Iterable):
                 for net in s:
-                    assert isinstance(net, Net), f"The folowing element is not a Net: {net}"
-                    nodes.append(Write(net))
+                    if isinstance(net, Net):
+                        nodes.append(Write(net))
             else:
-                nodes.append(Write(s))
+                if isinstance(s, Net):
+                    nodes.append(Write(s))
 
-        dw, self._variables = compile_to_dag(nodes, self.sdb)
+        dw, self._values = compile_to_dag(nodes, self.sdb)
         dw.write_com(binw.Command.END_COM)
         assert coparun(dw.get_data()) > 0
 
@@ -56,59 +59,56 @@ class Target():
         assert coparun(dw.get_data()) > 0
 
     @overload
-    def read_value(self, net: variable[bool]) -> bool:
-        ...
-
+    def read_value(self, net: value[T]) -> T: ...
     @overload
-    def read_value(self, net: variable[float]) -> float:
-        ...
-
+    def read_value(self, net: NumLike) -> float | int | bool: ...
     @overload
-    def read_value(self, net: variable[int]) -> int:
-        ...
-
-    @overload
-    def read_value(self, net: NumLike) -> float | int | bool:
-        ...
-
-    def read_value(self, net: NumLike) -> float | int | bool:
-        """Reads the value of a variable.
+    def read_value(self, net: Iterable[T | value[T]]) -> list[T]: ...
+    def read_value(self, net: NumLike | value[T] | Iterable[T | value[T]]) -> Any:
+        """Reads the numeric value of a copapy type.
 
         Arguments:
-            net: Variable to read
+            net: Values to read
 
         Returns:
-            Value of the variable
+            Numeric value
         """
-        assert isinstance(net, Net), "Variable must be a copapy variable object"
-        assert net in self._variables, f"Variable {net} not found. It might not have been compiled for the target."
-        addr, lengths, var_type = self._variables[net]
+        if isinstance(net, Iterable):
+            return [self.read_value(ni) if isinstance(ni, value) else ni for ni in net]
+
+        if isinstance(net, float | int):
+            print("Warning: value is not a copypy value")
+            return net
+
+        assert isinstance(net, Net), "Argument must be a copapy value"
+        assert net in self._values, f"Value {net} not found. It might not have been compiled for the target."
+        addr, lengths, var_type = self._values[net]
         assert lengths > 0
         data = read_data_mem(addr, lengths)
-        assert data is not None and len(data) == lengths, f"Failed to read variable {net}"
+        assert data is not None and len(data) == lengths, f"Failed to read value {net}"
         en = {'little': '<', 'big': '>'}[self.sdb.byteorder]
         if var_type == 'float':
             if lengths == 4:
-                value = struct.unpack(en + 'f', data)[0]
+                val = struct.unpack(en + 'f', data)[0]
             elif lengths == 8:
-                value = struct.unpack(en + 'd', data)[0]
+                val = struct.unpack(en + 'd', data)[0]
             else:
                 raise ValueError(f"Unsupported float length: {lengths} bytes")
-            assert isinstance(value, float)
-            return value
+            assert isinstance(val, float)
+            return val
         elif var_type == 'int':
             assert lengths in (1, 2, 4, 8), f"Unsupported int length: {lengths} bytes"
-            value = int.from_bytes(data, byteorder=self.sdb.byteorder, signed=True)
-            return value
+            val = int.from_bytes(data, byteorder=self.sdb.byteorder, signed=True)
+            return val
         elif var_type == 'bool':
             assert lengths in (1, 2, 4, 8), f"Unsupported int length: {lengths} bytes"
-            value = bool.from_bytes(data, byteorder=self.sdb.byteorder, signed=True)
-            return value
+            val = bool.from_bytes(data, byteorder=self.sdb.byteorder, signed=True)
+            return val
         else:
-            raise ValueError(f"Unsupported variable type: {var_type}")
+            raise ValueError(f"Unsupported value type: {var_type}")
 
     def read_value_remote(self, net: Net) -> None:
-        """Reads the raw data of a variable by the runner."""
+        """Reads the raw data of a value by the runner."""
         dw = binw.data_writer(self.sdb.byteorder)
-        add_read_command(dw, self._variables, net)
+        add_read_command(dw, self._values, net)
         assert coparun(dw.get_data()) > 0

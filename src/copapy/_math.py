@@ -1,17 +1,18 @@
 from . import vector
 from ._vectors import VecNumLike
-from . import variable, NumLike
+from . import value, NumLike
 from typing import TypeVar, Any, overload, Callable
-from ._basic_types import add_op
+from ._basic_types import add_op, unifloat
 import math
 
-T = TypeVar("T", int, float, variable[int], variable[float])
+T = TypeVar("T", int, float, value[int], value[float])
 U = TypeVar("U", int, float)
+
 
 @overload
 def exp(x: float | int) -> float: ...
 @overload
-def exp(x: variable[Any]) -> variable[float]: ...
+def exp(x: value[Any]) -> value[float]: ...
 @overload
 def exp(x: vector[Any]) -> vector[float]: ...
 def exp(x: Any) -> Any:
@@ -23,7 +24,7 @@ def exp(x: Any) -> Any:
     Returns:
         result of e**x
     """
-    if isinstance(x, variable):
+    if isinstance(x, value):
         return add_op('exp', [x])
     if isinstance(x, vector):
         return x.map(exp)
@@ -33,7 +34,7 @@ def exp(x: Any) -> Any:
 @overload
 def log(x: float | int) -> float: ...
 @overload
-def log(x: variable[Any]) -> variable[float]: ...
+def log(x: value[Any]) -> value[float]: ...
 @overload
 def log(x: vector[Any]) -> vector[float]: ...
 def log(x: Any) -> Any:
@@ -45,7 +46,7 @@ def log(x: Any) -> Any:
     Returns:
         result of ln(x)
     """
-    if isinstance(x, variable):
+    if isinstance(x, value):
         return add_op('log', [x])
     if isinstance(x, vector):
         return x.map(log)
@@ -55,9 +56,9 @@ def log(x: Any) -> Any:
 @overload
 def pow(x: float | int, y: float | int) -> float: ...
 @overload
-def pow(x: variable[Any], y: NumLike) -> variable[float]: ...
+def pow(x: value[Any], y: NumLike) -> value[float]: ...
 @overload
-def pow(x: NumLike, y: variable[Any]) -> variable[float]: ...
+def pow(x: NumLike, y: value[Any]) -> value[float]: ...
 @overload
 def pow(x: vector[Any], y: Any) -> vector[float]: ...
 def pow(x: VecNumLike, y: VecNumLike) -> Any:
@@ -80,7 +81,7 @@ def pow(x: VecNumLike, y: VecNumLike) -> Any:
         return m
     if y == -1:
         return 1 / x
-    if isinstance(x, variable) or isinstance(y, variable):
+    if isinstance(x, value) or isinstance(y, value):
         return add_op('pow', [x, y])
     else:
         return float(x ** y)
@@ -89,7 +90,7 @@ def pow(x: VecNumLike, y: VecNumLike) -> Any:
 @overload
 def sqrt(x: float | int) -> float: ...
 @overload
-def sqrt(x: variable[Any]) -> variable[float]: ...
+def sqrt(x: value[Any]) -> value[float]: ...
 @overload
 def sqrt(x: vector[Any]) -> vector[float]: ...
 def sqrt(x: Any) -> Any:
@@ -101,7 +102,7 @@ def sqrt(x: Any) -> Any:
     Returns:
         Square root of x
     """
-    if isinstance(x, variable):
+    if isinstance(x, value):
         return add_op('sqrt', [x])
     if isinstance(x, vector):
         return x.map(sqrt)
@@ -111,7 +112,7 @@ def sqrt(x: Any) -> Any:
 @overload
 def sin(x: float | int) -> float: ...
 @overload
-def sin(x: variable[Any]) -> variable[float]: ...
+def sin(x: value[Any]) -> value[float]: ...
 @overload
 def sin(x: vector[Any]) -> vector[float]: ...
 def sin(x: Any) -> Any:
@@ -123,7 +124,7 @@ def sin(x: Any) -> Any:
     Returns:
         Square root of x
     """
-    if isinstance(x, variable):
+    if isinstance(x, value):
         return add_op('sin', [x])
     if isinstance(x, vector):
         return x.map(sin)
@@ -133,7 +134,7 @@ def sin(x: Any) -> Any:
 @overload
 def cos(x: float | int) -> float: ...
 @overload
-def cos(x: variable[Any]) -> variable[float]: ...
+def cos(x: value[Any]) -> value[float]: ...
 @overload
 def cos(x: vector[Any]) -> vector[float]: ...
 def cos(x: Any) -> Any:
@@ -145,7 +146,7 @@ def cos(x: Any) -> Any:
     Returns:
         Cosine of x
     """
-    if isinstance(x, variable):
+    if isinstance(x, value):
         return add_op('cos', [x])
     if isinstance(x, vector):
         return x.map(cos)
@@ -155,7 +156,7 @@ def cos(x: Any) -> Any:
 @overload
 def tan(x: float | int) -> float: ...
 @overload
-def tan(x: variable[Any]) -> variable[float]: ...
+def tan(x: value[Any]) -> value[float]: ...
 @overload
 def tan(x: vector[Any]) -> vector[float]: ...
 def tan(x: Any) -> Any:
@@ -167,7 +168,7 @@ def tan(x: Any) -> Any:
     Returns:
         Tangent of x
     """
-    if isinstance(x, variable):
+    if isinstance(x, value):
         return add_op('tan', [x])
     if isinstance(x, vector):
         #return x.map(tan)
@@ -178,7 +179,7 @@ def tan(x: Any) -> Any:
 @overload
 def atan(x: float | int) -> float: ...
 @overload
-def atan(x: variable[Any]) -> variable[float]: ...
+def atan(x: value[Any]) -> value[float]: ...
 @overload
 def atan(x: vector[Any]) -> vector[float]: ...
 def atan(x: Any) -> Any:
@@ -190,7 +191,7 @@ def atan(x: Any) -> Any:
     Returns:
         Inverse tangent of x
     """
-    if isinstance(x, variable):
+    if isinstance(x, value):
         return add_op('atan', [x])
     if isinstance(x, vector):
         return x.map(atan)
@@ -200,9 +201,9 @@ def atan(x: Any) -> Any:
 @overload
 def atan2(x: float | int, y: float | int) -> float: ...
 @overload
-def atan2(x: variable[Any], y: NumLike) -> variable[float]: ...
+def atan2(x: value[Any], y: NumLike) -> value[float]: ...
 @overload
-def atan2(x: NumLike, y: variable[Any]) -> variable[float]: ...
+def atan2(x: NumLike, y: value[Any]) -> value[float]: ...
 @overload
 def atan2(x: vector[float], y: VecNumLike) -> vector[float]: ...
 @overload
@@ -219,7 +220,7 @@ def atan2(x: VecNumLike, y: VecNumLike) -> Any:
     """
     if isinstance(x, vector) or isinstance(y, vector):
         return _map2(x, y, atan2)
-    if isinstance(x, variable) or isinstance(y, variable):
+    if isinstance(x, value) or isinstance(y, value):
         return add_op('atan2', [x, y])
     return math.atan2(x, y)
 
@@ -227,7 +228,7 @@ def atan2(x: VecNumLike, y: VecNumLike) -> Any:
 @overload
 def asin(x: float | int) -> float: ...
 @overload
-def asin(x: variable[Any]) -> variable[float]: ...
+def asin(x: value[Any]) -> value[float]: ...
 @overload
 def asin(x: vector[Any]) -> vector[float]: ...
 def asin(x: Any) -> Any:
@@ -239,7 +240,7 @@ def asin(x: Any) -> Any:
     Returns:
         Inverse sine of x
     """
-    if isinstance(x, variable):
+    if isinstance(x, value):
         return add_op('asin', [x])
     if isinstance(x, vector):
         return x.map(asin)
@@ -249,7 +250,7 @@ def asin(x: Any) -> Any:
 @overload
 def acos(x: float | int) -> float: ...
 @overload
-def acos(x: variable[Any]) -> variable[float]: ...
+def acos(x: value[Any]) -> value[float]: ...
 @overload
 def acos(x: vector[Any]) -> vector[float]: ...
 def acos(x: Any) -> Any:
@@ -261,7 +262,7 @@ def acos(x: Any) -> Any:
     Returns:
         Inverse cosine of x
     """
-    if isinstance(x, variable):
+    if isinstance(x, value):
         return add_op('acos', [x])
     if isinstance(x, vector):
         return x.map(acos)
@@ -271,18 +272,22 @@ def acos(x: Any) -> Any:
 @overload
 def get_42(x: float | int) -> float: ...
 @overload
-def get_42(x: variable[Any]) -> variable[float]: ...
-def get_42(x: NumLike) -> variable[float] | float:
-    """Returns the variable representing the constant 42"""
-    if isinstance(x, variable):
+def get_42(x: value[Any]) -> value[float]: ...
+def get_42(x: NumLike) -> value[float] | float:
+    """Returns the value representing the constant 42"""
+    if isinstance(x, value):
         return add_op('get_42', [x, x])
     return float((int(x) * 3.0 + 42.0) * 5.0 + 21.0)
 
+
+#TODO: Add vector support
 @overload
 def abs(x: U) -> U: ...
 @overload
-def abs(x: variable[U]) -> variable[U]: ...
-def abs(x: U | variable[U]) -> Any:
+def abs(x: value[U]) -> value[U]: ...
+@overload
+def abs(x: vector[U]) -> vector[U]: ...
+def abs(x: U | value[U] | vector[U]) -> Any:
     """Absolute value function
 
     Arguments:
@@ -291,46 +296,67 @@ def abs(x: U | variable[U]) -> Any:
     Returns:
         Absolute value of x
     """
+    #tt = -x * (x < 0)
     ret = (x < 0) * -x + (x >= 0) * x
-    return ret  # pyright: ignore[reportReturnType]
+    return ret  # REMpyright: ignore[reportReturnType]
 
 
 @overload
-def clamp(x: variable[U], min_value: U | variable[U], max_value: U | variable[U]) -> variable[U]: ...
+def sign(x: U) -> U: ...
 @overload
-def clamp(x: U | variable[U], min_value: variable[U], max_value: U | variable[U]) -> variable[U]: ...
+def sign(x: value[U]) -> value[U]: ...
 @overload
-def clamp(x: U | variable[U], min_value: U | variable[U], max_value: variable[U]) -> variable[U]: ...
+def sign(x: vector[U]) -> vector[U]: ...
+def sign(x: U | value[U] | vector[U]) -> Any:
+    """Return 1 for positive numbers and -1 for negative numbers.
+    For an input of 0 the return value is 0.
+
+    Arguments:
+        x: Input value
+
+    Returns:
+        -1, 0 or 1
+    """
+    ret = (x > 0) - (x < 0)
+    return ret
+
+
+@overload
+def clamp(x: value[U], min_value: U | value[U], max_value: U | value[U]) -> value[U]: ...
+@overload
+def clamp(x: U | value[U], min_value: value[U], max_value: U | value[U]) -> value[U]: ...
+@overload
+def clamp(x: U | value[U], min_value: U | value[U], max_value: value[U]) -> value[U]: ...
 @overload
 def clamp(x: U, min_value: U, max_value: U) -> U: ...
 @overload
-def clamp(x: vector[U], min_value: 'U | variable[U]', max_value: 'U | variable[U]') -> vector[U]: ...
-def clamp(x: U | variable[U] | vector[U], min_value: U | variable[U], max_value:  U | variable[U]) -> Any:
+def clamp(x: vector[U], min_value: 'U | value[U]', max_value: 'U | value[U]') -> vector[U]: ...
+def clamp(x: U | value[U] | vector[U], min_value: U | value[U], max_value:  U | value[U]) -> Any:
     """Clamp function to limit a value between a minimum and maximum.
 
     Arguments:
         x: Input value
         min_value: Minimum limit
         max_value: Maximum limit
-    
+
     Returns:
         Clamped value of x
     """
     if isinstance(x, vector):
         return vector(clamp(comp, min_value, max_value) for comp in x.values)
-    
+
     return (x < min_value) * min_value + \
           (x > max_value) * max_value + \
           ((x >= min_value) & (x <= max_value)) * x
 
 
 @overload
-def min(x: variable[U], y: U | variable[U]) -> variable[U]: ...
+def min(x: value[U], y: U | value[U]) -> value[U]: ...
 @overload
-def min(x: U | variable[U], y: variable[U]) -> variable[U]: ...
+def min(x: U | value[U], y: value[U]) -> value[U]: ...
 @overload
 def min(x: U, y: U) -> U: ...
-def min(x: U | variable[U], y: U | variable[U]) -> Any:
+def min(x: U | value[U], y: U | value[U]) -> Any:
     """Minimum function to get the smaller of two values.
 
     Arguments:
@@ -344,12 +370,12 @@ def min(x: U | variable[U], y: U | variable[U]) -> Any:
 
 
 @overload
-def max(x: variable[U], y: U | variable[U]) -> variable[U]: ...
+def max(x: value[U], y: U | value[U]) -> value[U]: ...
 @overload
-def max(x: U | variable[U], y: variable[U]) -> variable[U]: ...
+def max(x: U | value[U], y: value[U]) -> value[U]: ...
 @overload
 def max(x: U, y: U) -> U: ...
-def max(x: U | variable[U], y: U | variable[U]) -> Any:
+def max(x: U | value[U], y: U | value[U]) -> Any:
     """Maximum function to get the larger of two values.
 
     Arguments:
@@ -363,16 +389,16 @@ def max(x: U | variable[U], y: U | variable[U]) -> Any:
 
 
 @overload
-def lerp(v1: variable[U], v2: U | variable[U], t: U | variable[U]) -> variable[U]: ...
+def lerp(v1: value[U], v2: U | value[U], t: unifloat) -> value[U]: ...
 @overload
-def lerp(v1: U | variable[U], v2: variable[U], t: U | variable[U]) -> variable[U]: ...
+def lerp(v1: U | value[U], v2: value[U], t: unifloat) -> value[U]: ...
 @overload
-def lerp(v1: U | variable[U], v2: U | variable[U], t: variable[U]) -> variable[U]: ...
+def lerp(v1: U | value[U], v2: U | value[U], t: value[float]) -> value[U]: ...
 @overload
-def lerp(v1: U, v2: U, t: U) -> U: ...
+def lerp(v1: U, v2: U, t: float) -> U: ...
 @overload
-def lerp(v1: vector[U], v2: vector[U], t: 'U | variable[U]') -> vector[U]: ...
-def lerp(v1: U | variable[U] | vector[U], v2: U | variable[U] | vector[U], t:  U | variable[U]) -> Any:
+def lerp(v1: vector[U], v2: vector[U], t: unifloat) -> vector[U]: ...
+def lerp(v1: U | value[U] | vector[U], v2: U | value[U] | vector[U], t:  unifloat) -> Any:
     """Linearly interpolate between two values or vectors v1 and v2 by a factor t."""
     if isinstance(v1, vector) or isinstance(v2, vector):
         assert isinstance(v1, vector) and isinstance(v2, vector), "None or both v1 and v2 must be vectors."
@@ -381,7 +407,19 @@ def lerp(v1: U | variable[U] | vector[U], v2: U | variable[U] | vector[U], t:  U
     return v1 * (1 - t) + v2 * t
 
 
-def _map2(self: VecNumLike, other: VecNumLike, func: Callable[[Any, Any], variable[U] | U]) -> vector[U]:
+@overload
+def relu(x: U) -> U: ...
+@overload
+def relu(x: value[U]) -> value[U]: ...
+@overload
+def relu(x: vector[U]) -> vector[U]: ...
+def relu(x: U | value[U] | vector[U]) -> Any:
+    """Returns x for x > 0 and otherwise 0."""
+    ret = (x > 0) * x
+    return ret
+
+
+def _map2(self: VecNumLike, other: VecNumLike, func: Callable[[Any, Any], value[U] | U]) -> vector[U]:
     """Applies a function to each element of the vector and a second vector or scalar."""
     if isinstance(self, vector) and isinstance(other, vector):
         return vector(func(x, y) for x, y in zip(self.values, other.values))

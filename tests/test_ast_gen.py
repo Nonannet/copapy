@@ -1,6 +1,6 @@
-from copapy import variable
+from copapy import value
 from copapy.backend import Write
-import copapy.backend as cpbe
+import copapy.backend as cpb
 
 
 def test_ast_generation():
@@ -21,8 +21,8 @@ def test_ast_generation():
     #r2 = i1 + 9
     #out = [Write(r1), Write(r2)]
 
-    c1 = variable(4)
-    c2 = variable(2)
+    c1 = value(4)
+    c2 = value(2)
     #i1 = c1 * 2
     #r1 = i1 + 7 + (c2 + 7 * 9)
     #r2 = i1 + 9
@@ -33,27 +33,27 @@ def test_ast_generation():
     print(out)
     print('-- get_edges:')
 
-    edges = list(cpbe.get_all_dag_edges(out))
+    edges = list(cpb.get_all_dag_edges(out))
     for p in edges:
         print('#', p)
 
     print('-- get_ordered_ops:')
-    ordered_ops = list(cpbe.stable_toposort(edges))
+    ordered_ops = cpb.stable_toposort(edges)
     for p in ordered_ops:
         print('#', p)
 
     print('-- get_consts:')
-    const_list = cpbe.get_const_nets(ordered_ops)
+    const_list = cpb.get_const_nets(ordered_ops)
     for p in const_list:
         print('#', p)
 
     print('-- add_read_ops:')
-    output_ops = list(cpbe.add_read_ops(ordered_ops))
+    output_ops = list(cpb.add_read_ops(ordered_ops))
     for p in output_ops:
         print('#', p)
 
     print('-- add_write_ops:')
-    extended_output_ops = list(cpbe.add_write_ops(output_ops, const_list))
+    extended_output_ops = list(cpb.add_write_ops(output_ops, const_list))
     for p in extended_output_ops:
         print('#', p)
     print('--')

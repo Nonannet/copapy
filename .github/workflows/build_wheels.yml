@@ -65,21 +65,21 @@ jobs:
           name: wheels-${{ matrix.os }}
           path: wheelhouse/*.whl
 
-#  publish:
-#    if: contains(github.ref, '-beta') == false
-#    needs: [build_wheels]
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: Install Twine
-#        run: pip install twine
+  publish:
+    if: contains(github.ref, '-beta') == false
+    needs: [build_wheels]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Twine
+        run: pip install twine
 
-#      - uses: actions/download-artifact@v4
-#        with:
-#          path: wheelhouse
+      - uses: actions/download-artifact@v4
+        with:
+          path: wheelhouse
 
-#      - name: Publish to PyPI
-#        env:
-#          TWINE_USERNAME: __token__
-#          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-#        
-#        run: python -m twine upload wheelhouse/*
+      - name: Publish to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        
+        run: python -m twine upload wheelhouse/*
