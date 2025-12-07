@@ -14,9 +14,19 @@ objdump -d -x src/copapy/obj/stencils_${arch}_O3.o > build/runner/stencils.asm
 python3 tools/make_example.py
 build/runner/coparun build/runner/test.copapy build/runner/test.copapy.bin
 
-if [ $(arch) = 'x86-64' ]; then
+if [ $(arch) = 'x86_64' ]; then
 	arch="i386:x86-64"
+elif [ $(arch) = 'x86' ]; then
+	arch="i386"
+elif [ $(arch) = 'arm64' ]; then
+	arch="aarch64"
+elif [ $(arch) = 'armv6' ]; then
+	arch="arm"
+elif [ $(arch) = 'armv7' ]; then
+	arch="arm"
 fi
+
+echo "Archtitecture: '$arch'"
 
 objdump -D -b binary -m $arch --adjust-vma=0x10000 build/runner/test.copapy.bin > build/runner/example.asm
 
