@@ -68,10 +68,10 @@ jobs:
         bash tools/create_asm.sh
 
         echo '<p>example</p>' >> $GITHUB_STEP_SUMMARY
-        python tools/clean_asm.py build/asm/example.asm >> $GITHUB_STEP_SUMMARY
+        python tools/clean_asm.py build/runner/example.asm >> $GITHUB_STEP_SUMMARY
 
         echo '<p>stencils_x86_64_O3.o</p>' >> $GITHUB_STEP_SUMMARY
-        python tools/clean_asm.py build/asm/stencils.asm >> $GITHUB_STEP_SUMMARY
+        python tools/clean_asm.py build/runner/stencils.asm >> $GITHUB_STEP_SUMMARY
 
     - name: Run tests with pytest
       run: pytest

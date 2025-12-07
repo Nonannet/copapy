@@ -4,7 +4,7 @@ from copapy._binwrite import Command
 import copapy as cp
 
 
-def compile_to_x86_64() -> None:
+def compile_example(arch: str = 'native') -> None:
     """Test compilation of a simple program for x86_64."""
     c1 = value(9.0)
 
@@ -16,65 +16,16 @@ def compile_to_x86_64() -> None:
 
     out = [Write(r) for r in ret]
 
-    sdb = stencil_db_from_package('x86_64')
+    sdb = stencil_db_from_package(arch)
     dw, _ = compile_to_dag(out, sdb)
 
     dw.write_com(Command.DUMP_CODE)
 
-    print('* Data to runner:')
-    dw.print()
+    #print('* Data to runner:')
+    #dw.print()
 
     dw.to_file('build/runner/test.copapy')
 
 
-def compile_to_x86() -> None:
-    """Test compilation of a simple program for x86 32 bit."""
-    c1 = value(9.0)
-
-    #ret = [c1 / 4, c1 / -4, c1 // 4, c1 // -4, (c1 * -1) // 4]
-    ret = [c1 // 3.3 + 5]
-    #ret = [cp.sqrt(c1)]
-    #c2 = cp._math.get_42()
-    #ret = [c2]
-    ret = [cp.sin(value(2.5))]
-
-    out = [Write(r) for r in ret]
-
-    sdb = stencil_db_from_package('x86')
-    dw, _ = compile_to_dag(out, sdb)
-
-    dw.write_com(Command.DUMP_CODE)
-
-    print('* Data to runner:')
-    dw.print()
-
-    dw.to_file('build/runner/test-x86.copapy')
-
-
-def compile_to_aarch64() -> None:
-    """Test compilation of a simple program for arm64."""
-    c1 = value(9.0)
-
-    #ret = [c1 / 4, c1 / -4, c1 // 4, c1 // -4, (c1 * -1) // 4]
-    #ret = [cp.sin(c1), cp.sqrt(c1) + 5]
-    ret = [c1 // 3.3 + 5]
-    #c2 = cp._math.get_42()
-    #ret = [c2]
-
-    out = [Write(r) for r in ret]
-
-    sdb = stencil_db_from_package('arm64')
-    dw, _ = compile_to_dag(out, sdb)
-
-    dw.write_com(Command.DUMP_CODE)
-
-    print('* Data to runner:')
-    dw.print()
-
-    dw.to_file('build/runner/test-arm64.copapy')
-
-
 if __name__ == "__main__":
-    compile_to_x86_64()
-    compile_to_x86()
-    compile_to_aarch64()
+    compile_example()

@@ -5,29 +5,29 @@ set -v
 
 mkdir -p build/runner
 
-arch=$(python3 -c "import copapy; print(copapy._stencils.detect_process_arch())")
+cparch=$(python3 -c "import copapy; print(copapy._stencils.detect_process_arch())")
 
 # Disassemble stencil object file
-objdump -d -x src/copapy/obj/stencils_${arch}_O3.o > build/runner/stencils.asm
+objdump -d -x src/copapy/obj/stencils_${cparch}_O3.o > build/runner/stencils.asm
 
 # Create example code disassembly
 python3 tools/make_example.py
 build/runner/coparun build/runner/test.copapy build/runner/test.copapy.bin
 
-if [ $(arch) = 'x86_64' ]; then
-	arch="i386:x86-64"
-elif [ $(arch) = 'x86' ]; then
-	arch="i386"
-elif [ $(arch) = 'arm64' ]; then
-	arch="aarch64"
-elif [ $(arch) = 'armv6' ]; then
-	arch="arm"
-elif [ $(arch) = 'armv7' ]; then
-	arch="arm"
+if [ "$cparch" = 'x86_64' ]; then
+	cparch="i386:x86-64"
+elif [ "$cparch" = 'x86' ]; then
+	cparch="i386"
+elif [ "$cparch" = 'arm64' ]; then
+	cparch="aarch64"
+elif [ "$cparch" = 'armv6' ]; then
+	cparch="arm"
+elif [ "$cparch" = 'armv7' ]; then
+	cparch="arm"
 fi
 
-echo "Archtitecture: '$arch'"
+echo "Archtitecture: '$cparch'"
 
-objdump -D -b binary -m $arch --adjust-vma=0x10000 build/runner/test.copapy.bin > build/runner/example.asm
+objdump -D -b binary -m $cparch --adjust-vma=0x10000 build/runner/test.copapy.bin > build/runner/example.asm
 
 rm build/runner/test.copapy.bin
