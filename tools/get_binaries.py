@@ -24,12 +24,17 @@ def main() -> None:
 
     assert releases, "No releases found."
 
-    release = releases[0]  # newest release (first in list)
-    tag = release["tag_name"]
-    print(f"Found latest release: {tag}")
+    assets: list[Any] = []
+    for release in releases:
+        tag = release["tag_name"]
+        print(f"Found latest release: {tag}")
 
-    assets = release.get("assets", [])
-    assert assets, "No assets found for this release."
+        assets = release.get("assets", [])
+        if assets:
+            break
+        print(f"No assets found for release {tag}.")
+
+    assert assets, "No assets found."
 
     for asset in assets:
         url = asset["browser_download_url"]
