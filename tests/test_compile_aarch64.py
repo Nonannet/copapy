@@ -66,8 +66,8 @@ def test_compile():
 
     il.write_com(_binwrite.Command.END_COM)
 
-    print('* Data to runner:')
-    il.print()
+    #print('* Data to runner:')
+    #il.print()
 
     il.to_file('build/runner/test-arm64.copapy')
 

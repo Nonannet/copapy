@@ -258,7 +258,7 @@ class stencil_database():
         elif pr.type.endswith('_LDST32_ABS_LO12_NC'):
             # R_AARCH64_LDST32_ABS_LO12_NC
             # (S + A) & 0xFFF
-            mask = 0b11_1111_1111_1100_0000_0000
+            mask = 0b00_1111_1111_1100_0000_0000
             patch_value = symbol_address + pr.fields['r_addend']
             symbol_type = symbol_type + 0x02  # Absolut value
             scale = 4
@@ -276,7 +276,7 @@ class stencil_database():
         elif pr.type.endswith('_LDST64_ABS_LO12_NC'):
             # R_AARCH64_LDST64_ABS_LO12_NC
             # (S + A) & 0xFFF
-            mask = 0b11_1111_1111_1100_0000_0000
+            mask = 0b00_0111_1111_1100_0000_0000
             patch_value = symbol_address + pr.fields['r_addend']
             symbol_type = symbol_type + 0x02  # Absolut value
             scale = 8

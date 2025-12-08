@@ -119,8 +119,8 @@ def test_compile():
 
     dw.write_com(_binwrite.Command.END_COM)
 
-    print('* Data to runner:')
-    dw.print()
+    #print('* Data to runner:')
+    #dw.print()
 
     dw.to_file('build/runner/test-armv7.copapy')
 
