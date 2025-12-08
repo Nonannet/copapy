@@ -24,7 +24,7 @@ Issues = "https://github.com/nonannet/copapy/issues"
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
-tool.setuptools]
+[tool.setuptools]
 license-files = []
 
 [tool.setuptools.packages.find]
