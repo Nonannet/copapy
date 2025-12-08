@@ -34,8 +34,8 @@ def test_compile_sqrt():
 
     il.write_com(_binwrite.Command.END_COM)
 
-    print('* Data to runner:')
-    il.print()
+    #print('* Data to runner:')
+    #il.print()
 
     il.to_file('build/runner/test.copapy')
 
@@ -68,8 +68,8 @@ def test_compile_log():
 
     il.write_com(_binwrite.Command.END_COM)
 
-    print('* Data to runner:')
-    il.print()
+    #print('* Data to runner:')
+    #il.print()
 
     il.to_file('build/runner/test.copapy')
 
