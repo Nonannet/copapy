@@ -1,13 +1,13 @@
 [project]
 name = "copapy"
-version = "0.0.1"
+version = "0.0.2"
 authors = [
   { name="Nicolas Kruse", email="nicolas.kruse@nonan.net" },
 ]
 description = "Copy-Patch Compiler"
 readme = "README.md"
 requires-python = ">=3.10"
-license = "GPL-3.0-only"
+license = "MIT"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
