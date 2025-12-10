@@ -16,16 +16,24 @@ The summarized main features are:
 - Very portable to new architectures
 - Small python package, minimal dependencies, no cross compile toolchain required
 
+The execution of the compiled code is managed by a runner application. The runner is implemented in C and handles IO and communication with the Copapy framework. The overall design aims for minimal complexity to simplify portability, since this part must be modified for the individual hardware/application. Since the patching of memory addresses is done by the runner, the different architecture specific relocation types gets unified to a architecture independent format by Copapy before sending the patch instructions to the runner. This keeps the patching code in the runner simple.
+
+![Copapy architecture](docs/source/media/copapy.svg)
+
+The design targets either a architecture with a realtime patched Linux kernel, where the runner uses the same CPU and memory as Linux with the Copapy framework but in a realtime thread. For applications where this setup is not sufficiently deterministic, the runner can be executed on a separate Crossover‑MCU on bare metal or a RTOS.
+
+The Copapy framework includes a runner as python module as well. This allows for frictionless testing of code and might be valuable to apply Copapy to conventional application development.
+
 ## Current state
 While obviously hardware IO is a core aspect, this is not yet available. Therefore this package is at the moment a proof of concept with limited direct use. However the computation part is fully working and available for testing and playing with it by simply installing the package. At this point the project is quite close to being ready for integration into the first demonstration hardware platform.
 
 Currently worked on:
 - Array stencils for handling very large arrays and generate SIMD optimized code - e.g. for machine vision and neural network applications.
 - For targeting Crossover‑MCUs, support for Thumb instructions required by ARM*-M is on the way.
-- Constant-regrouping for symbolic optimization of the computation graph.
+- Constant-regrouping for further symbolic optimization of the computation graph.
 
 ## Install
-To install copapy, you can use pip. Precompiled wheels are available for Linux (x86_64, Aarch64 and ARMv7), Windows (x86_64) and Mac OS (x86_64, Aarch64):
+To install Copapy, you can use pip. Precompiled wheels are available for Linux (x86_64, Aarch64 and ARMv7), Windows (x86_64) and Mac OS (x86_64, Aarch64):
 
 ```bash
 pip install copapy
@@ -33,7 +41,7 @@ pip install copapy
 
 ## Examples
 ### Basic example
-A very simple example program using copapy can look like this:
+A very simple example program using Copapy can look like this:
 
 ```python
 import copapy as cp
@@ -59,7 +67,7 @@ print("Result e:", tg.read_value(e))
 ```
 
 ### Inverse kinematics
-An other example using autograd in copapy. Here for for implementing
+An other example using autograd in Copapy. Here for for implementing
 gradient descent to solve a reverse kinematic problem for
 a two joint 2D arm:
 
