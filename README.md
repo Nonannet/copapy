@@ -1,4 +1,5 @@
 # Copapy
+
 Copapy is a Python framework for deterministic, low-latency realtime computation, targeting hardware applications - for example in the fields of robotics, aerospace, embedded systems and control systems in general.
 
 GPU frameworks like PyTorch, JAX and TensorFlow jump-started the development in the field of AI. With the right balance of flexibility and performance, they allow for fast iteration of new ideas while still being performant enough to test or even use them in production.
@@ -16,23 +17,28 @@ The main features can be summarized as:
 - Highly portable to new architectures
 - Small Python package with minimal dependencies and no cross-compile toolchain required
 
-Execution of the compiled code is managed by a runner application. The runner is implemented in C and handles I/O and communication with the Copapy framework. The overall design emphasizes minimal complexity to simplify portability, since this part must be adapted for the individual hardware/applications. Because patching of memory addresses is done by the runner, the different architecture-specific relocation types are unified to an architecture-independent format by Copapy before sending the patch instructions to the runner. This keeps the runner implementation simple.
+Execution of the compiled code is managed by a runner application. The runner is implemented in C and handles I/O and communication with the Copapy framework. The overall design emphasizes minimal complexity of the runner to simplify portability, since this part must be adapted for the individual hardware/application. Because patching of memory addresses is done by the runner, the different architecture-specific relocation types are unified to an architecture-independent format by Copapy before sending the patch instructions to the runner. This keeps the runner implementation as minimal as possible.
 
 ![Copapy architecture](docs/source/media/copapy.svg)
 
 The design targets either an architecture with a realtime-patched Linux kernel - where the runner uses the same CPU and memory as Linux but executes in a realtime thread - or a setup where even higher determinism is required. In such cases, the runner can be executed on a separate crossover MCU running on bare metal or a RTOS.
 
-The Copapy framework also includes a Python-based runner module. This allows frictionless testing of code and might be valuable for using Copapy in conventional application development.
+The Copapy framework also includes a runner as Python module build from the same C code. This allows frictionless testing of code and might be valuable for using Copapy in conventional application development.
 
 ## Current state
+
 While hardware I/O is obviously a core aspect of the project, it is not yet available. Therefore, this package is currently a proof of concept with limited direct use. However, the computation engine is fully functional and available for testing and experimentation simply by installing the package. The project is now close to being ready for integration into its first demonstration hardware platform.
 
 Currently in development:
 - Array stencils for handling very large arrays and generating SIMD-optimized code - e.g., for machine vision and neural network applications
-- Support for Thumb instructions required by ARM*-M targets (for crossover MCUs)
+- Support for Thumb instructions required by ARM*-M targets (for MCUs)
 - Constant regrouping for further symbolic optimization of the computation graph
 
+
+![Copapy architecture](docs/source/media/benchmark_results_001.svg)
+
 ## Install
+
 To install Copapy, you can use pip. Precompiled wheels are available for Linux (x86_64, AArch64, ARMv7), Windows (x86_64) and macOS (x86_64, AArch64):
 
 ```bash
@@ -70,9 +76,7 @@ print("Result e:", tg.read_value(e))
 
 ### Inverse kinematics
 
-Another example using autograd in Copapy, here implementing
-gradient descent to solve an inverse kinematics problem for
-a two-joint 2D arm:
+Another example using autograd in Copapy, here implementing gradient descent to solve an inverse kinematics problem for a two-joint 2D arm:
 
 ```python
 import copapy as cp
@@ -219,7 +223,7 @@ pytest
 
 ## License
 
-This project is licensed under GPL - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT license - see the [LICENSE](LICENSE) file for details.
 
 [^1]: Errors like divide-by-zero are currently still possible. The feasibility of tracking value ranges in the type system is under investigation to enable compile-time checks.
 
