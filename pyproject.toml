@@ -13,7 +13,6 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-  "pelfy>=1.0.7"
 ]
 
 [project.urls]
@@ -34,13 +33,15 @@ copapy = ["obj/*.o", "py.typed"]
 dev = [
     "ruff",
     "mypy",
-    "pytest"
+    "pytest",
+    "pelfy>=1.0.7"
 ]
 doc_build = [
   "sphinx",
   "pydata_sphinx_theme",
   "sphinx-autodoc-typehints",
-  "myst-parser"
+  "myst-parser",
+  "pelfy>=1.0.7"
 ]
 
 [tool.mypy]

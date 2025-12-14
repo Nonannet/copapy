@@ -1,9 +1,16 @@
 from dataclasses import dataclass
-from pelfy import open_elf_file, elf_file, elf_symbol
-from typing import Generator, Literal, Iterable
-import pelfy
+from typing import Generator, Literal, Iterable, TYPE_CHECKING
 import struct
 import platform
+
+if TYPE_CHECKING:
+    import pelfy
+else:
+    try:
+        from ._vendor import pelfy
+    except ImportError:
+        import pelfy
+
 
 ByteOrder = Literal['little', 'big']
 
@@ -62,7 +69,7 @@ def detect_process_arch() -> str:
     return arch_family
 
 
-def get_return_function_type(symbol: elf_symbol) -> str:
+def get_return_function_type(symbol: pelfy.elf_symbol) -> str:
     if symbol.relocations:
         for reloc in reversed(symbol.relocations):
             func_name = reloc.symbol.name
@@ -71,7 +78,7 @@ def get_return_function_type(symbol: elf_symbol) -> str:
     return 'void'
 
 
-def get_stencil_position(func: elf_symbol) -> tuple[int, int]:
+def get_stencil_position(func: pelfy.elf_symbol) -> tuple[int, int]:
     start_index = 0  # There must be no prolog
     # Find last relocation in function
     last_instr = get_last_call_in_function(func)
@@ -84,7 +91,7 @@ def get_stencil_position(func: elf_symbol) -> tuple[int, int]:
     return start_index, end_index
 
 
-def get_last_call_in_function(func: elf_symbol) -> int:
+def get_last_call_in_function(func: pelfy.elf_symbol) -> int:
     # Find last relocation in function
     assert func.relocations, f'No call function in stencil function {func.name}.'
     reloc = func.relocations[-1]
@@ -95,7 +102,7 @@ def get_last_call_in_function(func: elf_symbol) -> int:
     return reloc.fields['r_offset'] - func.fields['st_value'] + address_field_length - instruction_lengths
 
 
-def get_op_after_last_call_in_function(func: elf_symbol) -> int:
+def get_op_after_last_call_in_function(func: pelfy.elf_symbol) -> int:
     # Find last relocation in function
     assert func.relocations, f'No call function in stencil function {func.name}.'
     reloc = func.relocations[-1]
@@ -120,9 +127,9 @@ class stencil_database():
             obj_file: path to the ELF object file or bytes of the ELF object file
         """
         if isinstance(obj_file, str):
-            self.elf = open_elf_file(obj_file)
+            self.elf = pelfy.open_elf_file(obj_file)
         else:
-            self.elf = elf_file(obj_file)
+            self.elf = pelfy.elf_file(obj_file)
 
         self.stencil_definitions = {s.name: get_return_function_type(s)
                                     for s in self.elf.symbols
