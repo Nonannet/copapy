@@ -301,7 +301,7 @@ class vector(Generic[TNum]):
         """Applies a function to each element of the vector and returns a new vector."""
         return vector(func(x) for x in self.values)
     
-    def _map2(self, other: VecNumLike, func: Callable[[Any, Any], value[int | float]]) -> 'vector[Any]':
+    def _map2(self, other: VecNumLike, func: Callable[[Any, Any], value[int] | value[float]]) -> 'vector[Any]':
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(func(a, b) for a, b in zip(self.values, other.values))

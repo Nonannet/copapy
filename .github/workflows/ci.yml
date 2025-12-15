@@ -61,7 +61,7 @@ jobs:
       run: |
         git clone --depth 1 https://github.com/Nonannet/pelfy.git /tmp/pelfy
         mkdir -p src/${{ github.event.repository.name }}/_vendor
-        cp -r /tmp/pelfy/pelfy src/${{ github.event.repository.name }}/_vendor/
+        cp -r /tmp/pelfy/src/pelfy src/${{ github.event.repository.name }}/_vendor/
 
     - name: Run tests with pytest
       run: pytest -m "not runner"
