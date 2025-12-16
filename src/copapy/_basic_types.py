@@ -61,7 +61,6 @@ class Node:
             return hash(self.name) ^ hash(frozenset(a.source.node_hash for a in self.args))
         return hash(self.name) ^ hash(tuple(a.source.node_hash for a in self.args))
 
-
     def __hash__(self) -> int:
         return self.node_hash
 
@@ -77,6 +76,7 @@ class Net:
     def __init__(self, dtype: str, source: Node):
         self.dtype = dtype
         self.source = source
+        self.volatile = False
 
     def __repr__(self) -> str:
         names = get_var_name(self)
@@ -93,7 +93,7 @@ class value(Generic[TNum], Net):
     Attributes:
         dtype (str): Data type of this value.
     """
-    def __init__(self, source: TNum | Node, dtype: str | None = None):
+    def __init__(self, source: TNum | Node, dtype: str | None = None, volatile: bool = True):
         """Instance a value.
 
         Args:
@@ -113,6 +113,7 @@ class value(Generic[TNum], Net):
         else:
             self.source = CPConstant(source)
             self.dtype = 'int'
+        self.volatile = volatile
 
     @overload
     def __add__(self: 'value[TNum]', other: 'value[TNum] | TNum') -> 'value[TNum]': ...
@@ -220,33 +221,33 @@ class value(Generic[TNum], Net):
         return add_op('floordiv', [other, self])
 
     def __neg__(self: TCPNum) -> TCPNum:
-        if self.dtype == 'int':
-            return cast(TCPNum, add_op('sub', [value(0), self]))
-        return cast(TCPNum, add_op('sub', [value(0.0), self]))
+        if self.dtype == 'float':
+            return cast(TCPNum, add_op('sub', [value(0.0, volatile=False), self]))
+        return cast(TCPNum, add_op('sub', [value(0, volatile=False), self]))
 
     def __gt__(self, other: TVarNumb) -> 'value[int]':
         ret = add_op('gt', [self, other])
-        return value(ret.source, dtype='bool')
+        return value(ret.source, dtype='bool', volatile=False)
 
     def __lt__(self, other: TVarNumb) -> 'value[int]':
         ret = add_op('gt', [other, self])
-        return value(ret.source, dtype='bool')
+        return value(ret.source, dtype='bool', volatile=False)
 
     def __ge__(self, other: TVarNumb) -> 'value[int]':
         ret = add_op('ge', [self, other])
-        return value(ret.source, dtype='bool')
+        return value(ret.source, dtype='bool', volatile=False)
 
     def __le__(self, other: TVarNumb) -> 'value[int]':
         ret = add_op('ge', [other, self])
-        return value(ret.source, dtype='bool')
+        return value(ret.source, dtype='bool', volatile=False)
 
     def __eq__(self, other: TVarNumb) -> 'value[int]':  # type: ignore
         ret = add_op('eq', [self, other], True)
-        return value(ret.source, dtype='bool')
+        return value(ret.source, dtype='bool', volatile=False)
 
     def __ne__(self, other: TVarNumb) -> 'value[int]':  # type: ignore
         ret = add_op('ne', [self, other], True)
-        return value(ret.source, dtype='bool')
+        return value(ret.source, dtype='bool', volatile=False)
 
     @overload
     def __mod__(self: 'value[TNum]', other: 'value[TNum] | TNum') -> 'value[TNum]': ...
@@ -358,7 +359,7 @@ class Op(Node):
 
 def net_from_value(val: Any) -> value[Any]:
     vi = CPConstant(val)
-    return value(vi, vi.dtype)
+    return value(vi, vi.dtype, False)
 
 
 @overload

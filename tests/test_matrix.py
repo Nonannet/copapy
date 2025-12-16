@@ -103,8 +103,8 @@ def test_matrix_scalar_division():
     m1 = cp.matrix([[6.0, 8.0], [12.0, 16.0]])
     m2 = m1 / 2.0
 
-    assert m2[0] == pytest.approx((3.0, 4.0))  # pyright: ignore[reportUnknownMemberType]
-    assert m2[1] == pytest.approx((6.0, 8.0))  # pyright: ignore[reportUnknownMemberType]
+    assert list(m2[0]) == pytest.approx((3.0, 4.0))  # pyright: ignore[reportUnknownMemberType]
+    assert list(m2[1]) == pytest.approx((6.0, 8.0))  # pyright: ignore[reportUnknownMemberType]
 
 
 def test_matrix_vector_multiplication():

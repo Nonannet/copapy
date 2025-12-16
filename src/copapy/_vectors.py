@@ -1,6 +1,6 @@
 from . import value
 from ._mixed import mixed_sum, mixed_homogenize
-from typing import TypeVar, Iterable, Any, overload, TypeAlias, Callable, Iterator, Generic
+from typing import Sequence, TypeVar, Iterable, Any, overload, TypeAlias, Callable, Iterator, Generic
 import copapy as cp
 from ._helper_types import TNum
 
@@ -57,7 +57,10 @@ class vector(Generic[TNum]):
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a + b for a, b in zip(self.values, other.values))
-        return vector(a + other for a in self.values)
+        if isinstance(other, value):
+            return vector(a + other for a in self.values)
+        o = value(other, volatile=False)  # Make sure a single constant is allocated
+        return vector(a + o if isinstance(a, value) else a + other for a in self.values)
 
     @overload
     def __radd__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
@@ -80,7 +83,10 @@ class vector(Generic[TNum]):
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a - b for a, b in zip(self.values, other.values))
-        return vector(a - other for a in self.values)
+        if isinstance(other, value):
+            return vector(a - other for a in self.values)
+        o = value(other, volatile=False)  # Make sure a single constant is allocated
+        return vector(a - o if isinstance(a, value) else a - other for a in self.values)
 
     @overload
     def __rsub__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
@@ -92,7 +98,10 @@ class vector(Generic[TNum]):
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(b - a for a, b in zip(self.values, other.values))
-        return vector(other - a for a in self.values)
+        if isinstance(other, value):
+            return vector(other - a for a in self.values)
+        o = value(other, volatile=False)  # Make sure a single constant is allocated
+        return vector(o - a if isinstance(a, value) else other - a for a in self.values)
 
     @overload
     def __mul__(self: 'vector[int]', other: VecFloatLike) -> 'vector[float]': ...
@@ -106,7 +115,10 @@ class vector(Generic[TNum]):
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a * b for a, b in zip(self.values, other.values))
-        return vector(a * other for a in self.values)
+        if isinstance(other, value):
+            return vector(a * other for a in self.values)
+        o = value(other, volatile=False)  # Make sure a single constant is allocated
+        return vector(a * o if isinstance(a, value) else a * other for a in self.values)
 
     @overload
     def __rmul__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
@@ -129,7 +141,10 @@ class vector(Generic[TNum]):
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a ** b for a, b in zip(self.values, other.values))
-        return vector(a ** other for a in self.values)
+        if isinstance(other, value):
+            return vector(a ** other for a in self.values)
+        o = value(other, volatile=False)  # Make sure a single constant is allocated
+        return vector(a ** o if isinstance(a, value) else a ** other for a in self.values)
 
     @overload
     def __rpow__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
@@ -138,19 +153,31 @@ class vector(Generic[TNum]):
     @overload
     def __rpow__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __rpow__(self, other: VecNumLike) -> Any:
-        return self ** other
+        if isinstance(other, vector):
+            assert len(self.values) == len(other.values)
+            return vector(b ** a for a, b in zip(self.values, other.values))
+        if isinstance(other, value):
+            return vector(other ** a for a in self.values)
+        o = value(other, volatile=False)  # Make sure a single constant is allocated
+        return vector(o ** a if isinstance(a, value) else other ** a for a in self.values)
 
     def __truediv__(self, other: VecNumLike) -> 'vector[float]':
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a / b for a, b in zip(self.values, other.values))
-        return vector(a / other for a in self.values)
+        if isinstance(other, value):
+            return vector(a / other for a in self.values)
+        o = value(other, volatile=False)  # Make sure a single constant is allocated
+        return vector(a / o if isinstance(a, value) else a / other for a in self.values)
 
     def __rtruediv__(self, other: VecNumLike) -> 'vector[float]':
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(b / a for a, b in zip(self.values, other.values))
-        return vector(other / a for a in self.values)
+        if isinstance(other, value):
+            return vector(other / a for a in self.values)
+        o = value(other, volatile=False)  # Make sure a single constant is allocated
+        return vector(o / a if isinstance(a, value) else other / a for a in self.values)
 
     @overload
     def dot(self: 'vector[int]', other: 'vector[int]') -> int | value[int]: ...
@@ -191,37 +218,55 @@ class vector(Generic[TNum]):
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a > b for a, b in zip(self.values, other.values))
-        return vector(a > other for a in self.values)
+        if isinstance(other, value):
+            return vector(a > other for a in self.values)
+        o = value(other, volatile=False)  # Make sure a single constant is allocated
+        return vector(a > o if isinstance(a, value) else a > other for a in self.values)
 
     def __lt__(self, other: VecNumLike) -> 'vector[int]':
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a < b for a, b in zip(self.values, other.values))
-        return vector(a < other for a in self.values)
+        if isinstance(other, value):
+            return vector(a < other for a in self.values)
+        o = value(other, volatile=False)  # Make sure a single constant is allocated
+        return vector(a < o if isinstance(a, value) else a < other for a in self.values)
 
     def __ge__(self, other: VecNumLike) -> 'vector[int]':
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a >= b for a, b in zip(self.values, other.values))
-        return vector(a >= other for a in self.values)
+        if isinstance(other, value):
+            return vector(a >= other for a in self.values)
+        o = value(other, volatile=False)  # Make sure a single constant is allocated
+        return vector(a >= o if isinstance(a, value) else a >= other for a in self.values)
 
     def __le__(self, other: VecNumLike) -> 'vector[int]':
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a <= b for a, b in zip(self.values, other.values))
-        return vector(a <= other for a in self.values)
+        if isinstance(other, value):
+            return vector(a <= other for a in self.values)
+        o = value(other, volatile=False)  # Make sure a single constant is allocated
+        return vector(a <= o if isinstance(a, value) else a <= other for a in self.values)
 
-    def __eq__(self, other: VecNumLike) -> 'vector[int]':  # type: ignore
-        if isinstance(other, vector):
-            assert len(self.values) == len(other.values)
-            return vector(a == b for a, b in zip(self.values, other.values))
-        return vector(a == other for a in self.values)
+    def __eq__(self, other: VecNumLike | Sequence[int | float]) -> 'vector[int]':  # type: ignore
+        if isinstance(other, vector | Sequence):
+            assert len(self) == len(other)
+            return vector(a == b for a, b in zip(self.values, other))
+        if isinstance(other, value):
+            return vector(a == other for a in self.values)
+        o = value(other, volatile=False)  # Make sure a single constant is allocated
+        return vector(a == o if isinstance(a, value) else a == other for a in self.values)
 
     def __ne__(self, other: VecNumLike) -> 'vector[int]':  # type: ignore
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a != b for a, b in zip(self.values, other.values))
-        return vector(a != other for a in self.values)
+        if isinstance(other, value):
+            return vector(a != other for a in self.values)
+        o = value(other, volatile=False)  # Make sure a single constant is allocated
+        return vector(a != o if isinstance(a, value) else a != other for a in self.values)
     
     @property
     def shape(self) -> tuple[int]:
@@ -255,6 +300,15 @@ class vector(Generic[TNum]):
     def map(self, func: Callable[[Any], value[U] | U]) -> 'vector[U]':
         """Applies a function to each element of the vector and returns a new vector."""
         return vector(func(x) for x in self.values)
+    
+    def _map2(self, other: VecNumLike, func: Callable[[Any, Any], value[int] | value[float]]) -> 'vector[Any]':
+        if isinstance(other, vector):
+            assert len(self.values) == len(other.values)
+            return vector(func(a, b) for a, b in zip(self.values, other.values))
+        if isinstance(other, value):
+            return vector(func(a, other) for a in self.values)
+        o = value(other, volatile=False)  # Make sure a single constant is allocated
+        return vector(func(a, o) if isinstance(a, value) else a + other for a in self.values)
 
 
 def cross_product(v1: vector[float], v2: vector[float]) -> vector[float]:

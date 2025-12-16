@@ -299,6 +299,17 @@ def get_aux_func_layout(function_names: Iterable[str], sdb: stencil_database, of
     return section_list, function_lookup, offset
 
 
+def get_dag_stats(node_list: Iterable[Node | Net]) -> dict[str, int]:
+    edges = get_all_dag_edges(n.source if isinstance(n, Net) else n for n in node_list)
+    ops = {node for node, _ in edges}
+
+    op_stat: dict[str, int] = {}
+    for op in ops:
+        op_stat[op.name] = op_stat.get(op.name, 0) + 1
+
+    return op_stat
+
+
 def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[binw.data_writer, dict[Net, tuple[int, int, str]]]:
     """Compiles a DAG identified by provided end nodes to binary code
 

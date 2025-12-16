@@ -20,7 +20,8 @@ build/*
 /*.obj
 /src/*.pyd
 vc140.pdb
-benchmark_results*
+benchmark_results*.json
+benchmark_results*.png
 docs/build
 docs/source/api
 /libs/

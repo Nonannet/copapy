@@ -44,6 +44,12 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Vendor pelfy
+        run: |
+          git clone --depth 1 https://github.com/Nonannet/pelfy.git /tmp/pelfy
+          mkdir -p src/${{ github.event.repository.name }}/_vendor
+          cp -r /tmp/pelfy/src/pelfy src/${{ github.event.repository.name }}/_vendor/
+
       # Only needed for Linux ARM builds
       - name: Set up QEMU
         if: runner.os == 'Linux'
@@ -69,6 +75,11 @@ jobs:
     if: contains(github.ref, '-beta') == false
     needs: [build_wheels]
     runs-on: ubuntu-latest
+
+    environment:
+      name: pypi
+      url: https://pypi.org/project/${{ github.event.repository.name }}/
+
     steps:
       - name: Install Twine
         run: pip install --force-reinstall twine==6.2.0
