@@ -1,6 +1,6 @@
 from typing import Iterable, overload, TypeVar, Any
 from . import _binwrite as binw
-from coparun_module import coparun, read_data_mem
+from coparun_module import coparun, read_data_mem, create_target, clear_target
 import struct
 from ._basic_types import stencil_db_from_package
 from ._basic_types import value, Net, Node, Write, NumLike
@@ -29,6 +29,10 @@ class Target():
         """
         self.sdb = stencil_db_from_package(arch, optimization)
         self._values: dict[Net, tuple[int, int, str]] = {}
+        self._context = create_target()
+
+    def __del__(self) -> None:
+        clear_target(self._context)
 
     def compile(self, *values: int | float | value[int] | value[float] | Iterable[int | float | value[int] | value[float]]) -> None:
         """Compiles the code to compute the given values.
@@ -48,7 +52,7 @@ class Target():
 
         dw, self._values = compile_to_dag(nodes, self.sdb)
         dw.write_com(binw.Command.END_COM)
-        assert coparun(dw.get_data()) > 0
+        assert coparun(self._context, dw.get_data()) > 0
 
     def run(self) -> None:
         """Runs the compiled code on the target device.
@@ -56,7 +60,7 @@ class Target():
         dw = binw.data_writer(self.sdb.byteorder)
         dw.write_com(binw.Command.RUN_PROG)
         dw.write_com(binw.Command.END_COM)
-        assert coparun(dw.get_data()) > 0
+        assert coparun(self._context, dw.get_data()) > 0
 
     @overload
     def read_value(self, net: value[T]) -> T: ...
@@ -84,7 +88,7 @@ class Target():
         assert net in self._values, f"Value {net} not found. It might not have been compiled for the target."
         addr, lengths, var_type = self._values[net]
         assert lengths > 0
-        data = read_data_mem(addr, lengths)
+        data = read_data_mem(self._context, addr, lengths)
         assert data is not None and len(data) == lengths, f"Failed to read value {net}"
         en = {'little': '<', 'big': '>'}[self.sdb.byteorder]
         if var_type == 'float':
@@ -111,4 +115,4 @@ class Target():
         """Reads the raw data of a value by the runner."""
         dw = binw.data_writer(self.sdb.byteorder)
         add_read_command(dw, self._values, net)
-        assert coparun(dw.get_data()) > 0
+        assert coparun(self._context, dw.get_data()) > 0

@@ -45,7 +45,8 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    int ret = parse_commands(file_buff);
+    runmem_t targ;
+    int ret = parse_commands(&targ, file_buff);
 
     if (ret == 2) {
         /* Dump code for debugging */
@@ -54,11 +55,11 @@ int main(int argc, char *argv[]) {
             return EXIT_FAILURE;
         }
         f = fopen(argv[2], "wb");
-        fwrite(executable_memory, 1, (size_t)executable_memory_len, f);
+        fwrite(targ.executable_memory, 1, (size_t)targ.executable_memory_len, f);
         fclose(f);
     }
 
-    free_memory();
+    free_memory(&targ);
 
     return ret < 0;
 }

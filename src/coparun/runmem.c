@@ -5,14 +5,6 @@
 #include "runmem.h"
 #include "mem_man.h"
 
-/* Globals declared extern in runmem.h */
-uint8_t *data_memory = NULL;
-uint32_t data_memory_len = 0;
-uint8_t *executable_memory = NULL;
-uint32_t executable_memory_len = 0;
-entry_point_t entr_point = NULL;
-int data_offs = 0;
-
 void patch(uint8_t *patch_addr, uint32_t patch_mask, int32_t value) {
     uint32_t *val_ptr = (uint32_t*)patch_addr;
     uint32_t original = *val_ptr;
@@ -58,23 +50,25 @@ void patch_arm32_abs(uint8_t *patch_addr, uint32_t imm16)
     *((uint32_t *)patch_addr) = instr;
 }
 
-void free_memory() {
-    deallocate_memory(executable_memory, executable_memory_len);
-    deallocate_memory(data_memory, data_memory_len);
-    executable_memory_len = 0;
-    data_memory_len = 0;
+void free_memory(runmem_t *context) {
+    deallocate_memory(context->executable_memory, context->executable_memory_len);
+    deallocate_memory(context->data_memory, context->data_memory_len);
+    context->executable_memory_len = 0;
+    context->data_memory_len = 0;
+    context->executable_memory = NULL;
+    context->data_memory = NULL;
+    context->entr_point = NULL;
+    context->data_offs = 0;
 }
 
-int update_data_offs() {
-    if (data_memory && executable_memory && (data_memory - executable_memory > 0x7FFFFFFF || executable_memory - data_memory > 0x7FFFFFFF)) {
+int update_data_offs(runmem_t *context) {
+    if (context->data_memory && context->executable_memory &&
+        (context->data_memory - context->executable_memory > 0x7FFFFFFF ||
+         context->executable_memory - context->data_memory > 0x7FFFFFFF)) {
         perror("Error: code and data memory to far apart");
         return 0;
     }
-    if (data_memory && executable_memory && (data_memory - executable_memory > 0x7FFFFFFF || executable_memory - data_memory > 0x7FFFFFFF)) {
-        perror("Error: code and data memory to far apart");
-        return 0;
-    }
-    data_offs = (int)(data_memory - executable_memory);
+    context->data_offs = (int)(context->data_memory - context->executable_memory);
     return 1;
 }
 
@@ -82,7 +76,7 @@ int floor_div(int a, int b) {
     return a / b - ((a % b != 0) && ((a < 0) != (b < 0)));
 }
 
-int parse_commands(uint8_t *bytes) {
+int parse_commands(runmem_t *context, uint8_t *bytes) {
     int32_t value;
     uint32_t command;
     uint32_t patch_mask;
@@ -98,33 +92,32 @@ int parse_commands(uint8_t *bytes) {
         switch(command) {
             case ALLOCATE_DATA:
                 size = *(uint32_t*)bytes; bytes += 4;
-                data_memory = allocate_data_memory(size);
-                data_memory_len = size;
-                LOG("ALLOCATE_DATA size=%i mem_addr=%p\n", size, (void*)data_memory);
-                if (!update_data_offs()) end_flag = -4;
+                context->data_memory = allocate_data_memory(size);
+                context->data_memory_len = size;
+                LOG("ALLOCATE_DATA size=%i mem_addr=%p\n", size, (void*)context->data_memory);
+                if (!update_data_offs(context)) end_flag = -4;
                 break;
 
             case COPY_DATA:
                 offs = *(uint32_t*)bytes; bytes += 4;
                 size = *(uint32_t*)bytes; bytes += 4;
                 LOG("COPY_DATA offs=%i size=%i\n", offs, size);
-                memcpy(data_memory + offs, bytes, size); bytes += size;
+                memcpy(context->data_memory + offs, bytes, size); bytes += size;
                 break;
 
             case ALLOCATE_CODE:
                 size = *(uint32_t*)bytes; bytes += 4;
-                executable_memory = allocate_executable_memory(size);
-                executable_memory_len = size;
-                LOG("ALLOCATE_CODE size=%i mem_addr=%p\n", size, (void*)executable_memory);
-                //LOG("# d %i  c %i  off %i\n", data_memory, executable_memory, data_offs);
-                if (!update_data_offs()) end_flag = -4;
+                context->executable_memory = allocate_executable_memory(size);
+                context->executable_memory_len = size;
+                LOG("ALLOCATE_CODE size=%i mem_addr=%p\n", size, (void*)context->executable_memory);
+                if (!update_data_offs(context)) end_flag = -4;
                 break;
 
             case COPY_CODE:
                 offs = *(uint32_t*)bytes; bytes += 4;
                 size = *(uint32_t*)bytes; bytes += 4;
                 LOG("COPY_CODE offs=%i size=%i\n", offs, size);
-                memcpy(executable_memory + offs, bytes, size); bytes += size;
+                memcpy(context->executable_memory + offs, bytes, size); bytes += size;
                 break;
 
             case PATCH_FUNC:
@@ -134,7 +127,7 @@ int parse_commands(uint8_t *bytes) {
                 value = *(int32_t*)bytes; bytes += 4;
                 LOG("PATCH_FUNC patch_offs=%i patch_mask=%#08x scale=%i value=%i\n",
                     offs, patch_mask, patch_scale, value);
-                patch(executable_memory + offs, patch_mask, value / patch_scale);
+                patch(context->executable_memory + offs, patch_mask, value / patch_scale);
                 break;
 
             case PATCH_OBJECT:
@@ -144,7 +137,7 @@ int parse_commands(uint8_t *bytes) {
                 value = *(int32_t*)bytes; bytes += 4;
                 LOG("PATCH_OBJECT patch_offs=%i patch_mask=%#08x scale=%i value=%i\n",
                     offs, patch_mask, patch_scale, value);
-                patch(executable_memory + offs, patch_mask, value / patch_scale + data_offs / patch_scale);
+                patch(context->executable_memory + offs, patch_mask, value / patch_scale + context->data_offs / patch_scale);
                 break;
 
             case PATCH_OBJECT_ABS:
@@ -154,7 +147,7 @@ int parse_commands(uint8_t *bytes) {
                 value = *(int32_t*)bytes; bytes += 4;
                 LOG("PATCH_OBJECT_ABS patch_offs=%i patch_mask=%#08x scale=%i value=%i\n",
                     offs, patch_mask, patch_scale, value);
-                patch(executable_memory + offs, patch_mask, value / patch_scale);
+                patch(context->executable_memory + offs, patch_mask, value / patch_scale);
                 break;
 
             case PATCH_OBJECT_REL:
@@ -163,8 +156,8 @@ int parse_commands(uint8_t *bytes) {
                 patch_scale = *(int32_t*)bytes; bytes += 4;
                 value = *(int32_t*)bytes; bytes += 4;
                 LOG("PATCH_OBJECT_REL patch_offs=%i patch_addr=%p scale=%i value=%i\n",
-                    offs, (void*)(data_memory + value), patch_scale, value);
-                *(void **)(executable_memory + offs) = data_memory + value; // / patch_scale;
+                    offs, (void*)(context->data_memory + value), patch_scale, value);
+                *(void **)(context->executable_memory + offs) = context->data_memory + value;
                 break;
 
             case PATCH_OBJECT_HI21:
@@ -173,8 +166,8 @@ int parse_commands(uint8_t *bytes) {
                 patch_scale = *(int32_t*)bytes; bytes += 4;
                 value = *(int32_t*)bytes; bytes += 4;
                 LOG("PATCH_OBJECT_HI21 patch_offs=%i scale=%i value=%i res_value=%i\n",
-                    offs, patch_scale, value, floor_div(data_offs + value, patch_scale) - (int32_t)offs / patch_scale);
-                patch_hi21(executable_memory + offs, floor_div(data_offs + value, patch_scale) - (int32_t)offs / patch_scale);
+                    offs, patch_scale, value, floor_div(context->data_offs + value, patch_scale) - (int32_t)offs / patch_scale);
+                patch_hi21(context->executable_memory + offs, floor_div(context->data_offs + value, patch_scale) - (int32_t)offs / patch_scale);
                 break;
 
             case PATCH_OBJECT_ARM32_ABS:
@@ -183,21 +176,24 @@ int parse_commands(uint8_t *bytes) {
                 patch_scale = *(int32_t*)bytes; bytes += 4;
                 value = *(int32_t*)bytes; bytes += 4;
                 LOG("PATCH_OBJECT_ARM32_ABS patch_offs=%i patch_mask=%#08x scale=%i value=%i imm16=%#04x\n",
-                    offs, patch_mask, patch_scale, value, (uint32_t)((uintptr_t)(data_memory + value) & patch_mask) / (uint32_t)patch_scale);
-                patch_arm32_abs(executable_memory + offs, (uint32_t)((uintptr_t)(data_memory + value) & patch_mask) / (uint32_t)patch_scale);
+                    offs, patch_mask, patch_scale, value, (uint32_t)((uintptr_t)(context->data_memory + value) & patch_mask) / (uint32_t)patch_scale);
+                patch_arm32_abs(context->executable_memory + offs, (uint32_t)((uintptr_t)(context->data_memory + value) & patch_mask) / (uint32_t)patch_scale);
                 break;
 
             case ENTRY_POINT:
                 rel_entr_point = *(uint32_t*)bytes; bytes += 4;
-                entr_point = (entry_point_t)(executable_memory + rel_entr_point);
+                context->entr_point = (entry_point_t)(context->executable_memory + rel_entr_point);
                 LOG("ENTRY_POINT rel_entr_point=%i\n", rel_entr_point); 
-                mark_mem_executable(executable_memory, executable_memory_len);
+                mark_mem_executable(context->executable_memory, context->executable_memory_len);
                 break;
 
             case RUN_PROG:
                 LOG("RUN_PROG\n");
-                int ret = entr_point();
-                BLOG("Return value: %i\n", ret);
+                {
+                    int ret = context->entr_point();
+                    (void)ret;
+                    BLOG("Return value: %i\n", ret);
+                }
                 break;
 
             case READ_DATA:
@@ -205,14 +201,14 @@ int parse_commands(uint8_t *bytes) {
                 size = *(uint32_t*)bytes; bytes += 4;
                 BLOG("READ_DATA offs=%i size=%i data=", offs, size);
                 for (uint32_t i = 0; i < size; i++) {
-                    printf("%02X ", data_memory[offs + i]);
+                    printf("%02X ", context->data_memory[offs + i]);
                 }
                 printf("\n");
                 break;
 
             case FREE_MEMORY:
                 LOG("FREE_MENORY\n");
-                free_memory();
+                free_memory(context);
                 break;
 
             case DUMP_CODE:
