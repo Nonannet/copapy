@@ -46,6 +46,13 @@ int main(int argc, char *argv[]) {
     }
 
     runmem_t targ;
+    targ.executable_memory_len = 0;
+    targ.data_memory_len = 0;
+    targ.executable_memory = NULL;
+    targ.data_memory = NULL;
+    targ.entr_point = NULL;
+    targ.data_offs = 0;
+
     int ret = parse_commands(&targ, file_buff);
 
     if (ret == 2) {
