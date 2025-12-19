@@ -105,13 +105,13 @@ class value(Generic[TNum], Net):
             assert dtype, 'For source type Node a dtype argument is required.'
             self.dtype = dtype
         elif isinstance(source, float):
-            self.source = CPConstant(source)
+            self.source = CPConstant(source, False)
             self.dtype = 'float'
         elif isinstance(source, bool):
-            self.source = CPConstant(source)
+            self.source = CPConstant(source, False)
             self.dtype = 'bool'
         else:
-            self.source = CPConstant(source)
+            self.source = CPConstant(source, False)
             self.dtype = 'int'
         self.volatile = volatile
 
@@ -332,11 +332,11 @@ class value(Generic[TNum], Net):
 
 
 class CPConstant(Node):
-    def __init__(self, value: int | float):
+    def __init__(self, value: int | float, constant: bool = True):
         self.dtype, self.value = _get_data_and_dtype(value)
         self.name = 'const_' + self.dtype
         self.args = tuple()
-        self.node_hash = id(self)
+        self.node_hash = hash(value) if constant else id(self)
 
 
 class Write(Node):
