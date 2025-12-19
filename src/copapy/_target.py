@@ -32,7 +32,7 @@ def jit(func: Callable[..., TRet]) -> Callable[..., TRet]:
             tg = Target()
             inputs = tuple(
                 tuple(value(ai) for ai in a) if isinstance(a, Iterable) else value(a) for a in args)
-            out = func(*inputs)  # type: ignore
+            out = func(*inputs)
             tg.compile(out)
             _jit_cache[func] = (tg, inputs, out)
         tg.run()
