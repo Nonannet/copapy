@@ -1,4 +1,4 @@
-from ._target import Target
+from ._target import Target, jit
 from ._basic_types import NumLike, value, generic_sdb, iif
 from ._vectors import vector, distance, scalar_projection, angle_between, rotate_vector, vector_projection
 from ._matrices import matrix, identity, zeros, ones, diagonal, eye
@@ -41,5 +41,6 @@ __all__ = [
     "rotate_vector",
     "vector_projection",
     "grad",
-    "eye"
+    "eye",
+    "jit"
 ]
