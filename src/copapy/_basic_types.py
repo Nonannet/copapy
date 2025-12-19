@@ -336,7 +336,7 @@ class CPConstant(Node):
         self.dtype, self.value = _get_data_and_dtype(value)
         self.name = 'const_' + self.dtype
         self.args = tuple()
-        self.node_hash = hash(value) if constant else id(self)
+        self.node_hash = hash(value) ^ hash(self.dtype) if constant else id(self)
 
 
 class Write(Node):
