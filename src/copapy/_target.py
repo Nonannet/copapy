@@ -168,7 +168,7 @@ class Target():
             raise ValueError(f"Unsupported value type: {var_type}")
         
         dw.write_com(binw.Command.END_COM)
-        assert coparun(dw.get_data()) > 0
+        assert coparun(self._context, dw.get_data()) > 0
 
     def read_value_remote(self, net: Net) -> None:
         """Reads the raw data of a value by the runner."""
