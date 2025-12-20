@@ -217,9 +217,9 @@ jobs:
       run: |
         mkdir build\runner
         call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=amd64
-        cl /DENABLE_BASIC_LOGGING /O2 src\coparun\runmem.c src\coparun\coparun.c src\coparun\mem_man.c /Fe:build\runner\coparun.exe
+        cl /DENABLE_BASIC_LOGGING /Od src\coparun\runmem.c src\coparun\coparun.c src\coparun\mem_man.c /Fe:build\runner\coparun.exe
         call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x86
-        cl /DENABLE_BASIC_LOGGING /O2 src\coparun\runmem.c src\coparun\coparun.c src\coparun\mem_man.c /Fe:build\runner\coparun-x86.exe
+        cl /DENABLE_BASIC_LOGGING /Od src\coparun\runmem.c src\coparun\coparun.c src\coparun\mem_man.c /Fe:build\runner\coparun-x86.exe
 
     - name: Run tests with pytest
       run: pytest
