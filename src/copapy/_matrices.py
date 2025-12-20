@@ -83,7 +83,7 @@ class matrix(Generic[TNum]):
                 tuple(a + other for a in row)
                 for row in self.values
             )
-        o = value(other, volatile=False)  # Make sure a single constant is allocated
+        o = value(other)  # Make sure a single constant is allocated
         return matrix(
             tuple(a + o if isinstance(a, value) else a + other  for a in row)
             for row in self.values
@@ -117,7 +117,7 @@ class matrix(Generic[TNum]):
                 tuple(a - other for a in row)
                 for row in self.values
             )
-        o = value(other, volatile=False)  # Make sure a single constant is allocated
+        o = value(other)  # Make sure a single constant is allocated
         return matrix(
             tuple(a - o if isinstance(a, value) else a - other  for a in row)
             for row in self.values
@@ -140,7 +140,7 @@ class matrix(Generic[TNum]):
                 tuple(other - a for a in row)
                 for row in self.values
             )
-        o = value(other, volatile=False)  # Make sure a single constant is allocated
+        o = value(other)  # Make sure a single constant is allocated
         return matrix(
             tuple(o - a if isinstance(a, value) else other - a for a in row)
             for row in self.values
@@ -168,7 +168,7 @@ class matrix(Generic[TNum]):
                 tuple(a * other for a in row)
                 for row in self.values
             )
-        o = value(other, volatile=False)  # Make sure a single constant is allocated
+        o = value(other)  # Make sure a single constant is allocated
         return matrix(
             tuple(a * o if isinstance(a, value) else a * other  for a in row)
             for row in self.values
@@ -195,7 +195,7 @@ class matrix(Generic[TNum]):
                 tuple(a / other for a in row)
                 for row in self.values
             )
-        o = value(other, volatile=False)  # Make sure a single constant is allocated
+        o = value(other)  # Make sure a single constant is allocated
         return matrix(
             tuple(a / o if isinstance(a, value) else a / other  for a in row)
             for row in self.values
@@ -214,7 +214,7 @@ class matrix(Generic[TNum]):
                 tuple(other / a for a in row)
                 for row in self.values
             )
-        o = value(other, volatile=False)  # Make sure a single constant is allocated
+        o = value(other)  # Make sure a single constant is allocated
         return matrix(
             tuple(o / a if isinstance(a, value) else other / a  for a in row)
             for row in self.values
@@ -305,7 +305,7 @@ class matrix(Generic[TNum]):
         """Convert all elements to copapy values if any element is a copapy value."""
         if any(isinstance(val, value) for row in self.values for val in row):
             return matrix(
-                tuple(value(val, volatile=False) if not isinstance(val, value) else val for val in row)
+                tuple(value(val) if not isinstance(val, value) else val for val in row)
                 for row in self.values
             )
         else:

@@ -19,6 +19,6 @@ def mixed_sum(scalars: Iterable[int | float | value[Any]]) -> Any:
 
 def mixed_homogenize(scalars: Iterable[T | value[T]]) -> Iterable[T] | Iterable[value[T]]:
     if any(isinstance(val, value) for val in scalars):
-        return (value(val, volatile=False) if not isinstance(val, value) else val for val in scalars)
+        return (value(val) if not isinstance(val, value) else val for val in scalars)
     else:
         return (val for val in scalars if not isinstance(val, value))
