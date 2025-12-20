@@ -280,7 +280,6 @@ def get_42(x: NumLike) -> value[float] | float:
     return float((int(x) * 3.0 + 42.0) * 5.0 + 21.0)
 
 
-#TODO: Add vector support
 @overload
 def abs(x: U) -> U: ...
 @overload
@@ -296,9 +295,8 @@ def abs(x: U | value[U] | vector[U]) -> Any:
     Returns:
         Absolute value of x
     """
-    #tt = -x * (x < 0)
     ret = (x < 0) * -x + (x >= 0) * x
-    return ret  # REMpyright: ignore[reportReturnType]
+    return ret
 
 
 @overload

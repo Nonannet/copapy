@@ -18,6 +18,17 @@ def mixed_sum(scalars: Iterable[int | float | value[Any]]) -> Any:
 
 
 def mixed_homogenize(scalars: Iterable[T | value[T]]) -> Iterable[T] | Iterable[value[T]]:
+    """Convert all scalars to either python numbers if there are no value types,
+    or to value types if there is at least one value type.
+
+    Arguments:
+        scalars: Iterable of scalars which can be either
+                 python numbers or value types.
+
+    Returns:
+        Iterable of scalars homogenized to either all plain values
+        or all value types.
+    """
     if any(isinstance(val, value) for val in scalars):
         return (value(val) if not isinstance(val, value) else val for val in scalars)
     else:

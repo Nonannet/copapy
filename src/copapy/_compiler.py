@@ -308,6 +308,14 @@ def get_aux_func_layout(function_names: Iterable[str], sdb: stencil_database, of
 
 
 def get_dag_stats(node_list: Iterable[Node | Net]) -> dict[str, int]:
+    """Get operation statistics for the DAG identified by provided end nodes
+
+    Arguments:
+        node_list: List of end nodes of the DAG
+
+    Returns:
+        Dictionary of operation name to occurrence count
+    """
     edges = get_all_dag_edges(n.source if isinstance(n, Net) else n for n in node_list)
     ops = {node for node, _ in edges}
 

@@ -19,7 +19,7 @@ class vector(Generic[TNum]):
     def __init__(self, values: Iterable[TNum | value[TNum]]):
         """Create a vector with given values.
 
-        Args:
+        Arguments:
             values: iterable of constant values
         """
         self.values: tuple[value[TNum] | TNum, ...] = tuple(values)

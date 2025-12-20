@@ -123,7 +123,7 @@ class stencil_database():
     def __init__(self, obj_file: str | bytes):
         """Load the stencil database from an ELF object file
 
-        Args:
+        Arguments:
             obj_file: path to the ELF object file or bytes of the ELF object file
         """
         if isinstance(obj_file, str):
@@ -201,7 +201,7 @@ class stencil_database():
     def get_patch(self, relocation: relocation_entry, symbol_address: int, function_offset: int, symbol_type: int) -> patch_entry:
         """Return patch positions for a provided symbol (function or object)
 
-        Args:
+        Arguments:
             relocation: relocation entry
             symbol_address: absolute address of the target symbol
             function_offset: absolute address of the first byte of the
@@ -313,7 +313,7 @@ class stencil_database():
     def get_stencil_code(self, name: str) -> bytes:
         """Return the striped function code for a provided function name
 
-        Args:
+        Arguments:
             name: function name
 
         Returns:
@@ -333,7 +333,7 @@ class stencil_database():
 
     def get_sub_functions(self, names: Iterable[str]) -> set[str]:
         """Return recursively all functions called by stencils or by other functions
-        Args:
+        Arguments:
             names: function or stencil names
 
         Returns:
@@ -384,7 +384,7 @@ class stencil_database():
     def get_function_code(self, name: str, part: Literal['full', 'start', 'end'] = 'full') -> bytes:
         """Returns machine code for a specified function name.
 
-        Args:
+        Arguments:
             name: function name
             part: part of the function to return ('full', 'start', 'end')
 

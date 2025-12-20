@@ -95,7 +95,7 @@ class value(Generic[TNum], Net):
     def __init__(self, source: TNum | Node, dtype: str | None = None):
         """Instance a value.
 
-        Args:
+        Arguments:
             source: A numeric value or Node object.
             dtype: Data type of this value. Required if source is a Node.
         """
@@ -376,6 +376,17 @@ def iif(expression: float | int, true_result: value[TNum], false_result: TNum | 
 @overload
 def iif(expression: float | int | value[Any], true_result: TNum | value[TNum], false_result: TNum | value[TNum]) -> value[TNum] | TNum: ...
 def iif(expression: Any, true_result: Any, false_result: Any) -> Any:
+    """Inline if-else operation. Returns true_result if expression is non-zero,
+    else returns false_result.
+    
+    Arguments:
+        expression: The condition to evaluate.
+        true_result: The result if expression is non-zero.
+        false_result: The result if expression is zero.
+
+    Returns:
+        The selected result based on the evaluation of expression.
+    """
     allowed_type = (value, int, float)
     assert isinstance(true_result, allowed_type) and isinstance(false_result, allowed_type), "Result type not supported"
     return (expression != 0) * true_result + (expression == 0) * false_result

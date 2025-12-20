@@ -23,6 +23,14 @@ def add_read_command(dw: binw.data_writer, variables: dict[Net, tuple[int, int, 
 
 
 def jit(func: Callable[..., TRet]) -> Callable[..., TRet]:
+    """Just-in-time compile a function for the copapy target.
+
+    Arguments:
+        func: Function to compile
+
+    Returns:
+        A callable that runs the compiled function.
+    """
     def call_helper(*args: ArgType) -> TRet:
         if func in _jit_cache:
             tg, inputs, out = _jit_cache[func]
@@ -96,16 +104,15 @@ class Target():
         """Reads the numeric value of a copapy type.
 
         Arguments:
-            net: Values to read
+            net: Value or multiple Values to read
 
         Returns:
-            Numeric value
+            Numeric value or values
         """
         if isinstance(net, Iterable):
             return [self.read_value(ni) if isinstance(ni, value) else ni for ni in net]
 
         if isinstance(net, float | int):
-            print("Warning: value is not a copypy value")
             return net
 
         assert isinstance(net, Net), "Argument must be a copapy value"
@@ -136,11 +143,11 @@ class Target():
             raise ValueError(f"Unsupported value type: {var_type}")
         
     def write_value(self, net: value[Any] | Iterable[value[Any]], value: int | float | Iterable[int | float]) -> None:
-        """Reads the numeric value of a copapy type.
+        """Write to a copapy value on the target.
 
         Arguments:
-            net: Variable to overwrite
-            value: Value
+            net: Singe variable or multiple variables to overwrite
+            value: Singe value or multiple values to write
         """
         if isinstance(net, Iterable):
             assert isinstance(value, Iterable), "If net is iterable, value must be iterable too"

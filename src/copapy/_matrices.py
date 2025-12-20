@@ -16,7 +16,7 @@ class matrix(Generic[TNum]):
     def __init__(self, values: Iterable[Iterable[TNum | value[TNum]]] | vector[TNum]):
         """Create a matrix with given values.
 
-        Args:
+        Arguments:
             values: iterable of iterable of constant values
         """
         if isinstance(values, vector):
@@ -44,7 +44,7 @@ class matrix(Generic[TNum]):
     def __getitem__(self, key: tuple[int, int]) -> value[TNum] | TNum: ...
     def __getitem__(self, key: int | tuple[int, int]) -> Any:
         """Get a row as a vector or a specific element.
-            Args:
+            Arguments:
                 key: row index or (row, col) tuple
             
             Returns:
