@@ -1,6 +1,6 @@
 # Copapy
 
-Copapy is a Python framework for deterministic, low-latency realtime computation, targeting hardware applications - for example in the fields of robotics, aerospace, embedded systems and control systems in general.
+Copapy is a Python framework for deterministic, low-latency realtime computation with automatic differentiation support, targeting hardware applications - for example in the fields of robotics, aerospace, embedded systems and control systems in general.
 
 GPU frameworks like PyTorch, JAX and TensorFlow jump-started the development in the field of AI. With the right balance of flexibility and performance, they allow for fast iteration of new ideas while still being performant enough to test or even use them in production.
 
@@ -12,7 +12,7 @@ The main features can be summarized as:
 - Fast to write & easy to read
 - Memory and type safety with a minimal set of runtime errors
 - Deterministic execution
-- Autograd for efficient realtime optimization
+- Automatic differentiation for efficient realtime optimization (reverse-mode)
 - Optimized machine code for x86_64, AArch64 and ARMv7
 - Highly portable to new architectures
 - Small Python package with minimal dependencies and no cross-compile toolchain required

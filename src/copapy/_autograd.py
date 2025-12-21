@@ -15,7 +15,8 @@ def grad(x: Any, y: Sequence[value[Any]]) -> list[unifloat]: ...
 def grad(x: Any, y: matrix[Any]) -> matrix[float]: ...
 def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | matrix[Any]) -> Any:
     """Returns the partial derivative dx/dy where x needs to be a scalar
-    and y might be a scalar, a list of scalars, a vector or matrix.
+    and y might be a scalar, a list of scalars, a vector or matrix. It
+    uses automatic differentiation in reverse-mode.
 
     Arguments:
         x: Value to return derivative of
