@@ -12,18 +12,18 @@
             fill: #EEEEEE !important;
         }
         #patch_1 path {
-            fill: #444444 !important;
+            fill: #14141400 !important;
         }
     }
     @media (prefers-color-scheme: light) {
         path {
-            stroke: #444444 !important;
+            stroke: #141414 !important;
         }
         text {
-            fill: #444444 !important;
+            fill: #141414 !important;
         }
         #patch_1 path {
-            fill: #FFFFFF !important;
+            fill: #FFFFFF00 !important;
         }
     }
     #patch_1 path {

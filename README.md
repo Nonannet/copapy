@@ -147,7 +147,7 @@ The call to the dummy function `result_float_float` ensures that the compiler ke
 
 The machine code for the function above, compiled for x86_64, looks like this:
 
-```assembly
+```nasm
 0000000000000000 <add_float_float>:
    0:    f3 0f 58 c1              addss  %xmm1,%xmm0
    4:    e9 00 00 00 00           jmp    9 <.LC1+0x1>
@@ -158,7 +158,7 @@ Based on the relocation entry for the `jmp` to the symbol `result_float_float`, 
 
 For more complex operations - where inlining is less useful - stencils call a non-stencil function, such as in this example:
 
-```assembly
+```nasm
 0000000000000000 <sin_float>:
    0:    48 83 ec 08              sub    $0x8,%rsp
    4:    e8 00 00 00 00           call   9 <sin_float+0x9>

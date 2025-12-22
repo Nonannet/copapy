@@ -17,7 +17,8 @@ def extract_sections(md_text: str) -> dict[str, str]:
 
     sections: dict[str, str] = {}
     for _, title, content in pattern.findall(md_text):
-        sections[title] = content.strip()
+        assert isinstance(content, str)
+        sections[title] = content.strip().replace('](docs/source/media/', '](media/')
 
     return sections
 
@@ -26,4 +27,8 @@ if __name__ == '__main__':
         readme = extract_sections(f.read())
 
     with open('docs/source/start.md', 'wt') as f:
-        f.write('\n'.join(readme[s] for s in ['Copapy', 'Current state']))
+        f.write('\n'.join(f"# {s}\n" + readme[s] for s in ['Copapy', 'Current state', 'Install', 'License']))
+
+    with open('docs/source/compiler.md', 'wt') as f:
+        f.write('# How it works\n')
+        f.write('\n'.join(readme[s] for s in ['How it works']))

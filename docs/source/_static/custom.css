@@ -1,0 +1,3 @@
+html[data-theme="dark"] .bd-content img {
+  background-color: transparent !important;
+}

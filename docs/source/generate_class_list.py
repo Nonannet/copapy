@@ -17,7 +17,7 @@ def write_classes(f: TextIOWrapper, patterns: list[str], module_name: str, title
 
     classes = [
         name for name, obj in inspect.getmembers(module, inspect.isclass)
-        if (any(fnmatch.fnmatch(name, pat) for pat in patterns if pat not in exclude) and
+        if (any(fnmatch.fnmatch(name, pat) for pat in patterns if name not in exclude) and
             obj.__doc__ and '(Automatic generated stub)' not in obj.__doc__)
     ]
 
@@ -38,14 +38,17 @@ def write_classes(f: TextIOWrapper, patterns: list[str], module_name: str, title
             f2.write('```\n\n')
 
 
-def write_functions(f: TextIOWrapper, patterns: list[str], module_name: str, title: str, description: str = '', exclude: list[str] = []) -> None:
+def write_functions(f: TextIOWrapper, patterns: list[str], module_name: str, title: str, description: str = '', exclude: list[str] = [], path_patterns: list[str] = ['*']) -> None:
     """Write the classes to the file."""
     module = importlib.import_module(module_name)
 
-    functions = [
-        name for name, _ in inspect.getmembers(module, inspect.isfunction)
-        if (any(fnmatch.fnmatch(name, pat) for pat in patterns if pat not in exclude))
-    ]
+    functions: list[str] = []
+    for name, fu in inspect.getmembers(module, inspect.isfunction):
+        if (any(fnmatch.fnmatch(name, pat) for pat in patterns if name not in exclude)):
+            path = inspect.getfile(fu)
+            if any(fnmatch.fnmatch(path, pat) for pat in path_patterns):
+                functions.append(name)
+
 
     if description:
         f.write(f'{description}\n\n')
@@ -77,10 +80,22 @@ if __name__ == "__main__":
     os.makedirs('docs/source/api', exist_ok=True)
 
     with open('docs/source/api/index.md', 'w') as f:
-        f.write('# Classes and functions\n\n')
+        f.write('# User API\n\n')
 
         write_classes(f, ['*'], 'copapy', title='Classes')
 
-        write_functions(f, ['*'], 'copapy', title='Functions')
+        write_functions(f, ['*'], 'copapy', title='General functions', path_patterns=['*_autograd.py', '*_basic_types.py', '*_target.py'])
 
-        #write_manual(f, ['../ndfloat', '../floatarray'], title='Types')
+        write_functions(f, ['*'], 'copapy', title='Math functions', path_patterns=['*_math*'], exclude=['get_42'])
+
+        write_functions(f, ['*'], 'copapy', title='Vector functions', path_patterns=['*_vectors*'])
+
+        write_functions(f, ['*'], 'copapy', title='Matrix functions', path_patterns=['*_matrices*'])
+
+        write_manual(f, ['NumLike'], title='Types')
+
+    with open('docs/source/api/backend.md', 'w') as f:
+        f.write('# Backend\n\n')
+        write_classes(f, ['*'], 'copapy.backend', title='Classes')
+
+        write_functions(f, ['*'], 'copapy.backend', title='Functions')
