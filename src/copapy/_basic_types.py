@@ -64,6 +64,9 @@ class Node:
     def __hash__(self) -> int:
         return self.node_hash
 
+    def __eq__(self, value: object) -> bool:
+        return isinstance(value, Node) and self.node_hash == value.node_hash  # TODO: change to 64 bit hash
+
 
 class Net:
     """A Net represents a scalar type in the computation graph - or more generally it
@@ -79,7 +82,7 @@ class Net:
 
     def __repr__(self) -> str:
         names = get_var_name(self)
-        return f"{'name:' + names[0] if names else 'id:' + str(hash(self))[-5:]}"
+        return f"{'name:' + names[0] if names else 'h:' + str(hash(self))[-5:]}"
 
     def __hash__(self) -> int:
         return self.source.node_hash
@@ -352,7 +355,7 @@ class CPConstant(Node):
 
         self.name = 'const_' + self.dtype
         self.args = tuple()
-        self.node_hash = hash(value) ^ hash(self.dtype) if anonymous else id(self)
+        self.node_hash = ((value if isinstance(value, int) else hash(value)) + 0x1_0000_0000) ^ hash(self.dtype) if anonymous else id(self)  # TODO: Simplify hash and compare
 
 
 class Write(Node):

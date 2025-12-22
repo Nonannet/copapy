@@ -98,7 +98,7 @@ def test_compile():
 
     out = [Write(r) for r in ret_test]
 
-    sdb = backend.stencil_db_from_package('armv7')
+    sdb = backend.stencil_db_from_package('armv6')
     dw, variables = compile_to_dag(out, sdb)
 
     #dw.write_com(_binwrite.Command.READ_DATA)
@@ -122,25 +122,25 @@ def test_compile():
     #print('* Data to runner:')
     #dw.print()
 
-    dw.to_file('build/runner/test-armv7.copapy')
+    dw.to_file('build/runner/test-armv6.copapy')
 
     if not check_for_qemu():
-        warnings.warn("qemu-armv7 not found, armv7 test skipped!", UserWarning)
+        warnings.warn("qemu-armv6 not found, armv6 test skipped!", UserWarning)
         return
-    if not os.path.isfile('build/runner/coparun-armv7'):
-        warnings.warn("armv7 runner not found, armv7 test skipped!", UserWarning)
+    if not os.path.isfile('build/runner/coparun-armv6'):
+        warnings.warn("armv6 runner not found, armv6 test skipped!", UserWarning)
         return
 
-    command = qemu_command + ['build/runner/coparun-armv7', 'build/runner/test-armv7.copapy'] + ['build/runner/test-armv7.copapy.bin']
+    command = qemu_command + ['build/runner/coparun-armv6', 'build/runner/test-armv6.copapy'] + ['build/runner/test-armv6.copapy.bin']
     #try:
     result = run_command(command)
     #except FileNotFoundError:
     #    warnings.warn(f"Test skipped, executable not found.", UserWarning)
     #    return
 
-    print('* Output from runner:\n--')
-    print(result)
-    print('--')
+    #print('* Output from runner:\n--')
+    #print(result)
+    #print('--')
 
     assert 'Return value: 1' in result
 
@@ -167,5 +167,5 @@ def test_compile():
 
 
 if __name__ == "__main__":
-    #test_example()
+    #test_compile()
     test_slow_31bit_int_list_hash()

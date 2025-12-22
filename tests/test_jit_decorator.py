@@ -48,6 +48,20 @@ def slow_31bit_int_list_hash(data: list[int], rounds: int = 5)-> int:
     return state
 
 
+def test_hash_without_decorator():
+    nums = [12, 99, 2024]
+    h_ref = slow_31bit_int_list_hash(nums)
+    h = slow_31bit_int_list_hash([cp.value(num) for num in nums])
+
+    tg = cp.Target()
+    tg.compile(h)
+    tg.run()
+
+    assert isinstance(h, cp.value)
+    assert tg.read_value(h) == h_ref
+    print(tg.read_value(h), h_ref)
+
+
 def test_decorator():
     sumv = 0
     y = 5.7
@@ -57,11 +71,10 @@ def test_decorator():
 
     assert abs(sumv - 166542418649.28778) < 1e14, sumv
 
+
 def test_hash():
     nums = [12, 99, 2024]
     h_ref = slow_31bit_int_list_hash(nums)
-    print(h_ref)
-
     h = cp.jit(slow_31bit_int_list_hash)(nums)
-    print(h)
+    print(h, h_ref)
     assert h == h_ref

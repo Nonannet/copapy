@@ -153,6 +153,35 @@ jobs:
         name: runner-linux-arm64
         path: build/runner/*
 
+  build-armv6:
+    needs: [build_stencils]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/download-artifact@v4
+      with:
+        name: stencil-object-files
+        path: src/copapy/obj
+    - name: Set up QEMU for ARMv6
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: linux/arm/v6
+    - name: Use ARMv6 container
+      run: |
+        docker run --rm -v $PWD:/app -w /app --platform linux/arm/v6 ghcr.io/nonannet/armv6_test:1 \
+        bash -lc "pip install . && \
+                  mkdir -p build/runner && \
+                  gcc -O3 -DENABLE_LOGGING -o build/runner/coparun src/coparun/runmem.c \
+                  src/coparun/coparun.c src/coparun/mem_man.c && \
+                  pytest && \
+                  bash tools/create_asm.sh"
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: runner-linux-armv6
+        path: build/runner/*
+
   build-armv7:
     needs: [build_stencils]
     runs-on: ubuntu-latest
@@ -231,7 +260,7 @@ jobs:
         path: build/runner/*
 
   release-stencils:
-    needs: [build_stencils, build-ubuntu, build-windows, build-arm64, build-armv7]
+    needs: [build_stencils, build-ubuntu, build-windows, build-arm64, build-armv6, build-armv7]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
@@ -263,6 +292,7 @@ jobs:
           cp tmp/musl-object-files/* release/
           cp tmp/runner-linux/coparun release/
           cp tmp/runner-linux-arm64/coparun release/coparun-aarch64
+          cp tmp/runner-linux-armv6/coparun release/coparun-armv6
           cp tmp/runner-linux-armv7/coparun release/coparun-armv7
           cp tmp/runner-win/coparun*.exe release/
 

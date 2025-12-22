@@ -380,7 +380,7 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
             dw.write_int(start)
             dw.write_int(lengths)
             dw.write_value(net.source.value, lengths)
-            print(f'+ {net.dtype} {net.source.value}')
+            #print(f'+ {net.dtype} {net.source.value}')
 
     # prep auxiliary_functions
     code_section_layout, func_addr_lookup, aux_func_len = get_aux_func_layout(aux_function_names, sdb)
