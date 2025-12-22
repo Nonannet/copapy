@@ -298,7 +298,14 @@ class vector(Generic[TNum]):
             return self
 
     def map(self, func: Callable[[Any], value[U] | U]) -> 'vector[U]':
-        """Applies a function to each element of the vector and returns a new vector."""
+        """Applies a function to each element of the vector and returns a new vector.
+        
+        Arguments:
+            func: A function that takes a single argument.
+        
+        Returns:
+            A new vector with the function applied to each element.
+        """
         return vector(func(x) for x in self.values)
     
     def _map2(self, other: VecNumLike, func: Callable[[Any, Any], value[int] | value[float]]) -> 'vector[Any]':
@@ -312,30 +319,70 @@ class vector(Generic[TNum]):
 
 
 def cross_product(v1: vector[float], v2: vector[float]) -> vector[float]:
-    """Calculate the cross product of two 3D vectors."""
+    """Calculate the cross product of two 3D vectors.
+    
+    Arguments:
+        v1: First 3D vector.
+        v2: Second 3D vector.
+        
+    Returns:
+        The cross product vector.
+    """
     return v1.cross(v2)
 
 
 def dot_product(v1: vector[float], v2: vector[float]) -> 'float | value[float]':
-    """Calculate the dot product of two vectors."""
+    """Calculate the dot product of two vectors.
+    
+    Arguments:
+        v1: First vector.
+        v2: Second vector.
+        
+    Returns:
+        The dot product.
+    """
     return v1.dot(v2)
 
 
 def distance(v1: vector[float], v2: vector[float]) -> 'float | value[float]':
-    """Calculate the Euclidean distance between two vectors."""
+    """Calculate the Euclidean distance between two vectors.
+    
+    Arguments:
+        v1: First vector.
+        v2: Second vector.
+        
+    Returns:
+        The Euclidean distance.
+    """
     diff = v1 - v2
     return diff.magnitude()
 
 
 def scalar_projection(v1: vector[float], v2: vector[float]) -> 'float | value[float]':
-    """Calculate the scalar projection of v1 onto v2."""
+    """Calculate the scalar projection of v1 onto v2.
+    
+    Arguments:
+        v1: First vector.
+        v2: Second vector.
+        
+    Returns:
+        The scalar projection.
+    """
     dot_prod = v1.dot(v2)
     mag_v2 = v2.magnitude() + epsilon
     return dot_prod / mag_v2
 
 
 def vector_projection(v1: vector[float], v2: vector[float]) -> vector[float]:
-    """Calculate the vector projection of v1 onto v2."""
+    """Calculate the vector projection of v1 onto v2.
+    
+    Arguments:
+        v1: First vector.
+        v2: Second vector.
+        
+    Returns:
+        The projected vector.
+    """
     dot_prod = v1.dot(v2)
     mag_v2_squared = v2.magnitude() ** 2 + epsilon
     scalar_proj = dot_prod / mag_v2_squared
@@ -343,7 +390,15 @@ def vector_projection(v1: vector[float], v2: vector[float]) -> vector[float]:
 
 
 def angle_between(v1: vector[float], v2: vector[float]) -> 'float | value[float]':
-    """Calculate the angle in radians between two vectors."""
+    """Calculate the angle in radians between two vectors.
+    
+    Arguments:
+        v1: First vector.
+        v2: Second vector.
+        
+    Returns:
+        The angle in radians.
+    """
     dot_prod = v1.dot(v2)
     mag_v1 = v1.magnitude()
     mag_v2 = v2.magnitude()
@@ -352,7 +407,16 @@ def angle_between(v1: vector[float], v2: vector[float]) -> 'float | value[float]
 
 
 def rotate_vector(v: vector[float], axis: vector[float], angle: 'float | value[float]') -> vector[float]:
-    """Rotate vector v around a given axis by a specified angle using Rodrigues' rotation formula."""
+    """Rotate vector v around a given axis by a specified angle using Rodrigues' rotation formula.
+    
+    Arguments:
+        v: The 3D vector to be rotated.
+        axis: A 3D vector defining the axis of rotation.
+        angle: The angle of rotation in radians.
+    
+    Returns:
+        The rotated vector.
+    """
     k = axis.normalize()
     cos_angle = cp.cos(angle)
     sin_angle = cp.sin(angle)
