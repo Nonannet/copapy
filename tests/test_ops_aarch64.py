@@ -146,7 +146,7 @@ def test_compile():
 
     for test, ref in zip(ret_test, ret_ref):
         assert isinstance(test, value)
-        address = variables[test][0]
+        address = variables[test.net][0]
         data = result_data[address]
         if test.dtype == 'int':
             val = int.from_bytes(data, sdb.byteorder, signed=True)
