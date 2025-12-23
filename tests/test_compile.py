@@ -65,9 +65,9 @@ def test_compile():
     # run program command
     il.write_com(_binwrite.Command.RUN_PROG)
 
-    for net in ret:
-        assert isinstance(net, copapy.backend.Net)
-        add_read_command(il, variables, net)
+    for v in ret:
+        assert isinstance(v, cp.value)
+        add_read_command(il, variables, v.net)
 
     il.write_com(_binwrite.Command.END_COM)
 

@@ -83,35 +83,51 @@ class Net:
 
     def __hash__(self) -> int:
         return self.source.node_hash
+    
+    def __eq__(self, value: object) -> bool:
+        return isinstance(value, Net) and self.source.node_hash == value.source.node_hash  # TODO: change to 64 bit hash
 
 
-class value(Generic[TNum], Net):
+class value(Generic[TNum]):
     """A "value" represents a typed scalar variable. It supports arithmetic and
     comparison operations.
 
     Attributes:
         dtype (str): Data type of this value.
     """
-    def __init__(self, source: TNum | Node, dtype: str | None = None):
+    def __init__(self, source: TNum | Net, dtype: str | None = None):
         """Instance a value.
 
         Arguments:
-            source: A numeric value or Node object.
-            dtype: Data type of this value. Required if source is a Node.
+            dtype: Data type of this value.
+            net: Reference to the underlying Net in the graph
         """
-        if isinstance(source, Node):
-            self.source = source
-            assert dtype, 'For source type Node a dtype argument is required.'
+        if isinstance(source, Net):
+            self.net: Net = source
+            if dtype:
+                assert transl_type(dtype) == source.dtype, f"Type of Net ({source.dtype}) does not match {dtype}"
+                self.dtype: str = dtype
+            else:
+                self.dtype = source.dtype
+        elif dtype == 'int' or dtype == 'bool':
+            new_node = CPConstant(int(source), False)
+            self.net = Net(new_node.dtype, new_node)
             self.dtype = dtype
-        elif isinstance(source, float):
-            self.source = CPConstant(source, False)
-            self.dtype = 'float'
-        elif isinstance(source, bool):
-            self.source = CPConstant(source, False)
-            self.dtype = 'bool'
+        elif dtype == 'float':
+            new_node = CPConstant(float(source), False)
+            self.net = Net(new_node.dtype, new_node)
+            self.dtype = dtype
+        elif dtype is None:
+            if isinstance(source, bool):
+                new_node = CPConstant(source, False)
+                self.net = Net(new_node.dtype, new_node)
+                self.dtype = 'bool'
+            else:
+                new_node = CPConstant(source, False)
+                self.net = Net(new_node.dtype, new_node)
+                self.dtype = new_node.dtype
         else:
-            self.source = CPConstant(source, False)
-            self.dtype = 'int'
+            raise ValueError('Unknown type: {dtype}')
 
     @overload
     def __add__(self: 'value[TNum]', other: 'value[TNum] | TNum') -> 'value[TNum]': ...
@@ -227,28 +243,22 @@ class value(Generic[TNum], Net):
         return cast(TCPNum, add_op('sub', [value(0), self]))
 
     def __gt__(self, other: TVarNumb) -> 'value[int]':
-        ret = add_op('gt', [self, other])
-        return value(ret.source, dtype='bool')
+        return add_op('gt', [self, other], dtype='bool')
 
     def __lt__(self, other: TVarNumb) -> 'value[int]':
-        ret = add_op('gt', [other, self])
-        return value(ret.source, dtype='bool')
+        return add_op('gt', [other, self], dtype='bool')
 
     def __ge__(self, other: TVarNumb) -> 'value[int]':
-        ret = add_op('ge', [self, other])
-        return value(ret.source, dtype='bool')
+        return add_op('ge', [self, other], dtype='bool')
 
     def __le__(self, other: TVarNumb) -> 'value[int]':
-        ret = add_op('ge', [other, self])
-        return value(ret.source, dtype='bool')
+        return add_op('ge', [other, self], dtype='bool')
 
     def __eq__(self, other: TVarNumb) -> 'value[int]':  # type: ignore
-        ret = add_op('eq', [self, other], True)
-        return value(ret.source, dtype='bool')
+        return add_op('eq', [self, other], True, dtype='bool')
 
     def __ne__(self, other: TVarNumb) -> 'value[int]':  # type: ignore
-        ret = add_op('ne', [self, other], True)
-        return value(ret.source, dtype='bool')
+        return add_op('ne', [self, other], True, dtype='bool')
 
     @overload
     def __mod__(self: 'value[TNum]', other: 'value[TNum] | TNum') -> 'value[TNum]': ...
@@ -295,7 +305,7 @@ class value(Generic[TNum], Net):
         return cp.pow(other, self)
 
     def __hash__(self) -> int:
-        return super().__hash__()
+        return id(self)
 
     # Bitwise and shift operations for cp[int]
     def __lshift__(self, other: uniint) -> 'value[int]':
@@ -330,16 +340,26 @@ class value(Generic[TNum], Net):
 
 
 class CPConstant(Node):
-    def __init__(self, value: int | float, anonymous: bool = True):
-        self.dtype, self.value = _get_data_and_dtype(value)
+    def __init__(self, value: Any, anonymous: bool = True):
+        if isinstance(value, int):
+            self.value: int | float =  value
+            self.dtype = 'int'
+        elif isinstance(value, float):
+            self.value =  value
+            self.dtype = 'float'
+        else:
+            raise ValueError(f'Non supported data type: {type(value).__name__}')
+
         self.name = 'const_' + self.dtype
         self.args = tuple()
         self.node_hash = hash(value) ^ hash(self.dtype) if anonymous else id(self)
 
 
 class Write(Node):
-    def __init__(self, input: Net | int | float):
-        if isinstance(input, Net):
+    def __init__(self, input: value[Any] | Net | int | float):
+        if isinstance(input, value):
+            net = input.net
+        elif isinstance(input, Net):
             net = input
         else:
             node = CPConstant(input)
@@ -352,15 +372,16 @@ class Write(Node):
 
 class Op(Node):
     def __init__(self, typed_op_name: str, args: Sequence[Net], commutative: bool = False):
-        assert not args or any(isinstance(t, Net) for t in args), 'args parameter must be of type list[Net]'
         self.name: str = typed_op_name
         self.args: tuple[Net, ...] = tuple(args)
         self.node_hash = self.get_node_hash(commutative)
 
 
-def net_from_value(val: Any) -> value[Any]:
-    vi = CPConstant(val)
-    return value(vi, vi.dtype)
+def value_from_number(val: Any) -> value[Any]:
+    # Create anonymous constant that can be removed during optimization
+    new_node = CPConstant(val)
+    new_net = Net(new_node.dtype, new_node)
+    return value(new_net)
 
 
 @overload
@@ -392,29 +413,22 @@ def iif(expression: Any, true_result: Any, false_result: Any) -> Any:
     return (expression != 0) * true_result + (expression == 0) * false_result
 
 
-def add_op(op: str, args: list[value[Any] | int | float], commutative: bool = False) -> value[Any]:
-    arg_nets = [a if isinstance(a, Net) else net_from_value(a) for a in args]
+def add_op(op: str, args: list[value[Any] | int | float], commutative: bool = False, dtype: str | None = None) -> value[Any]:
+    arg_values = [a if isinstance(a, value) else value_from_number(a) for a in args]
 
     if commutative:
-        arg_nets = sorted(arg_nets, key=lambda a: a.dtype)  # TODO: update the stencil generator to generate only sorted order
+        arg_values = sorted(arg_values, key=lambda a: a.dtype)  # TODO: update the stencil generator to generate only sorted order
 
-    typed_op = '_'.join([op] + [transl_type(a.dtype) for a in arg_nets])
+    typed_op = '_'.join([op] + [transl_type(a.dtype) for a in arg_values])
 
     if typed_op not in generic_sdb.stencil_definitions:
-        raise NotImplementedError(f"Operation {op} not implemented for {' and '.join([a.dtype for a in arg_nets])}")
+        raise NotImplementedError(f"Operation {op} not implemented for {' and '.join([a.dtype for a in arg_values])}")
 
     result_type = generic_sdb.stencil_definitions[typed_op].split('_')[0]
 
-    if result_type == 'float':
-        return value[float](Op(typed_op, arg_nets, commutative), result_type)
-    else:
-        return value[int](Op(typed_op, arg_nets, commutative), result_type)
+    result_net = Net(result_type, Op(typed_op, [av.net for av in arg_values], commutative))
 
+    if dtype:
+        result_type = dtype
 
-def _get_data_and_dtype(value: Any) -> tuple[str, float | int]:
-    if isinstance(value, int):
-        return ('int', int(value))
-    elif isinstance(value, float):
-        return ('float', float(value))
-    else:
-        raise ValueError(f'Non supported data type: {type(value).__name__}')
+    return value(result_net, result_type)

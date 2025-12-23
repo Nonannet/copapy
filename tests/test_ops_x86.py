@@ -120,9 +120,9 @@ def test_compile():
     dw.write_com(_binwrite.Command.RUN_PROG)
     #dw.write_com(_binwrite.Command.DUMP_CODE)
 
-    for net in ret_test:
-        assert isinstance(net, backend.Net)
-        add_read_command(dw, variables, net)
+    for v in ret_test:
+        assert isinstance(v, value)
+        add_read_command(dw, variables, v.net)
 
     #dw.write_com(_binwrite.Command.READ_DATA)
     #dw.write_int(0)

@@ -16,7 +16,7 @@ def test_multi_target():
     tg1.compile(e)
 
     # Patch constant value
-    a.source = cp._basic_types.CPConstant(1000.0)
+    a.net.source = cp._basic_types.CPConstant(1000.0)
 
     tg2 = cp.Target()
     tg2.compile(e)

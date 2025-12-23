@@ -33,9 +33,9 @@ def test_compile():
     # run program command
     il.write_com(_binwrite.Command.RUN_PROG)
 
-    for net in ret:
-        assert isinstance(net, Net)
-        add_read_command(il, vars, net)
+    for v in ret:
+        assert isinstance(v, value)
+        add_read_command(il, vars, v.net)
 
     il.write_com(_binwrite.Command.END_COM)
 

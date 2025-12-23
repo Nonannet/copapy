@@ -13,7 +13,7 @@ def test_get_dag_stats():
     v3 = sum((v1 + i + 7) @ v2 for i in range(sum_size))
 
     assert isinstance(v3, value)
-    stat = get_dag_stats([v3])
+    stat = get_dag_stats([v3.net])
     print(stat)
 
     assert stat['const_float'] == 2 * v_size

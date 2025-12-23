@@ -35,23 +35,23 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | matrix[Any
         assert isinstance(y, Sequence) or isinstance(y, vector)
         y_set = {v for v in y}
 
-    edges = cpb.get_all_dag_edges_between([x.source], (net.source for net in y_set if isinstance(net, Net)))
+    edges = cpb.get_all_dag_edges_between([x.net.source], (v.net.source for v in y_set if isinstance(v, value)))
     ordered_ops = cpb.stable_toposort(edges)
 
     net_lookup = {net.source: net for node in ordered_ops for net in node.args}
     grad_dict: dict[Net, unifloat] = dict()
 
     def add_grad(val: value[Any], gradient_value: unifloat) -> None:
-        grad_dict[val] = grad_dict.get(val, 0.0) + gradient_value
+        grad_dict[val.net] = grad_dict.get(val.net, 0.0) + gradient_value
 
     for node in reversed(ordered_ops):
         #print(f"-->   {'x' if node in net_lookup else ' '}", node, f"{net_lookup.get(node)}")
         if node.args:
-            args: Sequence[Any] = list(node.args)
-            g = 1.0 if node is x.source else grad_dict[net_lookup[node]]
+            args: Sequence[Net] = list(node.args)
+            g = 1.0 if node is x.net.source else grad_dict[net_lookup[node]]
             opn = node.name.split('_')[0]
-            a: value[Any] = args[0]
-            b: value[Any] = args[1] if len(args) > 1 else a
+            a: value[float] = value(args[0])
+            b: value[float] = value(args[1]) if len(args) > 1 else a
 
             if opn in ['ge', 'gt', 'eq', 'ne', 'floordiv', 'bwand', 'bwor', 'bwxor']:
                 pass  # Derivative is 0 for all ops returning integers
@@ -119,9 +119,9 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | matrix[Any
                 raise ValueError(f"Operation {opn} not yet supported for auto diff.")
 
     if isinstance(y, value):
-        return grad_dict[y]
+        return grad_dict[y.net]
     if isinstance(y, vector):
-        return vector(grad_dict[yi] if isinstance(yi, value) else 0.0 for yi in y)
+        return vector(grad_dict[yi.net] if isinstance(yi, value) else 0.0 for yi in y)
     if isinstance(y, matrix):
-        return matrix((grad_dict[yi] if isinstance(yi, value) else 0.0 for yi in row) for row in y)
-    return [grad_dict[yi] for yi in y]
+        return matrix((grad_dict[yi.net] if isinstance(yi, value) else 0.0 for yi in row) for row in y)
+    return [grad_dict[yi.net] for yi in y]
