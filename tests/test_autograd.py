@@ -4,7 +4,7 @@ import pytest
 
 
 def test_autograd():
-    # Validate against micrograd results from Andrej Karpathy
+    # Validated against micrograd results from Andrej Karpathy
     # https://github.com/karpathy/micrograd/blob/master/test/test_engine.py
     a = value(-4.0)
     b = value(2.0)
