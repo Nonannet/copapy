@@ -209,7 +209,12 @@ def test_vector_compile():
         warnings.warn(f"Test skipped, {platform.machine()} not supported for this test.", UserWarning)
     else:
         command = ['build/runner/coparun-x86', 'build/runner/test-x86.copapy', 'build/runner/test-x86.copapy.bin']
-        result = run_command(command)
+        try:
+            result = run_command(command)
+        except FileNotFoundError:
+            warnings.warn("Test skipped, executable not found.", UserWarning)
+            return
+
         print('* Output from runner:\n--')
         print(result)
         print('--')
