@@ -43,6 +43,8 @@ def test_two_arms():
     print(f"End-effector position: {tg.read_value(effector)}")
     print(f"quadratic error = {tg.read_value(error)}")
 
+    assert tg.read_value(error) < 1e-6
+
 
 if __name__ == '__main__':
     test_two_arms()
