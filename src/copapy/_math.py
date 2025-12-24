@@ -79,10 +79,10 @@ def pow(x: VecNumLike, y: VecNumLike) -> Any:
         for _ in range(y - 1):
             m *= x
         return m
-    if y == -1:
-        return 1 / x
     if isinstance(x, value) or isinstance(y, value):
         return add_op('pow', [x, y])
+    elif y == -1:
+        return 1 / x
     else:
         return float(x ** y)
 
