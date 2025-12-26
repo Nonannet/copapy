@@ -7,5 +7,5 @@ api/backend
 repo
 ```
 
-```{include} start.md
+```{include} ../build/start.md
 ```

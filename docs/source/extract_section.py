@@ -1,4 +1,6 @@
 import re
+import argparse
+import os
 
 def extract_sections(md_text: str) -> dict[str, str]:
     """
@@ -23,12 +25,19 @@ def extract_sections(md_text: str) -> dict[str, str]:
     return sections
 
 if __name__ == '__main__':
-    with open('README.md', 'rt') as f:
+    parser = argparse.ArgumentParser(description='Extract sections from README.md and generate documentation files')
+    parser.add_argument('--readme', type=str, default='README.md', help='README.md path')
+    parser.add_argument('--build-dir', type=str, default='docs/source', help='Build directory for output files (default: docs/source)')
+    args = parser.parse_args()
+
+    readme_path = args.readme
+    build_dir = args.build_dir
+
+    with open(readme_path, 'rt') as f:
         readme = extract_sections(f.read())
 
-    with open('docs/source/start.md', 'wt') as f:
+    with open(os.path.join(build_dir, 'start.md'), 'wt') as f:
         f.write('\n'.join(f"# {s}\n" + readme[s] for s in ['Copapy', 'Current state', 'Install', 'License']))
 
-    with open('docs/source/compiler.md', 'wt') as f:
-        f.write('# How it works\n')
+    with open(os.path.join(build_dir, 'compiler.md'), 'wt') as f:
         f.write('\n'.join(readme[s] for s in ['How it works']))

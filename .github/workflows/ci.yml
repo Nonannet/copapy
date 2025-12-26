@@ -308,3 +308,28 @@ jobs:
             echo "Updating existing release for $TAG"
             gh release upload "$TAG" release/* --clobber
           fi
+
+  build-docs:
+    #if: github.event_name == 'push'
+    needs: [build_stencils, build-ubuntu, build-windows, build-arm64, build-armv6, build-armv7]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: build/tmp
+
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: "3.x"
+
+      - name: Install package and dependencies
+        run: pip install sphinx pydata_sphinx_theme sphinx-autodoc-typehints myst-parser
+
+      - name: Build Docs
+        run: |
+          make html
+          touch ./build/html/.nojekyll

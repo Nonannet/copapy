@@ -1,31 +1,16 @@
 from copapy import value
 from copapy.backend import Write, compile_to_dag, stencil_db_from_package
 from copapy._binwrite import Command
-import copapy as cp
 
+input = value(9.0)
 
-def compile_example(arch: str = 'native') -> None:
-    """Test compilation of a simple program for x86_64."""
-    c1 = value(9.0)
+result = input ** 2 / 3.3 + 5
 
-    #ret = [c1 / 4, c1 / -4, c1 // 4, c1 // -4, (c1 * -1) // 4]
-    ret = [c1 // 3.3 + 5]
-    #ret = [cp.sqrt(c1)]
-    #c2 = cp._math.get_42()
-    #ret = [c2]
+arch = 'native'
+sdb = stencil_db_from_package(arch)
+dw, _ = compile_to_dag([Write(result)], sdb)
 
-    out = [Write(r) for r in ret]
+# Instruct runner to dump patched code to a file:
+dw.write_com(Command.DUMP_CODE)
 
-    sdb = stencil_db_from_package(arch)
-    dw, _ = compile_to_dag(out, sdb)
-
-    dw.write_com(Command.DUMP_CODE)
-
-    #print('* Data to runner:')
-    #dw.print()
-
-    dw.to_file('build/runner/test.copapy')
-
-
-if __name__ == "__main__":
-    compile_example()
+dw.to_file('build/runner/test.copapy')
