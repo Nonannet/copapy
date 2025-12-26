@@ -12,18 +12,17 @@ BUILDDIR      = build
 help:
 	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
-.PHONY: help Makefile
+.PHONY: help prepare-docs html
 
 prepare-docs:
-    python $(SOURCEDIR)/generate_class_list.py --api-dir $(SOURCEDIR)/api
-    python $(SOURCEDIR)/extract_section.py --readme $(SOURCEDIR)/../../README.md --build-dir $(BUILDDIR)
-    python $(SOURCEDIR)/stencil_doc.py --input $(SOURCEDIR)/../../build/stencils.c --asm-pattern "$(SOURCEDIR)/../../build/tmp/runner-linux-*/stencils.asm" --output $(BUILDDIR)/stencils.md
-    python $(SOURCEDIR)/example_asm.py --input $(SOURCEDIR)/../../tools/make_example.py --asm-pattern "$(SOURCEDIR)/../../build/tmp/runner-linux-*/example.asm" --output $(BUILDDIR)/compiled_example.md
-
+	python $(SOURCEDIR)/generate_class_list.py --api-dir $(SOURCEDIR)/api
+	python $(SOURCEDIR)/extract_section.py --readme $(SOURCEDIR)/../../README.md --build-dir $(BUILDDIR)
+	python $(SOURCEDIR)/stencil_doc.py --input $(SOURCEDIR)/../../build/stencils.c --asm-pattern "$(SOURCEDIR)/../../build/tmp/runner-linux-*/stencils.asm" --output $(BUILDDIR)/stencils.md
+	python $(SOURCEDIR)/example_asm.py --input $(SOURCEDIR)/../../tools/make_example.py --asm-pattern "$(SOURCEDIR)/../../build/tmp/runner-linux-*/example.asm" --output $(BUILDDIR)/compiled_example.md
 
 # Build documentation (generate API and extract sections first)
 html: prepare-docs
-    @$(SPHINXBUILD) -M html "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
+	@$(SPHINXBUILD) -M html "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
 # Catch-all target: route all unknown targets to Sphinx using the new
 # "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).
