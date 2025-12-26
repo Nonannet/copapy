@@ -295,8 +295,11 @@ def abs(x: U | value[U] | vector[U]) -> Any:
     Returns:
         Absolute value of x
     """
-    ret = (x < 0) * -x + (x >= 0) * x
-    return ret
+    if isinstance(x, value):
+        return add_op('abs', [x])
+    if isinstance(x, vector):
+        return x.map(abs)
+    return (x < 0) * -x + (x >= 0) * x
 
 
 @overload

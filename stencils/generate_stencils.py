@@ -84,10 +84,19 @@ def get_cast(type1: str, type2: str, type_out: str) -> str:
 
 
 @norm_indent
-def get_func1(func_name: str, type1: str, type2: str) -> str:
+def get_func1(func_name: str, type1: str) -> str:
     return f"""
-    STENCIL void {func_name}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        result_float_{type2}(aux_{func_name}((float)arg1), arg2);
+    STENCIL void {func_name}_{type1}({type1} arg1) {{
+        result_float(aux_{func_name}((float)arg1));
+    }}
+    """
+
+
+@norm_indent
+def get_custom_stencil(stencil_signature: str, stencil_body: str) -> str:
+    return f"""
+    STENCIL void {stencil_signature} {{
+        {stencil_body}
     }}
     """
 
@@ -102,10 +111,10 @@ def get_func2(func_name: str, type1: str, type2: str) -> str:
 
 
 @norm_indent
-def get_math_func1(func_name: str, type1: str) -> str:
+def get_math_func1(func_name: str, type1: str, stencil_name: str) -> str:
     return f"""
-    STENCIL void {func_name}_{type1}({type1} arg1) {{
-        result_float({func_name}f((float)arg1));
+    STENCIL void {stencil_name}_{type1}({type1} arg1) {{
+        result_float({func_name}((float)arg1));
     }}
     """
 
@@ -149,7 +158,7 @@ def get_floordiv(op: str, type1: str, type2: str) -> str:
     else:
         return f"""
         STENCIL void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-            result_float_{type2}((float)floor_div((float)arg1, (float)arg2), arg2);
+            result_float_{type2}(floorf((float)arg1 / (float)arg2), arg2);
         }}
         """
 
@@ -238,11 +247,14 @@ if __name__ == "__main__":
 
     fnames = ['get_42']
     for fn, t1 in permutate(fnames, types):
-        code += get_func1(fn, t1, t1)
+        code += get_func1(fn, t1)
 
     fnames = ['sqrt', 'exp', 'log', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan']
     for fn, t1 in permutate(fnames, types):
-        code += get_math_func1(fn, t1)
+        code += get_math_func1(fn + 'f', t1, fn)
+
+    code += get_math_func1('fabsf', 'float', 'abs')
+    code += get_custom_stencil('abs_int(int arg1)', 'result_int(__builtin_abs(arg1));')
 
     fnames = ['atan2', 'pow']
     for fn, t1, t2 in permutate(fnames, types, types):
