@@ -12,7 +12,7 @@ def extract_sections(md_text: str) -> dict[str, str]:
     # regex captures: heading marks (###...), heading text, and the following content
     pattern = re.compile(
         r'^(#{1,6})\s+(.*?)\s*$'          # heading level + heading text
-        r'(.*?)'                          # section content (lazy)
+        r'(.*?(?:```.*?```.*?)*?)'        # section content (lazy)
         r'(?=^#{1,6}\s+|\Z)',             # stop at next heading or end of file
         re.MULTILINE | re.DOTALL
     )
@@ -37,7 +37,9 @@ if __name__ == '__main__':
         readme = extract_sections(f.read())
 
     with open(os.path.join(build_dir, 'start.md'), 'wt') as f:
-        f.write('\n'.join(f"# {s}\n" + readme[s] for s in ['Copapy', 'Current state', 'Install', 'License']))
+        f.write('\n'.join(f"{s}\n" + readme[s.strip(' #')] for s in [
+            '# Copapy', '## Current state', '## Install', '## Examples',
+            '### Basic example', '### Inverse kinematics', '## License']))
 
     with open(os.path.join(build_dir, 'compiler.md'), 'wt') as f:
         f.write('\n'.join(readme[s] for s in ['How it works']))
