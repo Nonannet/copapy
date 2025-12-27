@@ -22,7 +22,7 @@ def argsort(input_vector: vector[TNum]) -> vector[int]:
     Perform an indirect sort. It returns an array of indices that index data
     in sorted order.
 
-    Args:
+    Arguments:
         input_vector: The input vector containing numerical values.
 
     Returns:
@@ -35,7 +35,7 @@ def median(input_vector: vector[TNum]) -> TNum | value[TNum]:
     """
     Applies a median filter to the input vector and returns the median as a unifloat.
 
-    Args:
+    Arguments:
         input_vector: The input vector containing numerical values.
 
     Returns:
@@ -56,7 +56,7 @@ def mean(input_vector: vector[Any]) -> unifloat:
     """
     Applies a mean filter to the input vector and returns the mean as a unifloat.
 
-    Args:
+    Arguments:
         input_vector (vector): The input vector containing numerical values.
 
     Returns:

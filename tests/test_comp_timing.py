@@ -70,7 +70,7 @@ def test_timing_compiler():
 
 
     # Get all nets/variables associated with heap memory
-    variable_list = get_nets([[const_net_list]], extended_output_ops)
+    variable_list = get_nets([const_net_list], extended_output_ops)
     stencil_names = {node.name for _, node in extended_output_ops}
 
     print(f'-- get_sub_functions:  {len(stencil_names)}')

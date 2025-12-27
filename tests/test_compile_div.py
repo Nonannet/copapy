@@ -1,5 +1,5 @@
 from copapy import value, NumLike
-from copapy.backend import Write, compile_to_dag
+from copapy.backend import Write, compile_to_dag, add_read_command, Net
 import copapy
 import subprocess
 from copapy import _binwrite
@@ -28,14 +28,14 @@ def test_compile():
 
     out = [Write(r) for r in ret]
 
-    il, _ = compile_to_dag(out, copapy.generic_sdb)
+    il, vars = compile_to_dag(out, copapy.generic_sdb)
 
     # run program command
     il.write_com(_binwrite.Command.RUN_PROG)
 
-    il.write_com(_binwrite.Command.READ_DATA)
-    il.write_int(0)
-    il.write_int(36)
+    for v in ret:
+        assert isinstance(v, value)
+        add_read_command(il, vars, v.net)
 
     il.write_com(_binwrite.Command.END_COM)
 

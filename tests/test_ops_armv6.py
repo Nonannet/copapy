@@ -13,9 +13,10 @@ import copapy as cp
 if os.name == 'nt':
     # On Windows wsl and qemu-user is required:
     # sudo apt install qemu-user
-    qemu_command = ['wsl', 'qemu-aarch64']
+    qemu_command = ['wsl', 'qemu-arm']
 else:
-    qemu_command = ['qemu-aarch64']
+    qemu_command = ['qemu-arm']
+
 
 def parse_results(log_text: str) -> dict[int, bytes]:
     regex = r"^READ_DATA offs=(\d*) size=(\d*) data=(.*)$"
@@ -30,6 +31,7 @@ def parse_results(log_text: str) -> dict[int, bytes]:
             var_dict[int(match.group(1))] = value
 
     return var_dict
+
 
 def run_command(command: list[str]) -> str:
     result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf8', check=False)
@@ -91,12 +93,12 @@ def test_compile():
     ret_test = function1(c_i) + function1(c_f) + function2(c_i) + function2(c_f) + function3(c_i) + function4(c_i) + function5(c_b) + [value(9) % 2] + iiftests(c_i) + iiftests(c_f) + [cp.asin(c_i/10)]
     ret_ref = function1(9) + function1(1.111) + function2(9) + function2(1.111) + function3(9) + function4(9) + function5(True) + [9 % 2] + iiftests(9) + iiftests(1.111) + [cp.asin(9/10)]
 
+    #ret_test = (c_i * 100 // 5, c_f * 10 // 5)
+    #ret_ref = (9 * 100 // 5, 1.111 * 10 // 5)
+
     out = [Write(r) for r in ret_test]
 
-    #ret_test += [c_i, v2]
-    #ret_ref += [9, 4.44, -4.44]
-
-    sdb = backend.stencil_db_from_package('arm64')
+    sdb = backend.stencil_db_from_package('armv6')
     dw, variables = compile_to_dag(out, sdb)
 
     #dw.write_com(_binwrite.Command.READ_DATA)
@@ -120,25 +122,25 @@ def test_compile():
     #print('* Data to runner:')
     #dw.print()
 
-    dw.to_file('build/runner/test-arm64.copapy')
+    dw.to_file('build/runner/test-armv6.copapy')
 
     if not check_for_qemu():
-        warnings.warn("qemu-aarch64 not found, aarch64 test skipped!", UserWarning)
+        warnings.warn("qemu-armv6 not found, armv6 test skipped!", UserWarning)
         return
-    if not os.path.isfile('build/runner/coparun-aarch64'):
-        warnings.warn("aarch64 runner not found, aarch64 test skipped!", UserWarning)
+    if not os.path.isfile('build/runner/coparun-armv6'):
+        warnings.warn("armv6 runner not found, armv6 test skipped!", UserWarning)
         return
 
-    command = qemu_command + ['build/runner/coparun-aarch64', 'build/runner/test-arm64.copapy'] + ['build/runner/test-arm64.copapy.bin']
+    command = qemu_command + ['build/runner/coparun-armv6', 'build/runner/test-armv6.copapy'] + ['build/runner/test-armv6.copapy.bin']
     #try:
     result = run_command(command)
     #except FileNotFoundError:
     #    warnings.warn(f"Test skipped, executable not found.", UserWarning)
     #    return
 
-    print('* Output from runner:\n--')
-    print(result)
-    print('--')
+    #print('* Output from runner:\n--')
+    #print(result)
+    #print('--')
 
     assert 'Return value: 1' in result
 
@@ -165,5 +167,5 @@ def test_compile():
 
 
 if __name__ == "__main__":
-    #test_example()
-    test_compile()
+    #test_compile()
+    test_slow_31bit_int_list_hash()

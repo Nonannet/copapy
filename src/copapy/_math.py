@@ -79,10 +79,10 @@ def pow(x: VecNumLike, y: VecNumLike) -> Any:
         for _ in range(y - 1):
             m *= x
         return m
-    if y == -1:
-        return 1 / x
     if isinstance(x, value) or isinstance(y, value):
         return add_op('pow', [x, y])
+    elif y == -1:
+        return 1 / x
     else:
         return float(x ** y)
 
@@ -280,7 +280,6 @@ def get_42(x: NumLike) -> value[float] | float:
     return float((int(x) * 3.0 + 42.0) * 5.0 + 21.0)
 
 
-#TODO: Add vector support
 @overload
 def abs(x: U) -> U: ...
 @overload
@@ -296,9 +295,11 @@ def abs(x: U | value[U] | vector[U]) -> Any:
     Returns:
         Absolute value of x
     """
-    #tt = -x * (x < 0)
-    ret = (x < 0) * -x + (x >= 0) * x
-    return ret  # REMpyright: ignore[reportReturnType]
+    if isinstance(x, value):
+        return add_op('abs', [x])
+    if isinstance(x, vector):
+        return x.map(abs)
+    return (x < 0) * -x + (x >= 0) * x
 
 
 @overload

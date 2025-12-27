@@ -102,11 +102,19 @@ def get_all_dag_edges(nodes: Iterable[Node]) -> Generator[tuple[Node, Node], Non
         Tuples of (source_node, target_node) representing edges in the DAG
     """
     emitted_edges: set[tuple[Node, Node]] = set()
+    used_nets: dict[Net, Net] = {}
     node_list: list[Node] = [n for n in nodes]
 
     while(node_list):
         node = node_list.pop()
         for net in node.args:
+
+            # In case there is already net with equivalent value use this 
+            if net in used_nets:
+                net = used_nets[net]
+            else:
+                used_nets[net] = net
+
             edge = (net.source, node)
             if edge not in emitted_edges:
                 yield edge
@@ -213,6 +221,8 @@ def get_nets(*inputs: Iterable[Iterable[Any]]) -> list[Net]:
             for net in el:
                 if isinstance(net, Net):
                     nets.add(net)
+                else:
+                    assert net is None or isinstance(net, Node), net
 
     return list(nets)
 
@@ -300,6 +310,14 @@ def get_aux_func_layout(function_names: Iterable[str], sdb: stencil_database, of
 
 
 def get_dag_stats(node_list: Iterable[Node | Net]) -> dict[str, int]:
+    """Get operation statistics for the DAG identified by provided end nodes
+
+    Arguments:
+        node_list: List of end nodes of the DAG
+
+    Returns:
+        Dictionary of operation name to occurrence count
+    """
     edges = get_all_dag_edges(n.source if isinstance(n, Net) else n for n in node_list)
     ops = {node for node, _ in edges}
 
@@ -335,7 +353,7 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
     dw.write_com(binw.Command.FREE_MEMORY)
 
     # Get all nets/variables associated with heap memory
-    variable_list = get_nets([[const_net_list]], extended_output_ops)
+    variable_list = get_nets([const_net_list], extended_output_ops)
 
     stencil_names = {node.name for _, node in extended_output_ops}
     aux_function_names = sdb.get_sub_functions(stencil_names)

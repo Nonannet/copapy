@@ -32,23 +32,24 @@
 #define FREE_MEMORY     257
 #define DUMP_CODE       258
 
-/* Memory blobs accessible by other translation units */
-extern uint8_t *data_memory;
-extern uint32_t data_memory_len;
-extern uint8_t *executable_memory;
-extern uint32_t executable_memory_len;
-extern int data_offs;
-
-/* Entry point type and variable */
+/* Entry point type */
 typedef int (*entry_point_t)(void);
-extern entry_point_t entr_point;
 
+/* Struct for run-time memory state */
+typedef struct runmem_s {
+    uint8_t *data_memory;            // Pointer to data memory
+    uint32_t data_memory_len;        // Length of data memory
+    uint8_t *executable_memory;      // Pointer to executable memory
+    uint32_t executable_memory_len;  // Length of executable memory
+    int data_offs;                   // Offset of data memory relative to executable memory
+    entry_point_t entr_point;        // Entry point function pointer
+} runmem_t;
 
 /* Command parser: takes a pointer to the command stream and returns
    an error flag (0 on success according to current code) */
-int parse_commands(uint8_t *bytes);
+int parse_commands(runmem_t *context, uint8_t *bytes);
 
 /* Free program and data memory */
-void free_memory();
+void free_memory(runmem_t *context);
 
 #endif /* RUNMEM_H */

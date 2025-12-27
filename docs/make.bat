@@ -25,6 +25,13 @@ if errorlevel 9009 (
 
 if "%1" == "" goto help
 
+md %BUILDDIR%
+
+python %SOURCEDIR%\generate_class_list.py --api-dir %SOURCEDIR%\api
+python %SOURCEDIR%\extract_section.py --readme %SOURCEDIR%/../../README.md --build-dir %BUILDDIR%
+python %SOURCEDIR%\stencil_doc.py --input "%SOURCEDIR%/../../build/stencils.c" --asm-pattern "%SOURCEDIR%/../../build/tmp/runner-linux-*/stencils.asm" --output %BUILDDIR%/stencils.md
+python %SOURCEDIR%\example_asm.py --input "%SOURCEDIR%/../../tools/make_example.py" --asm-pattern "%SOURCEDIR%/../../build/tmp/runner-linux-*/example.asm" --output %BUILDDIR%/compiled_example.md
+
 %SPHINXBUILD% -M %1 %SOURCEDIR% %BUILDDIR% %SPHINXOPTS% %O%
 goto end
 

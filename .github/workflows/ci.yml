@@ -54,7 +54,7 @@ jobs:
 
     - name: Install Python dependencies
       run: |
-        python -m pip install -e .
+        python -m pip install .
         python -m pip install pytest
 
     - name: Vendor pelfy
@@ -89,7 +89,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
 
     - name: Install Python dependencies
-      run: python -m pip install -e .[dev]
+      run: python -m pip install .[dev]
 
     - name: Compile coparun
       run: |
@@ -153,6 +153,35 @@ jobs:
         name: runner-linux-arm64
         path: build/runner/*
 
+  build-armv6:
+    needs: [build_stencils]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/download-artifact@v4
+      with:
+        name: stencil-object-files
+        path: src/copapy/obj
+    - name: Set up QEMU for ARMv6
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: linux/arm/v6
+    - name: Use ARMv6 container
+      run: |
+        docker run --rm -v $PWD:/app -w /app --platform linux/arm/v6 ghcr.io/nonannet/armv6_test:1 \
+        bash -lc "pip install . && \
+                  mkdir -p build/runner && \
+                  gcc -O3 -DENABLE_LOGGING -o build/runner/coparun src/coparun/runmem.c \
+                  src/coparun/coparun.c src/coparun/mem_man.c && \
+                  pytest && \
+                  bash tools/create_asm.sh"
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: runner-linux-armv6
+        path: build/runner/*
+
   build-armv7:
     needs: [build_stencils]
     runs-on: ubuntu-latest
@@ -205,7 +234,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
 
     - name: Install Python dependencies
-      run: python -m pip install -e .[dev]
+      run: python -m pip install .[dev]
 
     - name: Set up MSVC environment
       uses: microsoft/setup-msbuild@v2
@@ -217,9 +246,9 @@ jobs:
       run: |
         mkdir build\runner
         call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=amd64
-        cl /DENABLE_BASIC_LOGGING /O2 src\coparun\runmem.c src\coparun\coparun.c src\coparun\mem_man.c /Fe:build\runner\coparun.exe
+        cl /DENABLE_BASIC_LOGGING /Od src\coparun\runmem.c src\coparun\coparun.c src\coparun\mem_man.c /Fe:build\runner\coparun.exe
         call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x86
-        cl /DENABLE_BASIC_LOGGING /O2 src\coparun\runmem.c src\coparun\coparun.c src\coparun\mem_man.c /Fe:build\runner\coparun-x86.exe
+        cl /DENABLE_BASIC_LOGGING /Od src\coparun\runmem.c src\coparun\coparun.c src\coparun\mem_man.c /Fe:build\runner\coparun-x86.exe
 
     - name: Run tests with pytest
       run: pytest
@@ -231,7 +260,7 @@ jobs:
         path: build/runner/*
 
   release-stencils:
-    needs: [build_stencils, build-ubuntu, build-windows, build-arm64, build-armv7]
+    needs: [build_stencils, build-ubuntu, build-windows, build-arm64, build-armv6, build-armv7]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
@@ -263,6 +292,7 @@ jobs:
           cp tmp/musl-object-files/* release/
           cp tmp/runner-linux/coparun release/
           cp tmp/runner-linux-arm64/coparun release/coparun-aarch64
+          cp tmp/runner-linux-armv6/coparun release/coparun-armv6
           cp tmp/runner-linux-armv7/coparun release/coparun-armv7
           cp tmp/runner-win/coparun*.exe release/
 
@@ -278,3 +308,49 @@ jobs:
             echo "Updating existing release for $TAG"
             gh release upload "$TAG" release/* --clobber
           fi
+
+  build-docs:
+    needs: [build_stencils, build-ubuntu, build-windows, build-arm64, build-armv6, build-armv7]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: stencil-object-files
+          path: src/copapy/obj
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: build/tmp
+
+      - uses: actions/setup-python@v3
+        with:
+          python-version: "3.x"
+
+      - name: Install package and dependencies
+        run: pip install .[doc_build]
+
+      - name: Build Docs
+        run: |
+          mkdir -p build/stencils
+          python stencils/generate_stencils.py build/stencils/stencils.c
+          cd docs
+          make html
+          touch build/html/.nojekyll
+
+  deploy-docs:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: build-docs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

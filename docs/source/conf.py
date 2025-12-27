@@ -28,6 +28,7 @@ exclude_patterns = []
 # html_theme = 'alabaster'
 html_theme = 'pydata_sphinx_theme'
 html_static_path = ['_static']
+html_css_files = ['custom.css']
 html_theme_options = {
   "secondary_sidebar_items": ["page-toc"],
   "footer_start": ["copyright"]
@@ -35,3 +36,4 @@ html_theme_options = {
 html_theme_options["footer_end"] = []
 
 autodoc_inherit_docstrings = True
+autoclass_content = 'both'

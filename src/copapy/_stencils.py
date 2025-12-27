@@ -95,11 +95,14 @@ def get_last_call_in_function(func: pelfy.elf_symbol) -> int:
     # Find last relocation in function
     assert func.relocations, f'No call function in stencil function {func.name}.'
     reloc = func.relocations[-1]
-    # Assume the call instruction is 4 bytes long for relocations with less than 32 bit and 5 bytes otherwise
-    instruction_lengths = 4 if reloc.bits < 32 else 5
-    address_field_length = 4
-    #print(f"-> {[r.fields['r_offset'] - func.fields['st_value'] for r in func.relocations]}")
-    return reloc.fields['r_offset'] - func.fields['st_value'] + address_field_length - instruction_lengths
+    if reloc.symbol.name.startswith('dummy_'):
+        return -0xFFFF  # Last relocation is not a jump
+    else:
+        # Assume the call instruction is 4 bytes long for relocations with less than 32 bit and 5 bytes otherwise
+        instruction_lengths = 4 if reloc.bits < 32 else 5
+        address_field_length = 4
+        #print(f"-> {[r.fields['r_offset'] - func.fields['st_value'] for r in func.relocations]}")
+        return reloc.fields['r_offset'] - func.fields['st_value'] + address_field_length - instruction_lengths
 
 
 def get_op_after_last_call_in_function(func: pelfy.elf_symbol) -> int:
@@ -123,7 +126,7 @@ class stencil_database():
     def __init__(self, obj_file: str | bytes):
         """Load the stencil database from an ELF object file
 
-        Args:
+        Arguments:
             obj_file: path to the ELF object file or bytes of the ELF object file
         """
         if isinstance(obj_file, str):
@@ -201,7 +204,7 @@ class stencil_database():
     def get_patch(self, relocation: relocation_entry, symbol_address: int, function_offset: int, symbol_type: int) -> patch_entry:
         """Return patch positions for a provided symbol (function or object)
 
-        Args:
+        Arguments:
             relocation: relocation entry
             symbol_address: absolute address of the target symbol
             function_offset: absolute address of the first byte of the
@@ -305,6 +308,12 @@ class stencil_database():
             symbol_type = symbol_type + 0x04  # Absolut value
             scale = 0x10000
 
+        elif pr.type.endswith('_ABS32'):
+            # R_ARM_ABS32
+            # S + A (replaces full 32 bit)
+            patch_value = symbol_address + pr.fields['r_addend']
+            symbol_type = symbol_type + 0x03  # Relative to data section
+
         else:
             raise NotImplementedError(f"Relocation type {pr.type} in {relocation.pelfy_reloc.target_section.name} pointing to {relocation.pelfy_reloc.symbol.name} not implemented")
 
@@ -313,7 +322,7 @@ class stencil_database():
     def get_stencil_code(self, name: str) -> bytes:
         """Return the striped function code for a provided function name
 
-        Args:
+        Arguments:
             name: function name
 
         Returns:
@@ -333,7 +342,7 @@ class stencil_database():
 
     def get_sub_functions(self, names: Iterable[str]) -> set[str]:
         """Return recursively all functions called by stencils or by other functions
-        Args:
+        Arguments:
             names: function or stencil names
 
         Returns:
@@ -384,7 +393,7 @@ class stencil_database():
     def get_function_code(self, name: str, part: Literal['full', 'start', 'end'] = 'full') -> bytes:
         """Returns machine code for a specified function name.
 
-        Args:
+        Arguments:
             name: function name
             part: part of the function to return ('full', 'start', 'end')
 

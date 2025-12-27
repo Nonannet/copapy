@@ -109,9 +109,9 @@ def test_compile():
     dw.write_com(_binwrite.Command.RUN_PROG)
     #dw.write_com(_binwrite.Command.DUMP_CODE)
 
-    for net in ret_test:
-        assert isinstance(net, backend.Net)
-        add_read_command(dw, variables, net)
+    for v in ret_test:
+        assert isinstance(v, value)
+        add_read_command(dw, variables, v.net)
 
     #dw.write_com(_binwrite.Command.READ_DATA)
     #dw.write_int(0)
@@ -148,7 +148,7 @@ def test_compile():
 
     for test, ref in zip(ret_test, ret_ref):
         assert isinstance(test, value)
-        address = variables[test][0]
+        address = variables[test.net][0]
         data = result_data[address]
         if test.dtype == 'int':
             val = int.from_bytes(data, sdb.byteorder, signed=True)
@@ -168,4 +168,4 @@ def test_compile():
 
 if __name__ == "__main__":
     #test_example()
-    test_compile()
+    test_slow_31bit_int_list_hash()

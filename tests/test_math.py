@@ -9,7 +9,6 @@ def test_fine():
     a_f = 2.5
     c_i = value(a_i)
     c_f = value(a_f)
-    # c_b = variable(True)
 
     ret_test = (c_f ** 2,
                 c_i ** -1,
@@ -19,7 +18,9 @@ def test_fine():
                 cp.sqrt(c_f),
                 cp.sin(c_f),
                 cp.cos(c_f),
-                cp.tan(c_f))  # , c_i & 3)
+                cp.tan(c_f),
+                cp.abs(-c_i),
+                cp.abs(-c_f))
 
     re2_test = (a_f ** 2,
                 a_i ** -1,
@@ -29,7 +30,9 @@ def test_fine():
                 cp.sqrt(a_f),
                 cp.sin(a_f),
                 cp.cos(a_f),
-                cp.tan(a_f))  # , a_i & 3)
+                cp.tan(a_f),
+                cp.abs(-a_i),
+                cp.abs(-a_f))
 
     ret_refe = (a_f ** 2,
                 a_i ** -1,
@@ -39,7 +42,9 @@ def test_fine():
                 ma.sqrt(a_f),
                 ma.sin(a_f),
                 ma.cos(a_f),
-                ma.tan(a_f))  # , a_i & 3)
+                ma.tan(a_f),
+                cp.abs(-a_i),
+                cp.abs(-a_f))
 
     tg = Target()
     print('* compile and copy ...')

@@ -28,9 +28,9 @@ def test_compile_sqrt():
     # run program command
     il.write_com(_binwrite.Command.RUN_PROG)
 
-    for net in ret:
-        assert isinstance(net, copapy.backend.Net)
-        add_read_command(il, variables, net)
+    for v in ret:
+        assert isinstance(v, value)
+        add_read_command(il, variables, v.net)
 
     il.write_com(_binwrite.Command.END_COM)
 
@@ -62,9 +62,9 @@ def test_compile_log():
     # run program command
     il.write_com(_binwrite.Command.RUN_PROG)
 
-    for net in ret:
-        assert isinstance(net, copapy.backend.Net)
-        add_read_command(il, variables, net)
+    for v in ret:
+        assert isinstance(v, value)
+        add_read_command(il, variables, v.net)
 
     il.write_com(_binwrite.Command.END_COM)
 
@@ -96,9 +96,9 @@ def test_compile_sin():
     # run program command
     il.write_com(_binwrite.Command.RUN_PROG)
 
-    for net in ret:
-        assert isinstance(net, copapy.backend.Net)
-        add_read_command(il, variables, net)
+    for v in ret:
+        assert isinstance(v, copapy.value)
+        add_read_command(il, variables, v.net)
 
     il.write_com(_binwrite.Command.END_COM)
 

@@ -21,6 +21,17 @@ gcc -Wall -Wextra -Wconversion -Wsign-conversion \
     src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c -o build/runner/coparun
 
 
+echo "--------------arm-v6  32 bit----------------"
+LIBGCC=$(arm-none-eabi-gcc -print-libgcc-file-name)
+#LIBM=$(arm-none-eabi-gcc -print-file-name=libm.a)
+#LIBC=$(arm-none-eabi-gcc -print-file-name=libc.a)
+
+arm-none-eabi-gcc -fno-pic -ffunction-sections -march=armv6 -mfpu=vfp -mfloat-abi=hard -marm -c $SRC -O3 -o build/stencils/stencils.o
+arm-none-eabi-ld -r build/stencils/stencils.o build/musl/musl_objects_armv6.o $LIBGCC -o $DEST/stencils_armv6_O3.o
+arm-none-eabi-objdump -d -x $DEST/stencils_armv6_O3.o > build/stencils/stencils_armv6_O3.asm
+arm-linux-gnueabihf-gcc -march=armv6 -mfpu=vfp -mfloat-abi=hard -marm -static -Wall -Wextra -Wconversion -Wsign-conversion -Wshadow -Wstrict-overflow -O3 -DENABLE_LOGGING src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c -o build/runner/coparun-armv6
+
+
 echo "--------------arm-v7  32 bit----------------"
 LIBGCC=$(arm-none-eabi-gcc -print-libgcc-file-name)
 #LIBM=$(arm-none-eabi-gcc -print-file-name=libm.a)

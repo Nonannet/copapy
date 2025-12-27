@@ -28,3 +28,4 @@ docs/source/api
 *.core
 core
 *.log
+docs/source/start.md
