@@ -339,6 +339,11 @@ jobs:
           make html
           touch build/html/.nojekyll
 
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/build/html
+
   deploy-docs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: build-docs
