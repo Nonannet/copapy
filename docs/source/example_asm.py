@@ -34,7 +34,7 @@ def build_asm_code_dict(asm_glob_pattern: str) -> dict[str, str]:
 # Example usage:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate stencils documentation from C and assembly code")
-    parser.add_argument('--input', default='tools/make_example.py', help='Path to input C file')
+    parser.add_argument('--input', default='tools/make_example.py', help='Path to example script')
     parser.add_argument('--asm-pattern', default='build/tmp/runner-linux-*/example.asm', help='Glob pattern for assembly files')
     parser.add_argument('--output', default='docs/build/compiled_example.md', help='Output markdown file path')
 
