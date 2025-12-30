@@ -33,6 +33,8 @@ sh ../packobjs.sh arm-none-eabi-gcc arm-none-eabi-ld /object_files/musl_objects_
 
 #sh ../packobjs.sh riscv64 riscv64-linux-gnu-gcc-13 riscv64-linux-gnu-ld
 
+cp ./COPYRIGHT /object_files/
+
 echo "- clean up..."
 rm -r ./*
 cd ..
