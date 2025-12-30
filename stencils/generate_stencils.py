@@ -84,6 +84,15 @@ def get_cast(type1: str, type2: str, type_out: str) -> str:
 
 
 @norm_indent
+def get_neg(type1: str) -> str:
+    return f"""
+    STENCIL void neg_{type1}({type1} arg1) {{
+        result_{type1}(-arg1);
+    }}
+    """
+
+
+@norm_indent
 def get_func1(func_name: str, type1: str) -> str:
     return f"""
     STENCIL void {func_name}_{type1}({type1} arg1) {{
@@ -248,6 +257,9 @@ if __name__ == "__main__":
     fnames = ['get_42']
     for fn, t1 in permutate(fnames, types):
         code += get_func1(fn, t1)
+
+    for t in types:
+        code += get_neg(t)
 
     fnames = ['sqrt', 'exp', 'log', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan']
     for fn, t1 in permutate(fnames, types):
