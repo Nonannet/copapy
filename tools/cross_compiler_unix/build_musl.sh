@@ -27,7 +27,7 @@ sh ../packobjs.sh arm-none-eabi-gcc arm-none-eabi-ld /object_files/musl_objects_
 sh ../packobjs.sh arm-none-eabi-gcc arm-none-eabi-ld /object_files/musl_objects_armv7.o "-march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -marm"
 
 # Armv7 Thumb for Cortex-M3..7
-sh ../packobjs.sh arm-none-eabi-gcc arm-none-eabi-ld /object_files/musl_objects_armv7thumb.o "-march=armv7-a -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb"
+sh ../packobjs.sh arm-none-eabi-gcc arm-none-eabi-ld /object_files/musl_objects_armv7thumb.o "-march=armv7e-m -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb"
 
 #sh ../packobjs.sh mips mips-linux-gnu-gcc-13 mips-linux-gnu-ld
 

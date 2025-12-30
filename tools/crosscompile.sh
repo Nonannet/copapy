@@ -42,7 +42,7 @@ LIBGCC=$(arm-none-eabi-gcc -print-libgcc-file-name)
 arm-none-eabi-ld -r $STMP /object_files/musl_objects_armv7.o $LIBGCC -o $DEST/stencils_armv7_$OPT.o
 
 # Armv7 Thumb for Cortex-M3..7 hardware fp
-arm-none-eabi-gcc -march=armv7-a -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb $FLAGS -$OPT -c $SRC -o $STMP
+arm-none-eabi-gcc -march=armv7e-m -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb $FLAGS -$OPT -c $SRC -o $STMP
 LIBGCC=$(arm-none-eabi-gcc -print-libgcc-file-name)
 arm-none-eabi-ld -r $STMP /object_files/musl_objects_armv7thumb.o $LIBGCC -o $DEST/stencils_armv7thumb_$OPT.o
 
