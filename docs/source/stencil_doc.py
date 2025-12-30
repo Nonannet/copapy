@@ -134,7 +134,8 @@ if __name__ == "__main__":
     md_code: str = ''
 
     for function_name, code in functions.items():
-        md_code += get_stencil_section(function_name)
+        if 'get_42' not in function_name and not function_name.startswith('cast_'):
+            md_code += get_stencil_section(function_name)
 
     with open(args.output, 'wt') as f:
         f.write(md_code)

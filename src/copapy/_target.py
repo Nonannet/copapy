@@ -2,8 +2,7 @@ from typing import Iterable, overload, TypeVar, Any, Callable, TypeAlias
 from . import _binwrite as binw
 from coparun_module import coparun, read_data_mem, create_target, clear_target
 import struct
-from ._basic_types import stencil_db_from_package
-from ._basic_types import value, Net, Node, Write, NumLike
+from ._basic_types import value, Net, Node, Write, NumLike, ArrayType, stencil_db_from_package
 from ._compiler import compile_to_dag
 
 T = TypeVar("T", int, float)
@@ -66,7 +65,7 @@ class Target():
     def __del__(self) -> None:
         clear_target(self._context)
 
-    def compile(self, *values: int | float | value[Any] | Iterable[int | float | value[Any]]) -> None:
+    def compile(self, *values: NumLike | value[T] | ArrayType[T] | Iterable[T | value[T]]) -> None:
         """Compiles the code to compute the given values.
 
         Arguments:
@@ -74,13 +73,16 @@ class Target():
         """
         nodes: list[Node] = []
         for input in values:
-            if isinstance(input, Iterable):
+            if isinstance(input, ArrayType):
+                for v in input.values:
+                    if isinstance(v, value):
+                        nodes.append(Write(v))
+            elif isinstance(input, Iterable):
                 for v in input:
                     if isinstance(v, value):
                         nodes.append(Write(v))
-            else:
-                if isinstance(input, value):
-                    nodes.append(Write(input))
+            elif isinstance(input, value):
+                nodes.append(Write(input))
 
         dw, self._values = compile_to_dag(nodes, self.sdb)
         dw.write_com(binw.Command.END_COM)
@@ -100,7 +102,9 @@ class Target():
     def read_value(self, variables: NumLike) -> float | int | bool: ...
     @overload
     def read_value(self, variables: Iterable[T | value[T]]) -> list[T]: ...
-    def read_value(self, variables: NumLike | value[T] | Iterable[T | value[T]]) -> Any:
+    @overload
+    def read_value(self, variables: ArrayType[T]) -> ArrayType[T]: ...
+    def read_value(self, variables: NumLike | value[T] | ArrayType[T] | Iterable[T | value[T]]) -> Any:
         """Reads the numeric value of a copapy type.
 
         Arguments:
@@ -109,6 +113,9 @@ class Target():
         Returns:
             Numeric value or values
         """
+        if isinstance(variables, ArrayType):
+            return variables.map(lambda v: self.read_value(v))
+
         if isinstance(variables, Iterable):
             return [self.read_value(ni) if isinstance(ni, value) else ni for ni in variables]
 
@@ -142,7 +149,7 @@ class Target():
             return val
         else:
             raise ValueError(f"Unsupported value type: {var_type}")
-        
+
     def write_value(self, variables: value[Any] | Iterable[value[Any]], data: int | float | Iterable[int | float]) -> None:
         """Write to a copapy value on the target.
 
@@ -155,7 +162,7 @@ class Target():
             for ni, vi in zip(variables, data):
                 self.write_value(ni, vi)
             return
-        
+
         assert not isinstance(data, Iterable), "If net is not iterable, value must not be iterable"
 
         assert isinstance(variables, value), "Argument must be a copapy value"
@@ -174,7 +181,7 @@ class Target():
             dw.write_value(int(data), lengths)
         else:
             raise ValueError(f"Unsupported value type: {var_type}")
-        
+
         dw.write_com(binw.Command.END_COM)
         assert coparun(self._context, dw.get_data()) > 0
 

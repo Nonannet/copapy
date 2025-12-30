@@ -28,7 +28,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: musl-object-files
-          path: /object_files/musl_objects_*.*o
+          path: /object_files/*
 
   build-package-test:
     needs: [build_stencils]
@@ -46,6 +46,16 @@ jobs:
       with:
         name: stencil-object-files
         path: src/copapy/obj
+
+    - uses: actions/download-artifact@v4
+      with:
+        name: musl-object-files
+        path: /tmp/musl-object-files
+
+    - name: Add musl copyright notice to license file
+      run: |
+        echo "\n\nMUSL COPYRIGHT NOTICE:" >> LICENSE
+        cat /tmp/musl-object-files/COPYRIGHT >> LICENSE
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
@@ -289,7 +299,8 @@ jobs:
           set -v
           mkdir -p release
           cp tmp/stencil-object-files/* release/
-          cp tmp/musl-object-files/* release/
+          cp tmp/musl-object-files/*.o release/
+          cp tmp/musl-object-files/COPYRIGHT release/MUSL-COPYRIGHT.txt
           cp tmp/runner-linux-x86_64/coparun release/
           cp tmp/runner-linux-arm64/coparun release/coparun-aarch64
           cp tmp/runner-linux-armv6/coparun release/coparun-armv6

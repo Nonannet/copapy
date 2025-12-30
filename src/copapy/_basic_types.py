@@ -1,5 +1,5 @@
 import pkgutil
-from typing import Any, Sequence, TypeVar, overload, TypeAlias, Generic, cast
+from typing import Any, Sequence, TypeVar, overload, TypeAlias, Generic, cast, Callable
 from ._stencils import stencil_database, detect_process_arch
 import copapy as cp
 from ._helper_types import TNum
@@ -75,7 +75,7 @@ class Net:
 
     def __hash__(self) -> int:
         return self.source.node_hash
-    
+
     def __eq__(self, other: object) -> bool:
         return isinstance(other, Net) and self.source == other.source
 
@@ -396,7 +396,7 @@ class Op(Node):
             return True
         if not isinstance(other, Op):
             return NotImplemented
-        
+
         # Traverse graph for both notes. Return false on first difference.
         # A false inequality result in seldom cases is ok, whereas a false
         # equality result leads to wrong computation results.
@@ -427,9 +427,18 @@ class Op(Node):
                 return False
             seen.add(key)
         return True
-    
+
     def __hash__(self) -> int:
         return self.node_hash
+
+# Interface for vector and tensor types
+class ArrayType(Generic[TNum]):
+    def __init__(self, shape: tuple[int, ...]) -> None:
+        self.shape = shape
+        self.values: tuple[TNum | value[TNum], ...] = ()
+    
+    def map(self, func: Callable[[TNum | value[TNum]], Any]) -> 'ArrayType[Any]':
+        return self
 
 
 def value_from_number(val: Any) -> value[Any]:
@@ -454,7 +463,7 @@ def iif(expression: float | int | value[Any], true_result: TNum | value[TNum], f
 def iif(expression: Any, true_result: Any, false_result: Any) -> Any:
     """Inline if-else operation. Returns true_result if expression is non-zero,
     else returns false_result.
-    
+
     Arguments:
         expression: The condition to evaluate.
         true_result: The result if expression is non-zero.

@@ -13,7 +13,7 @@ The main features can be summarized as:
 - Memory and type safety with a minimal set of runtime errors
 - Deterministic execution
 - Automatic differentiation for efficient realtime optimization (reverse-mode)
-- Optimized machine code for x86_64, AArch64 and ARMv7
+- Optimized machine code for x86_64, ARMv6, ARMv7 and AArch64
 - Highly portable to new architectures
 - Small Python package with minimal dependencies and no cross-compile toolchain required
 
@@ -38,9 +38,28 @@ Despite missing SIMD-optimization, benchmark performance shows promising numbers
 
 ![Copapy architecture](docs/source/media/benchmark_results_001.svg)
 
-For the benchmark (`tests/benchmark.py`) the timing of 30000 iterations for calculating the therm `sum((v1 + i) @ v2 for i in range(10))` where measured on an Ryzen 5 3400G. Where the vectors `v1` and `v2` both have a lengths of `v_size` which was varied according to the chart from 10 to 600. For the NumPy case the "i in range(10)" loop was vectorized like this: `np.sum((v1 + i) @ v2)` with i being here a `NDArray` with a dimension of `[10, 1]`. The number of calculated scalar operations is the same for both contenders. Obviously copapy profits from less overheat by calling a single function from python per iteration, where the NumPy variant requires 3. Interestingly there is no indication visible in the chart that for increasing `v_size` the calling overhead for NumPy will be compensated by using faster SIMD instructions.
+For the benchmark (`tests/benchmark.py`) the timing of 30000 iterations for calculating the therm `sum((v1 + i) @ v2 for i in range(10))` where measured on an Ryzen 5 3400G. Where the vectors `v1` and `v2` both have a lengths of `v_size` which was varied according to the chart from 10 to 600. For the NumPy case the "i in range(10)" loop was vectorized like this: `np.sum((v1 + i) @ v2)` with i being here a `NDArray` with a dimension of `[10, 1]`. The number of calculated scalar operations is the same for both contenders. Obviously copapy profits from less overheat by calling a single function from python per iteration, where the NumPy variant requires 3. Interestingly there is no indication visible in the chart that for increasing `v_size` the calling overhead for NumPy will be compensated by using faster SIMD instructions. It is to note that in this benchmark the copapy case does not move any data between python and the compiled code.
 
 Furthermore for many applications copypy will benefit by reducing the actual number of operations significantly compared to a NumPy implementation, by precompute constant values know at compile time and benefiting from sparcity. Multiplying by zero (e.g. in a diagonal matrix) eliminate a hole branch in the computation graph. Operations without effect, like multiplications by 1 oder additions with zero gets eliminated at compile time.
+
+For Testing and using Copapy to speed up computations in conventional Python programs there is also the `@cp.jit` decorator available, to compile functions on first use and cache the compiled version for later calls:
+
+```python
+import copapy as cp
+
+@cp.jit
+def calculation(x: float, y: float) -> float:
+    return sum(x ** 2 + y ** 2 + i for i in range(10))
+
+# Compile and run:
+result1 = calculation(2.5, 1.2)
+
+# Run cached compiled version:
+result2 = calculation(3.1, 4.7)
+```
+
+It is to note that `cp.jit` is not optimized very much at the moment concerning transfer data between Python and the compiled code back and forth.
+
 
 ## Install
 
@@ -234,4 +253,4 @@ This project is licensed under the MIT license - see the [LICENSE](LICENSE) file
 
 [^2]: The compiler must support tail-call optimization (TCO). Currently, GCC is supported. Porting to a new architecture requires implementing a subset of relocation types used by that architecture.
 
-[^3]: Supported architectures: x86_64, AArch64, ARMv7 (non-Thumb). ARMv6/7-M (Thumb) support is in development. Code for x86 32-bit exists but has unresolved issues and a low priority.
+[^3]: Supported architectures: x86_64, AArch64, ARMv6 and 7 (non-Thumb). ARMv6/7-M (Thumb) support is in development. Code for x86 32-bit exists but has unresolved issues and a low priority.

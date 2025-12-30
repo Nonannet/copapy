@@ -1,8 +1,9 @@
 from . import value
 from ._mixed import mixed_sum, mixed_homogenize
-from typing import Sequence, TypeVar, Iterable, Any, overload, TypeAlias, Callable, Iterator, Generic
+from typing import Sequence, TypeVar, Iterable, Any, overload, TypeAlias, Callable, Iterator
 import copapy as cp
 from ._helper_types import TNum
+from ._basic_types import ArrayType
 
 #VecNumLike: TypeAlias = 'vector[int] | vector[float] | value[int] | value[float] | int | float | bool'
 VecNumLike: TypeAlias = 'vector[Any] | value[Any] | int | float | bool'
@@ -13,8 +14,13 @@ U = TypeVar("U", int, float)
 epsilon = 1e-20
 
 
-class vector(Generic[TNum]):
+class vector(ArrayType[TNum]):
     """Mathematical vector class supporting basic operations and interactions with values.
+
+    Attributes:
+        values (tuple[value[TNum] | TNum, ...]): The elements of the vector.
+        ndim (int): Number of dimensions (always 1 for vector).
+        shape (tuple[int, ...]): Shape of the vector as a tuple.
     """
     def __init__(self, values: Iterable[TNum | value[TNum]]):
         """Create a vector with given values.
@@ -23,6 +29,8 @@ class vector(Generic[TNum]):
             values: iterable of constant values
         """
         self.values: tuple[value[TNum] | TNum, ...] = tuple(values)
+        self.ndim: int = 1
+        self.shape: tuple[int, ...] = (len(self.values),)
 
     def __repr__(self) -> str:
         return f"vector({self.values})"
@@ -44,6 +52,10 @@ class vector(Generic[TNum]):
 
     def __iter__(self) -> Iterator[value[TNum] | TNum]:
         return iter(self.values)
+
+    def get_scalar(self, index: int) -> TNum | value[TNum]:
+        """Get a single scalar value from the vector."""
+        return self.values[index]
 
     @overload
     def __add__(self: 'vector[int]', other: VecFloatLike) -> 'vector[float]': ...
@@ -213,7 +225,7 @@ class vector(Generic[TNum]):
             a3 * b1 - a1 * b3,
             a1 * b2 - a2 * b1
         ])
-    
+
     def __gt__(self, other: VecNumLike) -> 'vector[int]':
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
@@ -267,11 +279,7 @@ class vector(Generic[TNum]):
             return vector(a != other for a in self.values)
         o = value(other)  # Make sure a single constant is allocated
         return vector(a != o if isinstance(a, value) else a != other for a in self.values)
-    
-    @property
-    def shape(self) -> tuple[int]:
-        """Return the shape of the vector as (length,)."""
-        return (len(self.values),)
+
 
     @overload
     def sum(self: 'vector[int]') -> int | value[int]: ...
@@ -299,15 +307,15 @@ class vector(Generic[TNum]):
 
     def map(self, func: Callable[[Any], value[U] | U]) -> 'vector[U]':
         """Applies a function to each element of the vector and returns a new vector.
-        
+
         Arguments:
             func: A function that takes a single argument.
-        
+
         Returns:
             A new vector with the function applied to each element.
         """
         return vector(func(x) for x in self.values)
-    
+
     def _map2(self, other: VecNumLike, func: Callable[[Any, Any], value[int] | value[float]]) -> 'vector[Any]':
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
@@ -320,11 +328,11 @@ class vector(Generic[TNum]):
 
 def cross_product(v1: vector[float], v2: vector[float]) -> vector[float]:
     """Calculate the cross product of two 3D vectors.
-    
+
     Arguments:
         v1: First 3D vector.
         v2: Second 3D vector.
-        
+
     Returns:
         The cross product vector.
     """
@@ -333,11 +341,11 @@ def cross_product(v1: vector[float], v2: vector[float]) -> vector[float]:
 
 def dot_product(v1: vector[float], v2: vector[float]) -> 'float | value[float]':
     """Calculate the dot product of two vectors.
-    
+
     Arguments:
         v1: First vector.
         v2: Second vector.
-        
+
     Returns:
         The dot product.
     """
@@ -346,11 +354,11 @@ def dot_product(v1: vector[float], v2: vector[float]) -> 'float | value[float]':
 
 def distance(v1: vector[float], v2: vector[float]) -> 'float | value[float]':
     """Calculate the Euclidean distance between two vectors.
-    
+
     Arguments:
         v1: First vector.
         v2: Second vector.
-        
+
     Returns:
         The Euclidean distance.
     """
@@ -360,11 +368,11 @@ def distance(v1: vector[float], v2: vector[float]) -> 'float | value[float]':
 
 def scalar_projection(v1: vector[float], v2: vector[float]) -> 'float | value[float]':
     """Calculate the scalar projection of v1 onto v2.
-    
+
     Arguments:
         v1: First vector.
         v2: Second vector.
-        
+
     Returns:
         The scalar projection.
     """
@@ -375,11 +383,11 @@ def scalar_projection(v1: vector[float], v2: vector[float]) -> 'float | value[fl
 
 def vector_projection(v1: vector[float], v2: vector[float]) -> vector[float]:
     """Calculate the vector projection of v1 onto v2.
-    
+
     Arguments:
         v1: First vector.
         v2: Second vector.
-        
+
     Returns:
         The projected vector.
     """
@@ -391,11 +399,11 @@ def vector_projection(v1: vector[float], v2: vector[float]) -> vector[float]:
 
 def angle_between(v1: vector[float], v2: vector[float]) -> 'float | value[float]':
     """Calculate the angle in radians between two vectors.
-    
+
     Arguments:
         v1: First vector.
         v2: Second vector.
-        
+
     Returns:
         The angle in radians.
     """
@@ -408,12 +416,12 @@ def angle_between(v1: vector[float], v2: vector[float]) -> 'float | value[float]
 
 def rotate_vector(v: vector[float], axis: vector[float], angle: 'float | value[float]') -> vector[float]:
     """Rotate vector v around a given axis by a specified angle using Rodrigues' rotation formula.
-    
+
     Arguments:
         v: The 3D vector to be rotated.
         axis: A 3D vector defining the axis of rotation.
         angle: The angle of rotation in radians.
-    
+
     Returns:
         The rotated vector.
     """
