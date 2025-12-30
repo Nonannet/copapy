@@ -1,4 +1,4 @@
-from . import value, vector, matrix
+from . import value, vector, tensor
 import copapy.backend as cpb
 from typing import Any, Sequence, overload
 import copapy as cp
@@ -10,10 +10,10 @@ def grad(x: Any, y: value[Any]) -> unifloat: ...
 @overload
 def grad(x: Any, y: vector[Any]) -> vector[float]: ...
 @overload
-def grad(x: Any, y: Sequence[value[Any]]) -> list[unifloat]: ...
+def grad(x: Any, y: tensor[Any]) -> tensor[float]: ...
 @overload
-def grad(x: Any, y: matrix[Any]) -> matrix[float]: ...
-def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | matrix[Any]) -> Any:
+def grad(x: Any, y: Sequence[value[Any]]) -> list[unifloat]: ...
+def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any]) -> Any:
     """Returns the partial derivative dx/dy where x needs to be a scalar
     and y might be a scalar, a list of scalars, a vector or matrix. It
     uses automatic differentiation in reverse-mode.
@@ -29,11 +29,11 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | matrix[Any
 
     if isinstance(y, value):
         y_set = {y}
-    if isinstance(y, matrix):
-        y_set = {v for row in y for v in row}
+    if isinstance(y, tensor):
+        y_set = {v.get_scalar(0) for v in y.flatten()}
     else:
         assert isinstance(y, Sequence) or isinstance(y, vector)
-        y_set = {v for v in y}
+        y_set = set(y)
 
     edges = cpb.get_all_dag_edges_between([x.net.source], (v.net.source for v in y_set if isinstance(v, value)))
     ordered_ops = cpb.stable_toposort(edges)
@@ -121,7 +121,7 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | matrix[Any
     if isinstance(y, value):
         return grad_dict[y.net]
     if isinstance(y, vector):
-        return vector(grad_dict[yi.net] if isinstance(yi, value) else 0.0 for yi in y)
-    if isinstance(y, matrix):
-        return matrix((grad_dict[yi.net] if isinstance(yi, value) else 0.0 for yi in row) for row in y)
+        return vector(grad_dict[yi.net] if isinstance(yi, value) else 0.0 for yi in y.values)
+    if isinstance(y, tensor):
+        return tensor([grad_dict[yi.net] if isinstance(yi, value) else 0.0 for yi in y.values], y.shape)
     return [grad_dict[yi.net] for yi in y]
