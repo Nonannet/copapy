@@ -40,9 +40,11 @@ from ._tensors import tensor, zeros, ones, arange, eye, identity, diagonal
 from ._math import sqrt, abs, sign, sin, cos, tan, asin, acos, atan, atan2, log, exp, pow, get_42, clamp, min, max, relu
 from ._autograd import grad
 from ._tensors import tensor as matrix
+from ._version import __version__
 
 
 __all__ = [
+    "__version__",
     "Target",
     "NumLike",
     "value",
