@@ -230,13 +230,11 @@ class value(Generic[TNum]):
     def __rfloordiv__(self, other: NumLike) -> Any:
         return add_op('floordiv', [other, self])
 
-    def __abs__(self: TCPNum) -> TCPNum:
-        return cp.abs(self)  # type: ignore
+    def __abs__(self: 'value[TNum]') -> 'value[TNum]':
+        return cp.abs(self)
 
-    def __neg__(self: TCPNum) -> TCPNum:
-        if self.dtype == 'float':
-            return cast(TCPNum, add_op('sub', [value(0.0), self]))
-        return cast(TCPNum, add_op('sub', [value(0), self]))
+    def __neg__(self: 'value[TNum]') -> 'value[TNum]':
+        return add_op('neg', [self])
 
     def __gt__(self, other: TVarNumb) -> 'value[int]':
         return add_op('gt', [self, other], dtype='bool')

@@ -89,8 +89,11 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
             elif opn == 'sqrt':
                 add_grad(a, g * (0.5 / cp.sqrt(a)))
 
-            #elif opn == 'abs':
-            #    add_grad(x, g * cp.sign(x))
+            elif opn == 'abs':
+                add_grad(a, g * cp.sign(a))
+
+            elif opn == 'neg':
+                add_grad(a, -b)
 
             elif opn == 'sin':
                 add_grad(a, g * cp.cos(a))
