@@ -13,7 +13,7 @@ def test_autograd():
     c += c + 1
     c += 1 + c + (-a)
     d += d * 2 + cp.relu(b + a)
-    d += 3 * d + cp.relu(b - a)
+    d += 3 * d + cp.relu(-a + b)
     e = c - d
     f = e**2
     g = f / 2.0
@@ -32,6 +32,27 @@ def test_autograd():
 
     assert pytest.approx(dg[0], abs=1e-4) == 138.83381  # pyright: ignore[reportUnknownMemberType]
     assert pytest.approx(dg[1], abs=1e-4) == 645.57725  # pyright: ignore[reportUnknownMemberType]
+
+
+def test_autograd_extended():
+    a = value(-4.0)
+    b = value(2.0)
+    c = a + b
+    d = a * b + b**3
+    c += c + 1
+    c += 1 + c + (-a)
+    d += d * 2 + cp.relu(b + a)
+    d += 3 * d + cp.relu(b - a)
+    e = c - cp.sin(-d)
+    f = cp.abs(e**2)
+    g = f / 2.0
+    g += 10.0 / f
+
+    dg = grad(g, (a, b))
+
+    tg = cp.Target()
+    tg.compile(g, dg)
+    tg.run()
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@ from typing import Iterable, overload, TypeVar, Any, Callable, TypeAlias
 from . import _binwrite as binw
 from coparun_module import coparun, read_data_mem, create_target, clear_target
 import struct
-from ._basic_types import value, Net, Node, Write, NumLike, ArrayType, stencil_db_from_package
+from ._basic_types import value, Net, Node, Store, NumLike, ArrayType, stencil_db_from_package
 from ._compiler import compile_to_dag
 
 T = TypeVar("T", int, float)
@@ -76,13 +76,13 @@ class Target():
             if isinstance(input, ArrayType):
                 for v in input.values:
                     if isinstance(v, value):
-                        nodes.append(Write(v))
+                        nodes.append(Store(v))
             elif isinstance(input, Iterable):
                 for v in input:
                     if isinstance(v, value):
-                        nodes.append(Write(v))
+                        nodes.append(Store(v))
             elif isinstance(input, value):
-                nodes.append(Write(input))
+                nodes.append(Store(input))
 
         dw, self._values = compile_to_dag(nodes, self.sdb)
         dw.write_com(binw.Command.END_COM)

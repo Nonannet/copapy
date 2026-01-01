@@ -22,6 +22,11 @@ jobs:
           name: stencil-object-files
           path: src/copapy/obj/*.o
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: musl-object-files
+          path: /object_files/*
+
   build_wheels:
     if: contains(github.ref, '-beta') == false
     needs: [build_stencils]

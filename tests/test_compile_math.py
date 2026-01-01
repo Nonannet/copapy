@@ -1,5 +1,5 @@
 from copapy import value
-from copapy.backend import Write, compile_to_dag, add_read_command
+from copapy.backend import Store, compile_to_dag, add_read_command
 import copapy as cp
 import subprocess
 from copapy import _binwrite
@@ -21,7 +21,7 @@ def test_compile_sqrt():
     ret = [r for v in test_vals for r in (cp.sqrt(value(v)),)]
 
 
-    out = [Write(r) for r in ret]
+    out = [Store(r) for r in ret]
 
     il, variables = compile_to_dag(out, copapy.generic_sdb)
 
@@ -55,7 +55,7 @@ def test_compile_log():
     ret = [r for v in test_vals for r in (cp.log(value(v)),)]
 
 
-    out = [Write(r) for r in ret]
+    out = [Store(r) for r in ret]
 
     il, variables = compile_to_dag(out, copapy.generic_sdb)
 
@@ -89,7 +89,7 @@ def test_compile_sin():
     ret = [r for v in test_vals for r in (cp.sin(value(v)),)]
 
 
-    out = [Write(r) for r in ret]
+    out = [Store(r) for r in ret]
 
     il, variables = compile_to_dag(out, copapy.generic_sdb)
 

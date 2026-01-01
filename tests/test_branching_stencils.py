@@ -1,5 +1,5 @@
 from copapy import value
-from copapy.backend import Write, compile_to_dag, add_read_command
+from copapy.backend import Store, compile_to_dag, add_read_command
 import copapy as cp
 import subprocess
 from copapy import _binwrite
@@ -22,7 +22,7 @@ def test_compile():
     # Function with no passing-on-jump as last instruction:
     ret_test = [r for v in test_vals for r in (cp.tan(value(v)),)]
 
-    out = [Write(r) for r in ret_test]
+    out = [Store(r) for r in ret_test]
 
     il, variables = compile_to_dag(out, copapy.generic_sdb)
 

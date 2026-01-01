@@ -1,6 +1,6 @@
 import time
 from copapy import backend
-from copapy.backend import Write, stencil_db_from_package
+from copapy.backend import Store, stencil_db_from_package
 import copapy.backend as cpb
 import copapy as cp
 import copapy._binwrite as binw
@@ -13,7 +13,7 @@ def test_timing_compiler():
     #t2 = t1.sum()
     t3 = cp.vector(cp.value(1 / (v + 1)) for v in range(256))
     t5 = ((t3 * t1) * 2).magnitude()
-    out = [Write(t5)]
+    out = [Store(t5)]
 
     print(out)
 
@@ -45,7 +45,7 @@ def test_timing_compiler():
 
     print('-- add_read_ops:')
     t0 = time.time()
-    output_ops = list(cpb.add_read_ops(ordered_ops))
+    output_ops = list(cpb.add_load_ops(ordered_ops))
     t1 = time.time()
     #for p in output_ops:
     #    print('#', p)
@@ -53,7 +53,7 @@ def test_timing_compiler():
 
     print('-- add_write_ops:')
     t0 = time.time()
-    extended_output_ops = list(cpb.add_write_ops(output_ops, const_net_list))
+    extended_output_ops = list(cpb.add_store_ops(output_ops, const_net_list))
     t1 = time.time()
     #for p in extended_output_ops:
     #    print('#', p)

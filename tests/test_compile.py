@@ -1,5 +1,5 @@
 from copapy import NumLike
-from copapy.backend import Write, compile_to_dag, add_read_command
+from copapy.backend import Store, compile_to_dag, add_read_command
 import copapy as cp
 import subprocess
 import struct
@@ -58,7 +58,7 @@ def test_compile():
 
     ret = (t2, t4, t5)
 
-    out = [Write(r) for r in ret]
+    out = [Store(r) for r in ret]
 
     il, variables = compile_to_dag(out, copapy.generic_sdb)
 
