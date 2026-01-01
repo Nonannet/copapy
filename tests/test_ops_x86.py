@@ -1,5 +1,5 @@
 from copapy import NumLike, iif, value
-from copapy.backend import Write, compile_to_dag, add_read_command
+from copapy.backend import Store, compile_to_dag, add_read_command
 import subprocess
 from copapy import _binwrite
 import copapy.backend as backend
@@ -104,7 +104,7 @@ def test_compile():
     #ret_test = [cp.get_42(c_i)]
     #ret_ref = [cp.get_42(9)]
 
-    out = [Write(r) for r in ret_test]
+    out = [Store(r) for r in ret_test]
 
     #ret_test += [c_i, v2]
     #ret_ref += [9, 4.44, -4.44]
@@ -185,7 +185,7 @@ def test_vector_compile():
 
     ret = (t2, t4, t5)
 
-    out = [Write(r) for r in ret]
+    out = [Store(r) for r in ret]
 
     sdb = backend.stencil_db_from_package('x86')
     il, variables = compile_to_dag(out, sdb)
@@ -243,7 +243,7 @@ def test_sinus():
     ret_test = [si, e]
     ret_ref = [cp.sin(a_val), (a_val + 0.87 * 2.0) ** 2 + cp.sin(a_val) + cp.sqrt(0.87)]
 
-    out = [Write(r) for r in ret_test]
+    out = [Store(r) for r in ret_test]
 
     sdb = backend.stencil_db_from_package('x86')
     dw, variables = compile_to_dag(out, sdb)

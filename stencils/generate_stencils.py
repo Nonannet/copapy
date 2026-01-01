@@ -187,27 +187,27 @@ def get_result_stubs2(type1: str, type2: str) -> str:
 
 
 @norm_indent
-def get_read_reg0_code(type1: str, type2: str, type_out: str) -> str:
+def get_load_reg0_code(type1: str, type2: str, type_out: str) -> str:
     return f"""
-    STENCIL void read_{type_out}_reg0_{type1}_{type2}({type1} arg1, {type2} arg2) {{
+    STENCIL void load_{type_out}_reg0_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         result_{type_out}_{type2}(dummy_{type_out}, arg2);
     }}
     """
 
 
 @norm_indent
-def get_read_reg1_code(type1: str, type2: str, type_out: str) -> str:
+def get_load_reg1_code(type1: str, type2: str, type_out: str) -> str:
     return f"""
-    STENCIL void read_{type_out}_reg1_{type1}_{type2}({type1} arg1, {type2} arg2) {{
+    STENCIL void load_{type_out}_reg1_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         result_{type1}_{type_out}(arg1, dummy_{type_out});
     }}
     """
 
 
 @norm_indent
-def get_write_code(type1: str, type2: str) -> str:
+def get_store_code(type1: str, type2: str) -> str:
     return f"""
-    STENCIL void write_{type1}_reg0_{type1}_{type2}({type1} arg1, {type2} arg2) {{
+    STENCIL void store_{type1}_reg0_{type1}_{type2}({type1} arg1, {type2} arg2) {{
         dummy_{type1} = arg1;
         result_{type1}_{type2}(arg1, arg2);
     }}
@@ -289,11 +289,11 @@ if __name__ == "__main__":
     code += get_op_code('mod', 'int', 'int', 'int')
 
     for t1, t2, t_out in permutate(types, types, types):
-        code += get_read_reg0_code(t1, t2, t_out)
-        code += get_read_reg1_code(t1, t2, t_out)
+        code += get_load_reg0_code(t1, t2, t_out)
+        code += get_load_reg1_code(t1, t2, t_out)
 
     for t1, t2 in permutate(types, types):
-        code += get_write_code(t1, t2)
+        code += get_store_code(t1, t2)
 
     print(f"Write file {args.path}...")
     with open(args.path, 'w') as f:

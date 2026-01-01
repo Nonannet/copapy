@@ -1,12 +1,12 @@
 import copapy as cp
 from copapy import value
-from copapy.backend import get_dag_stats, Write
+from copapy.backend import get_dag_stats, Store
 import copapy.backend as cpb
 from typing import Any
 
 
 def show_dag(val: value[Any]):
-    out = [Write(val.net)]
+    out = [Store(val.net)]
 
     print(out)
     print('-- get_edges:')
@@ -26,12 +26,12 @@ def show_dag(val: value[Any]):
         print('#', p)
 
     print('-- add_read_ops:')
-    output_ops = list(cpb.add_read_ops(ordered_ops))
+    output_ops = list(cpb.add_load_ops(ordered_ops))
     for p in output_ops:
         print('#', p)
 
     print('-- add_write_ops:')
-    extended_output_ops = list(cpb.add_write_ops(output_ops, const_list))
+    extended_output_ops = list(cpb.add_store_ops(output_ops, const_list))
     for p in extended_output_ops:
         print('#', p)
     print('--')

@@ -1,5 +1,5 @@
 import pkgutil
-from typing import Any, Sequence, TypeVar, overload, TypeAlias, Generic, cast, Callable
+from typing import Any, Sequence, TypeVar, overload, TypeAlias, Generic, Callable
 from ._stencils import stencil_database, detect_process_arch
 import copapy as cp
 from ._helper_types import TNum
@@ -360,7 +360,7 @@ class CPConstant(Node):
         return self.node_hash
 
 
-class Write(Node):
+class Store(Node):
     def __init__(self, input: value[Any] | Net | int | float):
         if isinstance(input, value):
             net = input.net
@@ -370,7 +370,7 @@ class Write(Node):
             node = CPConstant(input)
             net = Net(node.dtype, node)
 
-        self.name = 'write_' + transl_type(net.dtype)
+        self.name = 'store_' + transl_type(net.dtype)
         self.args = (net,)
         self.node_hash = hash(self.name) ^ hash(net.source.node_hash)
 

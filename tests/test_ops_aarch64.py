@@ -1,5 +1,5 @@
 from copapy import NumLike, iif, value
-from copapy.backend import Write, compile_to_dag, add_read_command
+from copapy.backend import Store, compile_to_dag, add_read_command
 import subprocess
 from copapy import _binwrite
 import copapy.backend as backend
@@ -91,7 +91,7 @@ def test_compile():
     ret_test = function1(c_i) + function1(c_f) + function2(c_i) + function2(c_f) + function3(c_i) + function4(c_i) + function5(c_b) + [value(9) % 2] + iiftests(c_i) + iiftests(c_f) + [cp.asin(c_i/10)]
     ret_ref = function1(9) + function1(1.111) + function2(9) + function2(1.111) + function3(9) + function4(9) + function5(True) + [9 % 2] + iiftests(9) + iiftests(1.111) + [cp.asin(9/10)]
 
-    out = [Write(r) for r in ret_test]
+    out = [Store(r) for r in ret_test]
 
     #ret_test += [c_i, v2]
     #ret_ref += [9, 4.44, -4.44]

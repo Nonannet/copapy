@@ -2,7 +2,7 @@ from typing import Generator, Iterable, Any
 from . import _binwrite as binw
 from ._stencils import stencil_database, patch_entry
 from collections import defaultdict, deque
-from ._basic_types import Net, Node, Write, CPConstant, Op, transl_type
+from ._basic_types import Net, Node, Store, CPConstant, Op, transl_type
 
 
 def stable_toposort(edges: Iterable[tuple[Node, Node]]) -> list[Node]:
@@ -132,7 +132,7 @@ def get_const_nets(nodes: list[Node]) -> list[Net]:
     return [net_lookup[node] for node in nodes if isinstance(node, CPConstant)]
 
 
-def add_read_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], None, None]:
+def add_load_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], None, None]:
     """Add read node before each op where arguments are not already positioned
     correctly in the registers
 
@@ -156,7 +156,7 @@ def add_read_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], No
                     #if net in registers:
                     #    print('x  swap registers')
                     type_list = ['int' if r is None else transl_type(r.dtype) for r in registers]
-                    new_node = Op(f"read_{transl_type(net.dtype)}_reg{i}_" + '_'.join(type_list), [])
+                    new_node = Op(f"load_{transl_type(net.dtype)}_reg{i}_" + '_'.join(type_list), [])
                     yield net, new_node
                     registers[i] = net
 
@@ -170,7 +170,7 @@ def add_read_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], No
                 yield None, node
 
 
-def add_write_ops(net_node_list: list[tuple[Net | None, Node]], const_nets: list[Net]) -> Generator[tuple[Net | None, Node], None, None]:
+def add_store_ops(net_node_list: list[tuple[Net | None, Node]], const_nets: list[Net]) -> Generator[tuple[Net | None, Node], None, None]:
     """Add write operation for each new defined net if a read operation is later followed
 
     Returns:
@@ -181,19 +181,19 @@ def add_write_ops(net_node_list: list[tuple[Net | None, Node]], const_nets: list
     # Initialize set of nets with constants
     stored_nets = set(const_nets)
 
-    #assert all(node.name.startswith('read_') for net, node in net_node_list if net)
+    #assert all(node.name.startswith('load_') for net, node in net_node_list if net)
     read_back_nets = {
         net for net, node in net_node_list
-        if net and node.name.startswith('read_')}
+        if net and node.name.startswith('load_')}
 
     registers: list[Net | None] = [None, None]
 
     for net, node in net_node_list:
-        if isinstance(node, Write):
+        if isinstance(node, Store):
             assert len(registers) == 2
             type_list = [transl_type(r.dtype) if r else 'int' for r in registers]
-            yield node.args[0], Op(f"write_{type_list[0]}_reg0_" + '_'.join(type_list), node.args)
-        elif node.name.startswith('read_'):
+            yield node.args[0], Op(f"store_{type_list[0]}_reg0_" + '_'.join(type_list), node.args)
+        elif node.name.startswith('load_'):
             yield net, node
         else:
             yield None, node
@@ -207,7 +207,7 @@ def add_write_ops(net_node_list: list[tuple[Net | None, Node]], const_nets: list
 
             if net in read_back_nets and net not in stored_nets:
                 type_list = [transl_type(r.dtype) if r else 'int' for r in registers]
-                yield net, Op(f"write_{type_list[0]}_reg0_" + '_'.join(type_list), [])
+                yield net, Op(f"store_{type_list[0]}_reg0_" + '_'.join(type_list), [])
                 stored_nets.add(net)
 
 
@@ -344,8 +344,8 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
 
     ordered_ops = list(stable_toposort(get_all_dag_edges(node_list)))
     const_net_list = get_const_nets(ordered_ops)
-    output_ops = list(add_read_ops(ordered_ops))
-    extended_output_ops = list(add_write_ops(output_ops, const_net_list))
+    output_ops = list(add_load_ops(ordered_ops))
+    extended_output_ops = list(add_store_ops(output_ops, const_net_list))
 
     dw = binw.data_writer(sdb.byteorder)
 

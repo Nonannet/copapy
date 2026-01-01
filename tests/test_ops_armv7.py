@@ -1,5 +1,5 @@
 from copapy import NumLike, iif, value
-from copapy.backend import Write, compile_to_dag, add_read_command
+from copapy.backend import Store, compile_to_dag, add_read_command
 import subprocess
 from copapy import _binwrite
 import copapy.backend as backend
@@ -96,7 +96,7 @@ def test_compile():
     #ret_test = (c_i * 100 // 5, c_f * 10 // 5)
     #ret_ref = (9 * 100 // 5, 1.111 * 10 // 5)
 
-    out = [Write(r) for r in ret_test]
+    out = [Store(r) for r in ret_test]
 
     sdb = backend.stencil_db_from_package('armv7')
     dw, variables = compile_to_dag(out, sdb)
