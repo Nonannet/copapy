@@ -1,4 +1,4 @@
-# Compiler
+# How it works
 ```{toctree}
 :maxdepth: 1
 :hidden:
