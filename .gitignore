@@ -29,3 +29,4 @@ docs/source/api
 core
 *.log
 docs/source/start.md
+/src/copapy/_version.py

@@ -41,8 +41,6 @@ jobs:
     steps:
     - name: Check out code
       uses: actions/checkout@v4
-      with:
-        fetch-tags: true
 
     - uses: actions/download-artifact@v4
       with:
@@ -89,8 +87,6 @@ jobs:
     steps:
     - name: Check out code
       uses: actions/checkout@v4
-      with:
-        fetch-tags: true
 
     - uses: actions/download-artifact@v4
       with:
@@ -144,8 +140,6 @@ jobs:
     continue-on-error: true
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-tags: true
     - uses: actions/download-artifact@v4
       with:
         name: stencil-object-files
@@ -175,8 +169,6 @@ jobs:
     continue-on-error: true
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-tags: true
     - uses: actions/download-artifact@v4
       with:
         name: stencil-object-files
@@ -206,8 +198,6 @@ jobs:
     continue-on-error: true
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-tags: true
     - uses: actions/download-artifact@v4
       with:
         name: stencil-object-files
@@ -242,8 +232,6 @@ jobs:
     steps:
     - name: Check out code
       uses: actions/checkout@v4
-      with:
-        fetch-tags: true
 
     - uses: actions/download-artifact@v4
       with:
@@ -290,10 +278,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           fetch-tags: true
-          sparse-checkout: |
-            pyproject.toml
-            tools/get_tag.sh
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
