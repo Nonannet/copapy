@@ -166,8 +166,42 @@ def get_floordiv(op: str, type1: str, type2: str) -> str:
         """
     else:
         return f"""
-        STENCIL void {op}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-            result_float_{type2}(floorf((float)arg1 / (float)arg2), arg2);
+        STENCIL void {op}_{type1}_{type2}({type1} a, {type2} b) {{
+            result_float_{type2}(floorf((float)a / (float)b), b);
+        }}
+        """
+
+
+@norm_indent
+def get_min(type1: str, type2: str) -> str:
+    if type1 == 'int' and type2 == 'int':
+        return f"""
+        STENCIL void min_{type1}_{type2}({type1} a, {type2} b) {{
+            result_int_{type2}(a < b ? a : b, b);
+        }}
+        """
+    else:
+        return f"""
+        STENCIL void min_{type1}_{type2}({type1} a, {type2} b) {{
+            float _a = (float)a; float _b = (float)b;
+            result_float_{type2}(_a < _b ? _a : _b, b);
+        }}
+        """
+
+
+@norm_indent
+def get_max(type1: str, type2: str) -> str:
+    if type1 == 'int' and type2 == 'int':
+        return f"""
+        STENCIL void max_{type1}_{type2}({type1} a, {type2} b) {{
+            result_int_{type2}(a > b ? a : b, b);
+        }}
+        """
+    else:
+        return f"""
+        STENCIL void max_{type1}_{type2}({type1} a, {type2} b) {{
+            float _a = (float)a; float _b = (float)b;
+            result_float_{type2}(_a > _b ? _a : _b, b);
         }}
         """
 
@@ -268,9 +302,16 @@ if __name__ == "__main__":
     code += get_math_func1('fabsf', 'float', 'abs')
     code += get_custom_stencil('abs_int(int arg1)', 'result_int(__builtin_abs(arg1));')
 
+    for t in types:
+        code += get_custom_stencil(f"sign_{t}({t} arg1)", f"result_int((arg1 > 0) - (arg1 < 0));")
+
     fnames = ['atan2', 'pow']
     for fn, t1, t2 in permutate(fnames, types, types):
         code += get_math_func2(fn, t1, t2)
+
+    for t1, t2 in permutate(types, types):
+        code += get_min(t1, t2)
+        code += get_max(t1, t2)
 
     for op, t1, t2 in permutate(ops, types, types):
         t_out = t1 if t1 == t2 else 'float'
