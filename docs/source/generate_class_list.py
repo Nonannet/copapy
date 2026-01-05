@@ -97,7 +97,7 @@ if __name__ == "__main__":
 
         write_functions(f, ['*'], 'copapy', title='Vector functions', path_patterns=['*_vectors*'], api_dir=api_dir)
 
-        write_functions(f, ['*'], 'copapy', title='Matrix functions', path_patterns=['*_matrices*'], api_dir=api_dir)
+        write_functions(f, ['*'], 'copapy', title='Tensor/Matrix functions', path_patterns=['*_tensors*'], api_dir=api_dir)
 
         #write_manual(f, ['NumLike'], title='Types')
 
