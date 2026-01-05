@@ -20,7 +20,11 @@ def test_fine():
                 cp.cos(c_f),
                 cp.tan(c_f),
                 cp.abs(-c_i),
-                cp.abs(-c_f))
+                cp.abs(-c_f),
+                cp.sign(c_i),
+                cp.sign(-c_f),
+                cp.min(c_i, 5),
+                cp.max(c_f, 5))
 
     re2_test = (a_f ** 2,
                 a_i ** -1,
@@ -32,7 +36,11 @@ def test_fine():
                 cp.cos(a_f),
                 cp.tan(a_f),
                 cp.abs(-a_i),
-                cp.abs(-a_f))
+                cp.abs(-a_f),
+                cp.sign(a_i),
+                cp.sign(-a_f),
+                cp.min(a_i, 5),
+                cp.max(a_f, 5))
 
     ret_refe = (a_f ** 2,
                 a_i ** -1,
@@ -43,8 +51,12 @@ def test_fine():
                 ma.sin(a_f),
                 ma.cos(a_f),
                 ma.tan(a_f),
-                cp.abs(-a_i),
-                cp.abs(-a_f))
+                abs(-a_i),
+                abs(-a_f),
+                (a_i > 0) - (a_i < 0),
+                (-a_f > 0) - (-a_f < 0),
+                min(a_i, 5),
+                max(a_f, 5))
 
     tg = Target()
     print('* compile and copy ...')
@@ -53,10 +65,10 @@ def test_fine():
     tg.run()
     print('* finished')
 
-    for test, val2, ref, name in zip(ret_test, re2_test, ret_refe, ('^2', '**-1', 'sqrt_int', 'sqrt_float', 'sin', 'cos', 'tan')):
+    for test, val2, ref, name in zip(ret_test, re2_test, ret_refe, ['^2', '**-1', 'sqrt_int', 'sqrt_float', 'sin', 'cos', 'tan'] + ['other']*10):
         assert isinstance(test, cp.value)
         val = tg.read_value(test)
-        print('+', val, ref, type(val), test.dtype)
+        print('+', name, val, ref, type(val), test.dtype)
         #for t in (int, float, bool):
         #    assert isinstance(val, t) == isinstance(ref, t), f"Result type does not match for {val} and {ref}"
         assert val == pytest.approx(ref, abs=1e-3), f"Result for {name} does not match: {val} and reference: {ref}"  # pyright: ignore[reportUnknownMemberType]
