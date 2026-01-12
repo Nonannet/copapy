@@ -1,9 +1,8 @@
 from copapy import value
-from copapy.backend import Store, compile_to_dag, add_read_command
+from copapy.backend import Store, compile_to_dag, add_read_value_remote
 import copapy as cp
 import subprocess
 from copapy import _binwrite
-import copapy.backend
 import pytest
 
 
@@ -24,7 +23,7 @@ def test_compile():
 
     out = [Store(r) for r in ret_test]
 
-    il, variables = compile_to_dag(out, copapy.generic_sdb)
+    il, variables = compile_to_dag(out, cp.generic_sdb)
 
     # run program command
     il.write_com(_binwrite.Command.RUN_PROG)
@@ -32,7 +31,7 @@ def test_compile():
 
     for v in ret_test:
         assert isinstance(v, value)
-        add_read_command(il, variables, v.net)
+        add_read_value_remote(il, variables, v.net)
 
     il.write_com(_binwrite.Command.END_COM)
 

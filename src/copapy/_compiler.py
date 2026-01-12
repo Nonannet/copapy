@@ -7,6 +7,7 @@ from ._basic_types import Net, Node, Store, CPConstant, Op, transl_type
 
 def stable_toposort(edges: Iterable[tuple[Node, Node]]) -> list[Node]:
     """Perform a stable topological sort on a directed acyclic graph (DAG).
+
     Arguments:
         edges: Iterable of (u, v) pairs meaning u -> v
 
