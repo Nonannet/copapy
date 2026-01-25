@@ -104,7 +104,7 @@ jobs:
     - name: Compile coparun
       run: |
         mkdir -p build/runner
-        gcc -O3 -DENABLE_BASIC_LOGGING -o build/runner/coparun src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c
+        gcc -O3 -static -DENABLE_BASIC_LOGGING -o build/runner/coparun src/coparun/runmem.c src/coparun/coparun.c src/coparun/mem_man.c
 
     - name: Generate debug asm files
       if: strategy.job-index == 0
@@ -153,7 +153,7 @@ jobs:
         docker run --rm -v $PWD:/app -w /app --platform linux/arm64 ghcr.io/nonannet/arm64_test:1 \
         bash -lc "pip install . && \
                   mkdir -p build/runner && \
-                  gcc -O3 -DENABLE_LOGGING -o build/runner/coparun src/coparun/runmem.c \
+                  gcc -O3 -static -DENABLE_LOGGING -o build/runner/coparun src/coparun/runmem.c \
                   src/coparun/coparun.c src/coparun/mem_man.c && \
                   pytest && \
                   bash tools/create_asm.sh"
@@ -182,7 +182,7 @@ jobs:
         docker run --rm -v $PWD:/app -w /app --platform linux/arm/v6 ghcr.io/nonannet/armv6_test:1 \
         bash -lc "pip install . && \
                   mkdir -p build/runner && \
-                  gcc -O3 -DENABLE_LOGGING -o build/runner/coparun src/coparun/runmem.c \
+                  gcc -O3 -static -DENABLE_LOGGING -o build/runner/coparun src/coparun/runmem.c \
                   src/coparun/coparun.c src/coparun/mem_man.c && \
                   pytest && \
                   bash tools/create_asm.sh"
@@ -211,7 +211,7 @@ jobs:
         docker run --rm -v $PWD:/app -w /app --platform linux/arm/v7 ghcr.io/nonannet/armv7_test:1 \
         bash -lc "pip install . && \
                   mkdir -p build/runner && \
-                  gcc -O3 -DENABLE_LOGGING -o build/runner/coparun src/coparun/runmem.c \
+                  gcc -O3 -static -DENABLE_LOGGING -o build/runner/coparun src/coparun/runmem.c \
                   src/coparun/coparun.c src/coparun/mem_man.c && \
                   pytest && \
                   bash tools/create_asm.sh"
