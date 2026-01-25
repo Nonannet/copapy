@@ -1,32 +1,45 @@
-from copapy import NumLike
-from copapy.backend import Store, compile_to_dag, add_read_value_remote
-import subprocess
-from copapy import _binwrite
-import copapy.backend as backend
-import copapy as cp
 import os
+import subprocess
 import warnings
+
 import pytest
 
-if os.name == 'nt':
+import copapy as cp
+import copapy.backend as backend
+from copapy import NumLike, _binwrite
+from copapy.backend import Store, add_read_value_remote, compile_to_dag
+
+if os.name == "nt":
     # On Windows wsl and qemu-user is required:
     # sudo apt install qemu-user
-    qemu_command = ['wsl', 'qemu-arm']
+    qemu_command = ["wsl", "qemu-arm"]
 else:
-    qemu_command = ['qemu-arm']
+    qemu_command = ["qemu-arm"]
 
 
 def run_command(command: list[str]) -> str:
-    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf8', check=False)
-    assert result.returncode != 11, f"SIGSEGV (segmentation fault)\n -Error occurred: {result.stderr}\n -Output: {result.stdout}"
-    assert result.returncode == 0, f"\n -Error occurred: {result.stderr}\n -Output: {result.stdout}"
+    result = subprocess.run(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        encoding="utf8",
+        check=False,
+    )
+    assert result.returncode != 11, (
+        f"SIGSEGV (segmentation fault)\n -Error occurred: {result.stderr}\n -Output: {result.stdout}"
+    )
+    assert result.returncode == 0, (
+        f"\n -Error occurred: {result.stderr}\n -Output: {result.stdout}"
+    )
     return result.stdout
 
 
 def check_for_qemu() -> bool:
-    command = qemu_command + ['--version']
+    command = qemu_command + ["--version"]
     try:
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+        result = subprocess.run(
+            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
+        )
     except Exception:
         return False
     return result.returncode == 0
@@ -54,12 +67,12 @@ def test_compile():
 
     out = [Store(r) for r in ret]
 
-    sdb = backend.stencil_db_from_package('armv7')
+    sdb = backend.stencil_db_from_package("armv7")
     il, variables = compile_to_dag(out, sdb)
 
     # run program command
     il.write_com(_binwrite.Command.RUN_PROG)
-    #il.write_com(_binwrite.Command.DUMP_CODE)
+    # il.write_com(_binwrite.Command.DUMP_CODE)
 
     for v in ret:
         assert isinstance(v, cp.value)
@@ -67,23 +80,29 @@ def test_compile():
 
     il.write_com(_binwrite.Command.END_COM)
 
-    #print('* Data to runner:')
-    #il.print()
+    # print('* Data to runner:')
+    # il.print()
 
-    il.to_file('build/runner/test-armv7.copapy')
+    il.to_file("build/runner/test-armv7.copapy")
 
     if not check_for_qemu():
-        warnings.warn("qemu-armv7 not found, aarch64 test skipped!", UserWarning)
-    elif not os.path.isfile('build/runner/coparun-armv7'):
+        warnings.warn("qemu-armv7 not found, test skipped!", UserWarning)
+    elif "wsl" in qemu_command:
+        warnings.warn("qemu-armv7 seams not work on wsl1, test skipped!", UserWarning)
+    elif not os.path.isfile("build/runner/coparun-armv7"):
         warnings.warn("armv7 runner not found, aarch64 test skipped!", UserWarning)
     else:
-        command = ['build/runner/coparun-armv7', 'build/runner/test-armv7.copapy', 'build/runner/test-armv7.copapy.bin']
+        command = [
+            "build/runner/coparun-armv7",
+            "build/runner/test-armv7.copapy",
+            "build/runner/test-armv7.copapy.bin",
+        ]
         result = run_command(qemu_command + command)
-        print('* Output from runner:\n--')
+        print("* Output from runner:\n--")
         print(result)
-        print('--')
+        print("--")
 
-        assert 'Return value: 1' in result
+        assert "Return value: 1" in result
 
         # Compare to x86_64 reference results
         assert " size=4 data=24 00 00 00" in result
@@ -92,5 +111,5 @@ def test_compile():
 
 
 if __name__ == "__main__":
-    #test_example()
+    # test_example()
     test_compile()
