@@ -6,7 +6,9 @@ ByteOrder = Literal['little', 'big']
 
 Command = Enum('Command', [('ALLOCATE_DATA', 1), ('COPY_DATA', 2),
                            ('ALLOCATE_CODE', 3), ('COPY_CODE', 4),
-                           ('PATCH_FUNC', 0x1000), ('PATCH_OBJECT', 0x2000),
+                           ('PATCH_FUNC', 0x1000),
+                           ('PATCH_FUNC_ARM32_THM', 0x1005),
+                           ('PATCH_OBJECT', 0x2000),
                            ('PATCH_OBJECT_HI21', 0x2001),
                            ('PATCH_OBJECT_ABS', 0x2002),
                            ('PATCH_OBJECT_REL', 0x2003),

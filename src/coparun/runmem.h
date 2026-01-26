@@ -20,6 +20,7 @@
 #define ALLOCATE_CODE     3
 #define COPY_CODE         4
 #define PATCH_FUNC        0x1000
+#define PATCH_FUNC_ARM32_THM   0x1005
 #define PATCH_OBJECT      0x2000
 #define PATCH_OBJECT_HI21 0x2001
 #define PATCH_OBJECT_ABS  0x2002

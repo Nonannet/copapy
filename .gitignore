@@ -30,3 +30,4 @@ core
 *.log
 docs/source/start.md
 /src/copapy/_version.py
+sketch*.py
