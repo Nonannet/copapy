@@ -1,3 +1,15 @@
+/*
+ * file: coparun.c
+ * Description: This file alows to run copapy programs in the command line
+ * reading copapy data, code and patch instructions from a file and jump to the
+ * entry point to execute it or dump the patched code memory for debugging to a file.
+ * 
+ * It's intended for testing and debugging purposes, to run copapy programs in a
+ * debugger or emulator like qemu.
+ * 
+ * Usage: coparun <code_file> [memory_dump_file]
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include "runmem.h"

@@ -1,3 +1,10 @@
+/**
+ * @file runmem.h
+ * @brief Header file for runmem.c, which contains core functions of
+ * the runner to receive data, code and patch instructions, perform
+ * patching, and jump to the entry point of the copapy program.
+ */
+
 #ifndef RUNMEM_H
 #define RUNMEM_H
 
