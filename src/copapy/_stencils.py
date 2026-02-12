@@ -102,7 +102,7 @@ def get_last_call_in_function(func: pelfy.elf_symbol) -> int:
         instruction_lengths = 4 if reloc.bits < 32 else 5
         address_field_length = 4
         #print(f"-> {[r.fields['r_offset'] - func.fields['st_value'] for r in func.relocations]}")
-        return reloc.fields['r_offset'] - func.fields['st_value'] + address_field_length - instruction_lengths
+        return reloc.fields['r_offset'] - func.offset_in_section + address_field_length - instruction_lengths
 
 
 def get_op_after_last_call_in_function(func: pelfy.elf_symbol) -> int:
@@ -110,7 +110,7 @@ def get_op_after_last_call_in_function(func: pelfy.elf_symbol) -> int:
     assert func.relocations, f'No call function in stencil function {func.name}.'
     reloc = func.relocations[-1]
     assert reloc.bits <= 32, "Relocation segment might be larger then 32 bit"
-    return reloc.fields['r_offset'] - func.fields['st_value'] + 4
+    return reloc.fields['r_offset'] - func.offset_in_section + 4
 
 
 class stencil_database():
@@ -121,7 +121,7 @@ class stencil_database():
         var_size (dict[str, int]): dictionary of object names and their sizes
         byteorder (ByteOrder): byte order of the ELF file
         elf (elf_file): the loaded ELF file
-        thumb_mode (int): 1 if ARM in thumb mode, 0 otherwise
+        thumb_mode (bool): entry_function_shell in ARM thumb mode
     """
 
     def __init__(self, obj_file: str | bytes):
@@ -148,10 +148,7 @@ class stencil_database():
         #                 if s.info == 'STT_OBJECT'}
         self.byteorder: ByteOrder = self.elf.byteorder
 
-        self.arm = '.ARM.attributes' in self.elf.sections
-
-        # Returns 1 for ARM in thumb mode, 0 otherwise
-        self.thumb_mode = self.elf.symbols['entry_function_shell'].fields['st_value'] & 1
+        self.thumb_mode = self.elf.symbols['entry_function_shell'].thumb_mode
 
         #for name in self.function_definitions.keys():
         #    sym = self.elf.symbols[name]
@@ -194,14 +191,14 @@ class stencil_database():
         for reloc in symbol.relocations:
 
             # address to fist byte to patch relative to the start of the symbol
-            patch_offset = reloc.fields['r_offset'] - symbol.fields['st_value'] - start_index
+            patch_offset = reloc.fields['r_offset'] - symbol.offset_in_section - start_index
 
             if patch_offset < end_index - start_index:  # Exclude the call to the result_* function
                 reloc_entry = relocation_entry(reloc.symbol.name,
                                        reloc.symbol.info,
-                                       reloc.symbol.fields['st_value'],
+                                       reloc.symbol.fields['st_value'],  # LSB on ARM indicates thumb mode
                                        reloc.symbol.fields['st_shndx'],
-                                       symbol.fields['st_value'],
+                                       symbol.offset_in_section,
                                        start_index,
                                        reloc)
                 cache.append(reloc_entry)
@@ -348,10 +345,7 @@ class stencil_database():
             start_stencil, end_stencil = get_stencil_position(func)
             assert func.section
 
-            # For arm functions, mask out the thumb mode bit
-            function_offset = func.fields['st_value'] & ~int(self.arm)
-
-            start_index = func.section['sh_offset'] + function_offset + start_stencil
+            start_index = func.offset_in_file + start_stencil
             lengths = end_stencil - start_stencil
             self._stencil_cache[name] = (start_index, lengths)
 
@@ -389,7 +383,7 @@ class stencil_database():
 
     def get_symbol_offset(self, name: str) -> int:
         """Returns the offset of a specified symbol in the section."""
-        return self.elf.symbols[name].fields['st_value']
+        return self.elf.symbols[name].offset_in_section
 
     def get_symbol_section_index(self, name: str) -> int:
         """Returns the section index for a specified symbol name."""
@@ -420,13 +414,6 @@ class stencil_database():
         func = self.elf.symbols[name]
         assert func.info == 'STT_FUNC', f"{name} is not a function"
 
-        # For arm functions, mask out the thumb mode bit
-        function_offset = func.fields['st_value'] & ~int(self.arm)
-
-        start_index = func.section['sh_offset'] + function_offset
-        lengths = end_stencil - start_stencil
-
-        #return self.elf.read_bytes(start_index, func.fields['st_size'])
         if part == 'start':
             index = get_last_call_in_function(func)
             return func.data[:index]
