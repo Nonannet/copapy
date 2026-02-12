@@ -80,11 +80,20 @@ def get_return_function_type(symbol: pelfy.elf_symbol) -> str:
 
 def get_stencil_position(func: pelfy.elf_symbol) -> tuple[int, int]:
     start_index = 0  # There must be no prolog
+
     # Find last relocation in function
     last_instr = get_last_call_in_function(func)
-    function_size = func.fields['st_size']
-    if last_instr + 5 >= function_size:  # Check if jump is last instruction
-        end_index = last_instr  # Jump can be striped
+
+    assert func.section, f"No code section specified for symbol {func.name}"
+
+    # func.section.fields['sh_size'] is equivalent to func.fields['st_size']
+    # expect for ARM thumb, here nop padding at the end for 4-byte alignment
+    # is not included in st_size
+    function_size = func.section.fields['sh_size']
+
+    # Check if jump is the last instruction and can be striped
+    if last_instr + 5 >= function_size:
+        end_index = last_instr
     else:
         end_index = function_size
 
@@ -98,7 +107,8 @@ def get_last_call_in_function(func: pelfy.elf_symbol) -> int:
     if reloc.symbol.name.startswith('dummy_'):
         return -0xFFFF  # Last relocation is not a jump
     else:
-        # Assume the call instruction is 4 bytes long for relocations with less than 32 bit and 5 bytes otherwise
+        # Assume the jump/call instruction is 4 bytes long for relocations
+        # with less than 32 bit and 5 bytes otherwise
         instruction_lengths = 4 if reloc.bits < 32 else 5
         address_field_length = 4
         #print(f"-> {[r.fields['r_offset'] - func.fields['st_value'] for r in func.relocations]}")
