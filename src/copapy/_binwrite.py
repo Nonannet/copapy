@@ -24,6 +24,11 @@ class data_writer():
         self._data: list[tuple[str, bytes, int]] = []
         self.byteorder: ByteOrder = byteorder
 
+    def copy(self):
+        cp = data_writer(self.byteorder)
+        cp._data = self._data.copy()
+        return cp
+
     def write_int(self, value: int, num_bytes: int = 4, signed: bool = False) -> None:
         self._data.append((f"INT {value}", value.to_bytes(length=num_bytes, byteorder=self.byteorder, signed=signed), 0))
 
