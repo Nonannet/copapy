@@ -214,6 +214,10 @@ jobs:
                   gcc -O3 -static -DENABLE_LOGGING -o build/runner/coparun src/coparun/runmem.c \
                   src/coparun/coparun.c src/coparun/mem_man.c && \
                   pytest && \
+                  export CP_TARGET_ARCH=armv7thumb && \
+                  pytest && \
+                  export CP_TARGET_ARCH=armv7mthumb && \
+                  pytest && \
                   bash tools/create_asm.sh"
 
     - uses: actions/upload-artifact@v4
