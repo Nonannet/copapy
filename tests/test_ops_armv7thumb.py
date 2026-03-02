@@ -55,6 +55,9 @@ def function1(c1: NumLike) -> list[NumLike]:
             c1 + 4, c1 - 4,
             c1 > 2, c1 > 100, c1 < 4, c1 < 100]
 
+def function1ex(c1: NumLike) -> list[NumLike]:
+    return [c1 // 4]
+
 
 def function2(c1: NumLike) -> list[NumLike]:
     return [c1 * 4.44, c1 * -4.44]
@@ -90,24 +93,21 @@ def test_compile():
     c_f = value(1.111)
     c_b = value(True)
 
-    #ret_test = function1(c_i) + function1(c_f) + function2(c_i) + function2(c_f) + function3(c_i) + function4(c_i) + function5(c_b) + [value(9) % 2] + iiftests(c_i) + iiftests(c_f) + [cp.asin(c_i/10)]
-    #ret_ref = function1(9) + function1(1.111) + function2(9) + function2(1.111) + function3(9) + function4(9) + function5(True) + [9 % 2] + iiftests(9) + iiftests(1.111) + [cp.asin(9/10)]
-
-    ret_test = (c_i * 100 + 5,)
-    ret_ref = (9 * 100 + 5,)
+    ret_test = function1(c_i) + function1(c_f) + function2(c_i) + function2(c_f) + function3(c_i) + function4(c_i) + function5(c_b) + [value(9) % 2] + iiftests(c_i) + iiftests(c_f) + [cp.asin(c_i/10)]
+    ret_ref = function1(9) + function1(1.111) + function2(9) + function2(1.111) + function3(9) + function4(9) + function5(True) + [9 % 2] + iiftests(9) + iiftests(1.111) + [cp.asin(9/10)]
 
     out = [Store(r) for r in ret_test]
 
-    sdb = backend.stencil_db_from_package('armv7thumb')
+    sdb = backend.stencil_db_from_package('armv7mthumb')
     dw, variables = compile_to_dag(out, sdb)
 
     #dw.write_com(_binwrite.Command.READ_DATA)
     #dw.write_int(0)
     #dw.write_int(28)
 
-    # run program command
-    #dw.write_com(_binwrite.Command.RUN_PROG)
-    dw.write_com(_binwrite.Command.DUMP_CODE)
+    du = dw.copy()
+    dw.write_com(_binwrite.Command.RUN_PROG)
+    du.write_com(_binwrite.Command.DUMP_CODE)
 
     for v in ret_test:
         assert isinstance(v, value)
@@ -118,11 +118,13 @@ def test_compile():
     #dw.write_int(28)
 
     dw.write_com(_binwrite.Command.END_COM)
+    du.write_com(_binwrite.Command.END_COM)
 
     #print('* Data to runner:')
     #dw.print()
 
     dw.to_file('build/runner/test-armv7thumb.copapy')
+    du.to_file('build/runner/test-armv7thumb-dump.copapy')
 
     if not check_for_qemu():
         warnings.warn("qemu-armv7 not found, armv7 test skipped!", UserWarning)
@@ -131,12 +133,14 @@ def test_compile():
         warnings.warn("armv7thumb runner not found, armv7thumb test skipped!", UserWarning)
         return
 
-    command = qemu_command + ['build/runner/coparun-armv7thumb', 'build/runner/test-armv7thumb.copapy'] + ['build/runner/test.copapy-armv7thumb.bin']
-    #try:
+    print('----- Dump code...')
+    command = qemu_command + ['build/runner/coparun-armv7thumb', 'build/runner/test-armv7thumb-dump.copapy', 'build/runner/test.copapy-armv7thumb.bin']
     result = run_command(command)
-    #except FileNotFoundError:
-    #    warnings.warn(f"Test skipped, executable not found.", UserWarning)
-    #    return
+
+    print('----- Run code...')
+    command = qemu_command + ['build/runner/coparun-armv7thumb', 'build/runner/test-armv7thumb.copapy']
+    result = run_command(command)
+
 
     print('* Output from runner:\n--')
     print(result)
@@ -167,5 +171,14 @@ def test_compile():
 
 
 if __name__ == "__main__":
-    #test_example()
-    test_slow_31bit_int_list_hash()
+    test_compile()
+
+
+"""
+qemu-arm -d in_asm,exec,cpu_reset -D qemu.log build/runner/coparun-armv7thumb build/runner/test-armv7thumb.copapy build/runner/test.copapy-armv7thumb.bin
+
+qemu-arm -d in_asm,exec -D qemu_trace.log \
+  -global driver=pl011.audiomaddr,property=addr,value=0xff7ec000 \
+  -global driver=pl011.audiomaddr,property=size,value=0x100000 \
+  your_binary
+"""
