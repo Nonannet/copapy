@@ -50,6 +50,32 @@ void patch_arm32_abs(uint8_t *patch_addr, uint32_t imm16)
     *((uint32_t *)patch_addr) = instr;
 }
 
+void patch_arm_thm_abs(uint8_t *patch_addr, uint32_t imm16)
+{
+    // Thumb MOVW (T3) / MOVT (T1) encoding
+    
+    uint16_t *instr16 = (uint16_t *)patch_addr;
+    uint16_t first_half = instr16[0];
+    uint16_t second_half = instr16[1];
+
+    // Extract fields from imm16
+    uint32_t imm4 = (imm16 >> 12) & 0xF;
+    uint32_t i    = (imm16 >> 11) & 0x1;
+    uint32_t imm3 = (imm16 >> 8) & 0x7;
+    uint32_t imm8 = imm16 & 0xFF;
+
+    // Clear bits
+    first_half &= (uint16_t)(~(0x000F | (1 << 10)));
+    second_half &= (uint16_t)(~(0x00FF | (0x7 << 12)));
+
+    // Set new fields
+    first_half |= (uint16_t)((imm4 << 0) | (i << 10));
+    second_half |= (uint16_t)(imm8 | (imm3 << 12));
+
+    instr16[0] = first_half;
+    instr16[1] = second_half;
+}
+
 void patch_arm_thm_jump24(uint8_t *patch_addr, int32_t imm24)
 {
     // Read the 32-bit instruction (two halfwords)
@@ -77,8 +103,8 @@ void patch_arm_thm_jump24(uint8_t *patch_addr, int32_t imm24)
     second_half &= 0xD000;           // Keep upper 5 bits
 
     // Set new imm fields
-    first_half  |= (S << 10) | imm10;
-    second_half |= (J1 << 13) | (J2 << 11) | imm11;
+    first_half  |= (uint16_t)((S << 10) | imm10);
+    second_half |= (uint16_t)((J1 << 13) | (J2 << 11) | imm11);
 
     // Write back
     instr16[0] = first_half;
@@ -223,6 +249,16 @@ int parse_commands(runmem_t *context, uint8_t *bytes) {
                 LOG("PATCH_FUNC_ARM32_THM patch_offs=%i patch_mask=%#08x scale=%i value=%i\n",
                     offs, patch_mask, patch_scale, value);
                 patch_arm_thm_jump24(context->executable_memory + offs, value);
+                break;
+
+            case PATCH_OBJECT_ARM32_ABS_THM:
+                offs = *(uint32_t*)bytes; bytes += 4;
+                patch_mask = *(uint32_t*)bytes; bytes += 4;
+                patch_scale = *(int32_t*)bytes; bytes += 4;
+                value = *(int32_t*)bytes; bytes += 4;
+                LOG("PATCH_OBJECT_ARM32_ABS_THM patch_offs=%i patch_mask=%#08x scale=%i value=%i imm16=%#04x\n",
+                    offs, patch_mask, patch_scale, value, (uint32_t)((uintptr_t)(context->data_memory + value) & patch_mask) / (uint32_t)patch_scale);
+                patch_arm_thm_abs(context->executable_memory + offs, (uint32_t)((uintptr_t)(context->data_memory + value) & patch_mask) / (uint32_t)patch_scale);
                 break;
 
             case ENTRY_POINT:

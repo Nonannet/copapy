@@ -13,6 +13,7 @@ Command = Enum('Command', [('ALLOCATE_DATA', 1), ('COPY_DATA', 2),
                            ('PATCH_OBJECT_ABS', 0x2002),
                            ('PATCH_OBJECT_REL', 0x2003),
                            ('PATCH_OBJECT_ARM32_ABS', 0x2004),
+                           ('PATCH_OBJECT_ARM32_ABS_THM', 0x2006),
                            ('ENTRY_POINT', 7),
                            ('RUN_PROG', 64), ('READ_DATA', 65),
                            ('END_COM', 256), ('FREE_MEMORY', 257), ('DUMP_CODE', 258)])
