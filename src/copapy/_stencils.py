@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Generator, Literal, Iterable, TYPE_CHECKING
 import struct
 import platform
+import os
 
 if TYPE_CHECKING:
     import pelfy
@@ -46,6 +47,10 @@ class patch_entry:
 
 
 def detect_process_arch() -> str:
+    cp_target_arch = os.environ.get("CP_TARGET_ARCH")
+    if cp_target_arch:
+        return cp_target_arch
+
     bits = struct.calcsize("P") * 8
     arch = platform.machine().lower()
 
@@ -305,21 +310,20 @@ class stencil_database():
             scale = 8
             #print(f" *> {patch_value=} {symbol_address=} {pr.fields['r_addend']=}, {function_offset=}")
 
-        elif pr.type.endswith('_MOVW_ABS_NC'):
-            # R_ARM_MOVW_ABS_NC
+        elif pr.type == 'R_ARM_MOVW_ABS_NC':
             # (S + A) & 0xFFFF
             mask = 0xFFFF
             patch_value = symbol_address + pr.fields['r_addend']
             symbol_type = symbol_type + 0x04  # Absolut value
             #print(f" *> {pr.type} {patch_value=} {symbol_address=}, {function_offset=}")
 
-        elif pr.type.endswith('_MOVT_ABS'):
-            # R_ARM_MOVT_ABS
+        elif pr.type =='R_ARM_MOVT_ABS':
             # (S + A) & 0xFFFF0000
             mask = 0xFFFF0000
             patch_value = symbol_address + pr.fields['r_addend']
             symbol_type = symbol_type + 0x04  # Absolut value
             scale = 0x10000
+            #print(f" *> {pr.type} {patch_value=} {symbol_address=}, {function_offset=}, {pr.fields['r_addend']=}")
 
         elif pr.type.endswith('_ABS32'):
             # R_ARM_ABS32
@@ -330,9 +334,24 @@ class stencil_database():
         elif pr.type.endswith('_THM_JUMP24') or pr.type.endswith('_THM_CALL'):
             # R_ARM_THM_JUMP24
             # S + A - P
-            #assert pr.fields['r_addend'] == 0, pr.fields['r_addend']
-            patch_value = symbol_address - (patch_offset + 4)  #+ pr.fields['r_addend']
+            patch_value = symbol_address - patch_offset  + pr.fields['r_addend']
             symbol_type = symbol_type + 0x05  # PATCH_FUNC_ARM32_THM
+            #print(f" *> {pr.type} {patch_value=} {symbol_address=} {pr.fields['r_addend']=} {pr.bits=}, {function_offset=} {patch_offset=}")
+
+        elif pr.type == 'R_ARM_THM_MOVW_ABS_NC':
+            # (S + A) & 0xFFFF
+            mask = 0xFFFF
+            patch_value = symbol_address + pr.fields['r_addend']
+            symbol_type = symbol_type + 0x06  # PATCH_OBJECT_ARM32_ABS_THM
+            #print(f" *> {pr.type} {patch_value=} {symbol_address=}, {function_offset=}, {pr.fields['r_addend']=}")
+        
+        elif pr.type == 'R_ARM_THM_MOVT_ABS':
+            # (S + A) & 0xFFFF0000
+            mask = 0xFFFF0000
+            patch_value = symbol_address + pr.fields['r_addend']
+            symbol_type = symbol_type + 0x06  # PATCH_OBJECT_ARM32_ABS_THM
+            scale = 0x10000
+            #print(f" *> {pr.type} {patch_value=} {symbol_address=}, {function_offset=}, {pr.fields['r_addend']=}")
 
         else:
             raise NotImplementedError(f"Relocation type {pr.type} in {relocation.pelfy_reloc.target_section.name} pointing to {relocation.pelfy_reloc.symbol.name} not implemented")

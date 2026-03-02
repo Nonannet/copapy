@@ -393,14 +393,14 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
     # assemble stencils to main program and patch stencils
     data = sdb.get_function_code('entry_function_shell', 'start')
     data_list.append(data)
-    print(f"* entry_function_shell (0) " + ' '.join(f'{d:02X}' for d in data))
+    #print(f"* entry_function_shell (0) " + ' '.join(f'{d:02X}' for d in data))
     offset = aux_func_len + len(data)
 
     for associated_net, node in extended_output_ops:
         assert node.name in sdb.stencil_definitions, f"- Warning: {node.name} stencil not found"
         data = sdb.get_stencil_code(node.name)
         data_list.append(data)
-        print(f"* {node.name} ({offset}) " + ' '.join(f'{d:02X}' for d in data))
+        #print(f"* {node.name} ({offset}) " + ' '.join(f'{d:02X}' for d in data))
 
         for reloc in sdb.get_relocations(node.name, stencil=True):
             if reloc.target_symbol_info in ('STT_OBJECT', 'STT_NOTYPE', 'STT_SECTION'):
@@ -453,7 +453,7 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
         for reloc in sdb.get_relocations(name):
 
             if not reloc.target_section_index:
-                assert reloc.pelfy_reloc.type == 'R_ARM_V4BX', (reloc.pelfy_reloc.type, name)
+                assert reloc.pelfy_reloc.type == 'R_ARM_V4BX', (reloc.pelfy_reloc.type, name, reloc.pelfy_reloc.symbol.name)
 
             elif reloc.target_symbol_info in {'STT_OBJECT', 'STT_NOTYPE', 'STT_SECTION'}:
                 # Patch constants/variable addresses on heap
