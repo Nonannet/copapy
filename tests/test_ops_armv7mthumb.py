@@ -98,7 +98,7 @@ def test_compile():
 
     out = [Store(r) for r in ret_test]
 
-    sdb = backend.stencil_db_from_package('armv7thumb')
+    sdb = backend.stencil_db_from_package('armv7mthumb')
     dw, variables = compile_to_dag(out, sdb)
 
     #dw.write_com(_binwrite.Command.READ_DATA)
@@ -123,8 +123,8 @@ def test_compile():
     #print('* Data to runner:')
     #dw.print()
 
-    dw.to_file('build/runner/test-armv7thumb.copapy')
-    du.to_file('build/runner/test-armv7thumb-dump.copapy')
+    dw.to_file('build/runner/test-armv7mthumb.copapy')
+    du.to_file('build/runner/test-armv7mthumb-dump.copapy')
 
     if not check_for_qemu():
         warnings.warn("qemu-armv7 not found, armv7 test skipped!", UserWarning)
@@ -134,11 +134,11 @@ def test_compile():
         return
 
     print('----- Dump code...')
-    command = qemu_command + ['build/runner/coparun-armv7', 'build/runner/test-armv7thumb-dump.copapy', 'build/runner/test.copapy-armv7thumb.bin']
+    command = qemu_command + ['build/runner/coparun-armv7', 'build/runner/test-armv7mthumb-dump.copapy', 'build/runner/test.copapy-armv7mthumb.bin']
     result = run_command(command)
 
     print('----- Run code...')
-    command = qemu_command + ['build/runner/coparun-armv7', 'build/runner/test-armv7thumb.copapy']
+    command = qemu_command + ['build/runner/coparun-armv7', 'build/runner/test-armv7mthumb.copapy']
     result = run_command(command)
 
 
@@ -172,13 +172,3 @@ def test_compile():
 
 if __name__ == "__main__":
     test_compile()
-
-
-"""
-qemu-arm -d in_asm,exec,cpu_reset -D qemu.log build/runner/coparun-armv7thumb build/runner/test-armv7thumb.copapy build/runner/test.copapy-armv7thumb.bin
-
-qemu-arm -d in_asm,exec -D qemu_trace.log \
-  -global driver=pl011.audiomaddr,property=addr,value=0xff7ec000 \
-  -global driver=pl011.audiomaddr,property=size,value=0x100000 \
-  your_binary
-"""
