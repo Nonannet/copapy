@@ -211,18 +211,86 @@ jobs:
         docker run --rm -v $PWD:/app -w /app --platform linux/arm/v7 ghcr.io/nonannet/armv7_test:1 \
         bash -lc "pip install .[mindev] && \
                   mkdir -p build/runner && \
-                  gcc -O3 -static -DENABLE_LOGGING -o build/runner/coparun src/coparun/runmem.c \
+                  gcc  -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -marm -static \
+                  -Wall -Wextra -Wconversion -Wsign-conversion \
+                  -Wshadow -Wstrict-overflow -O3 \
+                  -DENABLE_LOGGING \
+                  -o build/runner/coparun src/coparun/runmem.c \
                   src/coparun/coparun.c src/coparun/mem_man.c && \
-                  pytest && \
-                  export CP_TARGET_ARCH=armv7thumb && \
-                  pytest && \
-                  export CP_TARGET_ARCH=armv7mthumb && \
                   pytest && \
                   bash tools/create_asm.sh"
 
     - uses: actions/upload-artifact@v4
       with:
         name: runner-linux-armv7
+        path: build/runner/*
+
+  build-armv7thumb:
+    needs: [build_stencils]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/download-artifact@v4
+      with:
+        name: stencil-object-files
+        path: src/copapy/obj
+    - name: Set up QEMU for ARMv7
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: linux/arm/v7
+    - name: Use ARMv7 container
+      run: |
+        docker run --rm -v $PWD:/app -w /app --platform linux/arm/v7 ghcr.io/nonannet/armv7_test:1 \
+        bash -lc "pip install .[mindev] && \
+                  mkdir -p build/runner && \
+                  gcc -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -marm -static \
+                  -Wall -Wextra -Wconversion -Wsign-conversion \
+                  -Wshadow -Wstrict-overflow -O3 \
+                  -DENABLE_LOGGING \
+                  -o build/runner/coparun src/coparun/runmem.c \
+                  src/coparun/coparun.c src/coparun/mem_man.c && \
+                  export CP_TARGET_ARCH=armv7thumb && \
+                  pytest && \
+                  bash tools/create_asm.sh"
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: runner-linux-armv7thumb
+        path: build/runner/*
+
+  build-armv7mthumb:
+    needs: [build_stencils]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/download-artifact@v4
+      with:
+        name: stencil-object-files
+        path: src/copapy/obj
+    - name: Set up QEMU for ARMv7
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: linux/arm/v7
+    - name: Use ARMv7 container
+      run: |
+        docker run --rm -v $PWD:/app -w /app --platform linux/arm/v7 ghcr.io/nonannet/armv7_test:1 \
+        bash -lc "pip install .[mindev] && \
+                  mkdir -p build/runner && \
+                  gcc -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -marm -static \
+                  -Wall -Wextra -Wconversion -Wsign-conversion \
+                  -Wshadow -Wstrict-overflow -O3 \
+                  -DENABLE_LOGGING \
+                  -o build/runner/coparun src/coparun/runmem.c \
+                  src/coparun/coparun.c src/coparun/mem_man.c && \
+                  export CP_TARGET_ARCH=armv7mthumb && \
+                  pytest && \
+                  bash tools/create_asm.sh"
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: runner-linux-armv7mthumb
         path: build/runner/*
 
   build-windows:
@@ -307,6 +375,8 @@ jobs:
           cp tmp/runner-linux-arm64/coparun release/coparun-aarch64
           cp tmp/runner-linux-armv6/coparun release/coparun-armv6
           cp tmp/runner-linux-armv7/coparun release/coparun-armv7
+          cp tmp/runner-linux-armv7thumb/coparun release/coparun-armv7thumb
+          cp tmp/runner-linux-armv7mthumb/coparun release/coparun-armv7mthumb
           cp tmp/runner-win/coparun*.exe release/
 
           TAG="${{ steps.version.outputs.version }}"

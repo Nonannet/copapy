@@ -128,6 +128,7 @@ if [[ "$ARCH" == "arm-v7" || "$ARCH" == "all" ]]; then
         $DEST/stencils_armv7_O3.o \
         > build/stencils/stencils_armv7_O3.asm
 
+    # The same runner for all ARM7
     arm-linux-gnueabihf-gcc \
         -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -marm -static \
         -Wall -Wextra -Wconversion -Wsign-conversion \
@@ -161,8 +162,9 @@ if [[ "$ARCH" == "arm-v7-thumb" || "$ARCH" == "all" ]]; then
         $DEST/stencils_armv7thumb_O3.o \
         > build/stencils/stencils_armv7thumb_O3.asm
 
+    # The same runner for all ARM7
     arm-linux-gnueabihf-gcc \
-        -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -mthumb -static \
+        -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -static \
         -Wall -Wextra -Wconversion -Wsign-conversion \
         -Wshadow -Wstrict-overflow -O3 \
         -DENABLE_LOGGING \
@@ -194,8 +196,9 @@ if [[ "$ARCH" == "arm-v7m-thumb" || "$ARCH" == "all" ]]; then
         $DEST/stencils_armv7mthumb_O3.o \
         > build/stencils/stencils_armv7mthumb_O3.asm
 
+    # The same runner for all ARM7
     arm-linux-gnueabihf-gcc \
-        -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -mthumb -static \
+        -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -static \
         -Wall -Wextra -Wconversion -Wsign-conversion \
         -Wshadow -Wstrict-overflow -O3 \
         -DENABLE_LOGGING \
