@@ -25,7 +25,7 @@ class data_writer():
         self._data: list[tuple[str, bytes, int]] = []
         self.byteorder: ByteOrder = byteorder
 
-    def copy(self):
+    def copy(self) -> 'data_writer':
         cp = data_writer(self.byteorder)
         cp._data = self._data.copy()
         return cp
