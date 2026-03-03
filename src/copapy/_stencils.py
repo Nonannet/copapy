@@ -135,6 +135,11 @@ def get_op_after_last_call_in_function(func: pelfy.elf_symbol) -> int:
     return reloc.fields['r_offset'] - func.offset_in_section + 4
 
 
+def add_sign_int32(value: int) -> int:
+    """Convert a 32-bit unsigned integer to a signed integer."""
+    return value - 0x100000000 if value > 0x7FFFFFFF else value
+
+
 class stencil_database():
     """A class for loading and querying a stencil database from an ELF object file
 
@@ -226,6 +231,7 @@ class stencil_database():
                 cache.append(reloc_entry)
                 yield reloc_entry
 
+
     def get_patch(self, relocation: relocation_entry, symbol_address: int, function_offset: int, symbol_type: int) -> patch_entry:
         """Return patch positions for a provided symbol (function or object)
 
@@ -251,12 +257,14 @@ class stencil_database():
 
         if pr.type.endswith('64_PC32') or pr.type.endswith('64_PLT32'):
             # S + A - P
-            patch_value = symbol_address + pr.fields['r_addend'] - patch_offset
+            addend = add_sign_int32(pr.fields['r_addend'])
+            patch_value = symbol_address + addend - patch_offset
             #print(f" *> {pr.type} {patch_value=} {symbol_address=} {pr.fields['r_addend']=} {pr.bits=}, {function_offset=} {patch_offset=}")
 
         elif pr.type == 'R_386_PC32':
             # S + A - P
-            patch_value = symbol_address + pr.fields['r_addend'] - patch_offset
+            addend = add_sign_int32(pr.fields['r_addend'])
+            patch_value = symbol_address + addend - patch_offset
             #print(f" *> {pr.type}     {pr.symbol.name} {patch_value=} {symbol_address=} {pr.fields['r_addend']=} {bin(pr.fields['r_addend'])} {pr.bits=}, {function_offset=} {patch_offset=}")
 
         elif pr.type == 'R_386_32':
