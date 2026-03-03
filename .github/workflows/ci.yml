@@ -151,7 +151,7 @@ jobs:
     - name: Use ARM64 container
       run: |
         docker run --rm -v $PWD:/app -w /app --platform linux/arm64 ghcr.io/nonannet/arm64_test:1 \
-        bash -lc "pip install . && \
+        bash -lc "pip install .[mindev] && \
                   mkdir -p build/runner && \
                   gcc -O3 -static -DENABLE_LOGGING -o build/runner/coparun src/coparun/runmem.c \
                   src/coparun/coparun.c src/coparun/mem_man.c && \
@@ -180,7 +180,7 @@ jobs:
     - name: Use ARMv6 container
       run: |
         docker run --rm -v $PWD:/app -w /app --platform linux/arm/v6 ghcr.io/nonannet/armv6_test:1 \
-        bash -lc "pip install . && \
+        bash -lc "pip install .[mindev] && \
                   mkdir -p build/runner && \
                   gcc -O3 -static -DENABLE_LOGGING -o build/runner/coparun src/coparun/runmem.c \
                   src/coparun/coparun.c src/coparun/mem_man.c && \
@@ -209,7 +209,7 @@ jobs:
     - name: Use ARMv7 container
       run: |
         docker run --rm -v $PWD:/app -w /app --platform linux/arm/v7 ghcr.io/nonannet/armv7_test:1 \
-        bash -lc "pip install . && \
+        bash -lc "pip install .[mindev] && \
                   mkdir -p build/runner && \
                   gcc -O3 -static -DENABLE_LOGGING -o build/runner/coparun src/coparun/runmem.c \
                   src/coparun/coparun.c src/coparun/mem_man.c && \
@@ -248,7 +248,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
 
     - name: Install Python dependencies
-      run: python -m pip install .[dev]
+      run: python -m pip install .[mindev]
 
     - name: Set up MSVC environment
       uses: microsoft/setup-msbuild@v2
