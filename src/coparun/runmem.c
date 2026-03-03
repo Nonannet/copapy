@@ -1,3 +1,10 @@
+/*
+ * file: runmem.c
+ * Description: This file contain the core functions of the runner
+ * to receive data, code and patch instruction, does the patching
+ * and jumps to the entry point of the copapy program
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

@@ -33,11 +33,14 @@ class relocation_entry:
 @dataclass
 class patch_entry:
     """
-    A dataclass for representing a relocation entry
+    A dataclass for representing a patch entry
 
     Attributes:
-        addr (int): address of first byte to patch relative to the start of the symbol
-        type (RelocationType): relocation type
+        mask (int): Bit-mask to apply to the patched value
+        address (int): Address where to patch
+        value (int): The value to write at the patch address
+        scale (int): The scale factor for the patch value
+        patch_type (int): The type of patch
     """
     mask: int
     address: int
@@ -47,6 +50,10 @@ class patch_entry:
 
 
 def detect_process_arch() -> str:
+    """For running the code locally in the python module
+    the architecture of the current process is detected
+    by this function to load the correct stencil database.
+    """
     cp_target_arch = os.environ.get("CP_TARGET_ARCH")
     if cp_target_arch:
         return cp_target_arch

@@ -429,8 +429,8 @@ class Op(Node):
     def __hash__(self) -> int:
         return self.node_hash
 
-# Interface for vector and tensor types
 class ArrayType(Generic[TNum]):
+    """Interface for vector and tensor types."""
     def __init__(self, shape: tuple[int, ...]) -> None:
         self.shape = shape
         self.values: tuple[TNum | value[TNum], ...] = ()

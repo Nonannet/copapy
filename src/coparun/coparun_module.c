@@ -1,3 +1,10 @@
+/*
+ * file: coparun_module.c
+ * Description: This file defines a Python C extension module that provides an
+ * interface to the core functions of the coparun runner, to run copapy programs
+ * directly local in Python.
+ */ 
+
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include "runmem.h"

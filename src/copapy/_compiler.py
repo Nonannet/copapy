@@ -134,7 +134,7 @@ def get_const_nets(nodes: list[Node]) -> list[Net]:
 
 
 def add_load_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], None, None]:
-    """Add read node before each op where arguments are not already positioned
+    """Add load/read node before each op where arguments are not already positioned
     correctly in the registers
 
     Arguments:
@@ -172,7 +172,7 @@ def add_load_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], No
 
 
 def add_store_ops(net_node_list: list[tuple[Net | None, Node]], const_nets: list[Net]) -> Generator[tuple[Net | None, Node], None, None]:
-    """Add write operation for each new defined net if a read operation is later followed
+    """Add store/write operation for each new defined net if a read operation is later followed
 
     Returns:
         Yields tuples of a net and a node. The associated net is provided for read and write nodes.
