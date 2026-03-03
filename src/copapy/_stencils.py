@@ -343,6 +343,9 @@ class stencil_database():
         elif pr.type.endswith('_ABS32'):
             # R_ARM_ABS32
             # S + A (replaces full 32 bit)
+            assert not patch_offset % 4, 'R_ARM_ABS32 patched data like literals needs to be 4 Byte aligned'
+            # This might be caused by the call in entry_function_shell if not aligned
+
             patch_value = symbol_address + pr.fields['r_addend']
             symbol_type = symbol_type + 0x03  # Relative to data section
 

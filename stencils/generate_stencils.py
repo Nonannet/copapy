@@ -57,8 +57,8 @@ def norm_indent(f: Callable[..., str]) -> Callable[..., str]:
 def get_entry_function_shell() -> str:
     return f"""
     {entry_func_prefix}int entry_function_shell(){{
-        volatile char stack_place_holder[{stack_size}];
-        stack_place_holder[0] = 0;
+        //volatile char stack_place_holder[{stack_size}];
+        //stack_place_holder[0] = 0;
         result_int(0);
         return 1;
     }}

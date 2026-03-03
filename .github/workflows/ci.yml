@@ -180,7 +180,8 @@ jobs:
     - name: Use ARMv6 container
       run: |
         docker run --rm -v $PWD:/app -w /app --platform linux/arm/v6 ghcr.io/nonannet/armv6_test:1 \
-        bash -lc "pip install .[mindev] && \
+        bash -lc "set -x && \
+                  pip install .[mindev] && \
                   mkdir -p build/runner && \
                   gcc -O3 -static -DENABLE_LOGGING -o build/runner/coparun src/coparun/runmem.c \
                   src/coparun/coparun.c src/coparun/mem_man.c && \
@@ -209,9 +210,10 @@ jobs:
     - name: Use ARMv7 container
       run: |
         docker run --rm -v $PWD:/app -w /app --platform linux/arm/v7 ghcr.io/nonannet/armv7_test:1 \
-        bash -lc "pip install .[mindev] && \
+        bash -lc "set -x && \
+                  pip install .[mindev] && \
                   mkdir -p build/runner && \
-                  gcc  -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -marm -static \
+                  gcc -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -marm -static \
                   -Wall -Wextra -Wconversion -Wsign-conversion \
                   -Wshadow -Wstrict-overflow -O3 \
                   -DENABLE_LOGGING \
@@ -242,7 +244,8 @@ jobs:
     - name: Use ARMv7 container
       run: |
         docker run --rm -v $PWD:/app -w /app --platform linux/arm/v7 ghcr.io/nonannet/armv7_test:1 \
-        bash -lc "pip install .[mindev] && \
+        bash -lc "set -x && \
+                  pip install .[mindev] && \
                   mkdir -p build/runner && \
                   gcc -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -marm -static \
                   -Wall -Wextra -Wconversion -Wsign-conversion \
@@ -276,7 +279,8 @@ jobs:
     - name: Use ARMv7 container
       run: |
         docker run --rm -v $PWD:/app -w /app --platform linux/arm/v7 ghcr.io/nonannet/armv7_test:1 \
-        bash -lc "pip install .[mindev] && \
+        bash -lc "set -x && \
+                  pip install .[mindev] && \
                   mkdir -p build/runner && \
                   gcc -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -marm -static \
                   -Wall -Wextra -Wconversion -Wsign-conversion \
@@ -342,7 +346,7 @@ jobs:
         path: build/runner/*
 
   release-stencils:
-    needs: [build_stencils, build-ubuntu, build-windows, build-arm64, build-armv6, build-armv7]
+    needs: [build_stencils, build-ubuntu, build-windows, build-arm64, build-armv6, build-armv7, build-armv7thumb, build-armv7mthumb]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
@@ -375,8 +379,6 @@ jobs:
           cp tmp/runner-linux-arm64/coparun release/coparun-aarch64
           cp tmp/runner-linux-armv6/coparun release/coparun-armv6
           cp tmp/runner-linux-armv7/coparun release/coparun-armv7
-          cp tmp/runner-linux-armv7thumb/coparun release/coparun-armv7thumb
-          cp tmp/runner-linux-armv7mthumb/coparun release/coparun-armv7mthumb
           cp tmp/runner-win/coparun*.exe release/
 
           TAG="${{ steps.version.outputs.version }}"

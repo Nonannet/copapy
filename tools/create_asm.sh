@@ -10,7 +10,6 @@ cparch=$(python3 -c "import copapy; print(copapy._stencils.detect_process_arch()
 # Disassemble stencil object file
 objdump -d -x src/copapy/obj/stencils_${cparch}_O3.o > build/runner/stencils.asm
 
-# Create example code disassembly
 python3 tools/make_example.py
 build/runner/coparun build/runner/test.copapy build/runner/test.copapy.bin
 
@@ -28,6 +27,10 @@ fi
 
 echo "Archtitecture: '$cparch'"
 
-objdump -D -b binary -m $cparch --adjust-vma=0x10000 build/runner/test.copapy.bin > build/runner/example.asm
+if [[ "$cparch" == *"thumb"* ]]; then
+	objdump -D -b binary -marm -M force-thumb --adjust-vma=0x10000 build/runner/test.copapy.bin > build/runner/example.asm
+else
+	objdump -D -b binary -m $cparch --adjust-vma=0x10000 build/runner/test.copapy.bin > build/runner/example.asm
+fi
 
 rm build/runner/test.copapy.bin
