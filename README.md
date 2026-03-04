@@ -13,7 +13,7 @@ The main features can be summarized as:
 - Memory and type safety with a minimal set of runtime errors
 - Deterministic execution
 - Automatic differentiation for efficient realtime optimization (reverse-mode)
-- Optimized machine code for x86_64, ARMv6, ARMv7 and AArch64
+- Optimized machine code for x86_64, 32 Bit ARM (Cortex-A and Cortex-M) and AArch64
 - Highly portable to new architectures
 - Small Python package with minimal dependencies and no cross-compile toolchain required
 
@@ -31,7 +31,6 @@ While hardware I/O is obviously a core aspect of the project, it is not yet avai
 
 Currently in development:
 - Array stencils for handling very large arrays and generating SIMD-optimized code - e.g., for machine vision and neural network applications
-- Support for Thumb instructions required by ARM*-M targets (for MCUs)
 - Constant regrouping for further symbolic optimization of the computation graph
 
 Despite missing SIMD-optimization, benchmark performance shows promising numbers. The following chart plots the results in comparison to NumPy 2.3.5:
@@ -253,4 +252,4 @@ This project is licensed under the MIT license - see the [LICENSE](LICENSE) file
 
 [^2]: The compiler must support tail-call optimization (TCO). Currently, GCC is supported. Porting to a new architecture requires implementing a subset of relocation types used by that architecture.
 
-[^3]: Supported architectures: x86_64, AArch64, ARMv6 and 7 (non-Thumb). ARMv6/7-M (Thumb) support is in development. Code for x86 32-bit exists but has unresolved issues and a low priority.
+[^3]: Supported architectures: x86_64, AArch64, ARMv6/7 (non-Thumb) and ARMv7 Thumb for Cortex-A and Cortex-M. Code for x86 32-bit exists but has unresolved issues and a low priority.
