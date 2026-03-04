@@ -395,7 +395,7 @@ jobs:
           fi
 
   build-docs:
-    needs: [build_stencils, build-ubuntu, build-windows, build-arm64, build-armv6, build-armv7]
+    needs: [build_stencils, build-ubuntu, build-windows, build-arm64, build-armv6, build-armv7, build-armv7thumb, build-armv7mthumb]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
