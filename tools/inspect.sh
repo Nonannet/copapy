@@ -14,3 +14,5 @@ objdump -D -b binary -m i386:x86-64 --adjust-vma=0x1000 build/runner/test.copapy
 
 build/runner/coparun-armv7 build/runner/test-armv7.copapy build/runner/test.copapy-armv7.bin
 arm-none-eabi-objdump -D -b binary -marm --adjust-vma=0x50000 build/runner/test.copapy-armv7.bin > build/runner/test.copapy-armv7.asm
+
+# arm-none-eabi-objdump -D -b binary -marm -M force-thumb --adjust-vma=0x50001 build/runner/test.copapy-armv7thumb.bin > build/runner/test.copapy-armv7thumb.asm

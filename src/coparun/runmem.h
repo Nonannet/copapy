@@ -27,11 +27,13 @@
 #define ALLOCATE_CODE     3
 #define COPY_CODE         4
 #define PATCH_FUNC        0x1000
+#define PATCH_FUNC_ARM32_THM   0x1005
 #define PATCH_OBJECT      0x2000
 #define PATCH_OBJECT_HI21 0x2001
 #define PATCH_OBJECT_ABS  0x2002
 #define PATCH_OBJECT_REL  0x2003
 #define PATCH_OBJECT_ARM32_ABS 0x2004
+#define PATCH_OBJECT_ARM32_ABS_THM 0x2006
 #define ENTRY_POINT       7
 #define RUN_PROG         64
 #define READ_DATA        65

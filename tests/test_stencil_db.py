@@ -19,11 +19,18 @@ def test_start_end_function():
 
         if symbol.relocations and symbol.relocations[-1].symbol.info == 'STT_NOTYPE':
 
-            print('-', sym_name, get_stencil_position(symbol), len(symbol.data))
+            if symbol.section and symbol.section.name == '.text':
+                print('SKIP', sym_name, '(Aux function, not a stencil)')
+                continue
 
-            start, end = get_stencil_position(symbol)
+            if symbol.section:
+                function_size = symbol.section.fields['sh_size']  # len(symbol.data) excludes nop after the function
 
-            assert start >= 0 and end >= start and end <= len(symbol.data)
+                print('-', sym_name, get_stencil_position(symbol), function_size)
+
+                start, end = get_stencil_position(symbol)
+
+                assert (start >= 0 and end >= start and end <= function_size)
 
 
 def test_aux_functions():

@@ -393,6 +393,7 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
     # assemble stencils to main program and patch stencils
     data = sdb.get_function_code('entry_function_shell', 'start')
     data_list.append(data)
+    #print(f"* entry_function_shell (0) " + ' '.join(f'{d:02X}' for d in data))
     offset = aux_func_len + len(data)
 
     for associated_net, node in extended_output_ops:
@@ -451,10 +452,8 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
         #print('--> ', name, list(sdb.get_relocations(name)))
         for reloc in sdb.get_relocations(name):
 
-            #assert reloc.target_symbol_info != 'STT_FUNC', "Not tested yet!"
-
             if not reloc.target_section_index:
-                assert reloc.pelfy_reloc.type == 'R_ARM_V4BX'
+                assert reloc.pelfy_reloc.type == 'R_ARM_V4BX', (reloc.pelfy_reloc.type, name, reloc.pelfy_reloc.symbol.name)
 
             elif reloc.target_symbol_info in {'STT_OBJECT', 'STT_NOTYPE', 'STT_SECTION'}:
                 # Patch constants/variable addresses on heap
@@ -489,6 +488,6 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
         dw.write_int(patch.value, signed=True)
 
     dw.write_com(binw.Command.ENTRY_POINT)
-    dw.write_int(aux_func_len)
+    dw.write_int(aux_func_len + sdb.thumb_mode)
 
     return dw, variables

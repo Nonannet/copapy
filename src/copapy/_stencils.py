@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Generator, Literal, Iterable, TYPE_CHECKING
 import struct
 import platform
+import os
 
 if TYPE_CHECKING:
     import pelfy
@@ -49,11 +50,14 @@ class patch_entry:
 
 
 def detect_process_arch() -> str:
-    """
-    For running the code locally in the python module
+    """For running the code locally in the python module
     the architecture of the current process is detected
     by this function to load the correct stencil database.
     """
+    cp_target_arch = os.environ.get("CP_TARGET_ARCH")
+    if cp_target_arch:
+        return cp_target_arch
+
     bits = struct.calcsize("P") * 8
     arch = platform.machine().lower()
 
@@ -88,11 +92,20 @@ def get_return_function_type(symbol: pelfy.elf_symbol) -> str:
 
 def get_stencil_position(func: pelfy.elf_symbol) -> tuple[int, int]:
     start_index = 0  # There must be no prolog
+
     # Find last relocation in function
     last_instr = get_last_call_in_function(func)
-    function_size = func.fields['st_size']
-    if last_instr + 5 >= function_size:  # Check if jump is last instruction
-        end_index = last_instr  # Jump can be striped
+
+    assert func.section, f"No code section specified for symbol {func.name}"
+
+    # func.section.fields['sh_size'] is equivalent to func.fields['st_size']
+    # expect for ARM thumb, here nop padding at the end for 4-byte alignment
+    # is not included in st_size
+    function_size = func.section.fields['sh_size']
+
+    # Check if jump is the last instruction and can be striped
+    if last_instr + 5 >= function_size:
+        end_index = last_instr
     else:
         end_index = function_size
 
@@ -106,11 +119,12 @@ def get_last_call_in_function(func: pelfy.elf_symbol) -> int:
     if reloc.symbol.name.startswith('dummy_'):
         return -0xFFFF  # Last relocation is not a jump
     else:
-        # Assume the call instruction is 4 bytes long for relocations with less than 32 bit and 5 bytes otherwise
+        # Assume the jump/call instruction is 4 bytes long for relocations
+        # with less than 32 bit and 5 bytes otherwise
         instruction_lengths = 4 if reloc.bits < 32 else 5
         address_field_length = 4
         #print(f"-> {[r.fields['r_offset'] - func.fields['st_value'] for r in func.relocations]}")
-        return reloc.fields['r_offset'] - func.fields['st_value'] + address_field_length - instruction_lengths
+        return reloc.fields['r_offset'] - func.offset_in_section + address_field_length - instruction_lengths
 
 
 def get_op_after_last_call_in_function(func: pelfy.elf_symbol) -> int:
@@ -118,7 +132,12 @@ def get_op_after_last_call_in_function(func: pelfy.elf_symbol) -> int:
     assert func.relocations, f'No call function in stencil function {func.name}.'
     reloc = func.relocations[-1]
     assert reloc.bits <= 32, "Relocation segment might be larger then 32 bit"
-    return reloc.fields['r_offset'] - func.fields['st_value'] + 4
+    return reloc.fields['r_offset'] - func.offset_in_section + 4
+
+
+def add_sign_int32(value: int) -> int:
+    """Convert a 32-bit unsigned integer to a signed integer."""
+    return value - 0x100000000 if value > 0x7FFFFFFF else value
 
 
 class stencil_database():
@@ -129,6 +148,7 @@ class stencil_database():
         var_size (dict[str, int]): dictionary of object names and their sizes
         byteorder (ByteOrder): byte order of the ELF file
         elf (elf_file): the loaded ELF file
+        thumb_mode (bool): entry_function_shell in ARM thumb mode
     """
 
     def __init__(self, obj_file: str | bytes):
@@ -154,6 +174,8 @@ class stencil_database():
         #                 for s in self.elf.symbols
         #                 if s.info == 'STT_OBJECT'}
         self.byteorder: ByteOrder = self.elf.byteorder
+
+        self.thumb_mode = self.elf.symbols['entry_function_shell'].thumb_mode
 
         #for name in self.function_definitions.keys():
         #    sym = self.elf.symbols[name]
@@ -196,18 +218,19 @@ class stencil_database():
         for reloc in symbol.relocations:
 
             # address to fist byte to patch relative to the start of the symbol
-            patch_offset = reloc.fields['r_offset'] - symbol.fields['st_value'] - start_index
+            patch_offset = reloc.fields['r_offset'] - symbol.offset_in_section - start_index
 
             if patch_offset < end_index - start_index:  # Exclude the call to the result_* function
                 reloc_entry = relocation_entry(reloc.symbol.name,
                                        reloc.symbol.info,
-                                       reloc.symbol.fields['st_value'],
+                                       reloc.symbol.fields['st_value'],  # LSB on ARM indicates thumb mode
                                        reloc.symbol.fields['st_shndx'],
-                                       symbol.fields['st_value'],
+                                       symbol.offset_in_section,
                                        start_index,
                                        reloc)
                 cache.append(reloc_entry)
                 yield reloc_entry
+
 
     def get_patch(self, relocation: relocation_entry, symbol_address: int, function_offset: int, symbol_type: int) -> patch_entry:
         """Return patch positions for a provided symbol (function or object)
@@ -234,12 +257,14 @@ class stencil_database():
 
         if pr.type.endswith('64_PC32') or pr.type.endswith('64_PLT32'):
             # S + A - P
-            patch_value = symbol_address + pr.fields['r_addend'] - patch_offset
+            addend = add_sign_int32(pr.fields['r_addend'])
+            patch_value = symbol_address + addend - patch_offset
             #print(f" *> {pr.type} {patch_value=} {symbol_address=} {pr.fields['r_addend']=} {pr.bits=}, {function_offset=} {patch_offset=}")
 
         elif pr.type == 'R_386_PC32':
             # S + A - P
-            patch_value = symbol_address + pr.fields['r_addend'] - patch_offset
+            addend = add_sign_int32(pr.fields['r_addend'])
+            patch_value = symbol_address + addend - patch_offset
             #print(f" *> {pr.type}     {pr.symbol.name} {patch_value=} {symbol_address=} {pr.fields['r_addend']=} {bin(pr.fields['r_addend'])} {pr.bits=}, {function_offset=} {patch_offset=}")
 
         elif pr.type == 'R_386_32':
@@ -300,27 +325,51 @@ class stencil_database():
             scale = 8
             #print(f" *> {patch_value=} {symbol_address=} {pr.fields['r_addend']=}, {function_offset=}")
 
-        elif pr.type.endswith('_MOVW_ABS_NC'):
-            # R_ARM_MOVW_ABS_NC
+        elif pr.type == 'R_ARM_MOVW_ABS_NC':
             # (S + A) & 0xFFFF
             mask = 0xFFFF
             patch_value = symbol_address + pr.fields['r_addend']
             symbol_type = symbol_type + 0x04  # Absolut value
             #print(f" *> {pr.type} {patch_value=} {symbol_address=}, {function_offset=}")
 
-        elif pr.type.endswith('_MOVT_ABS'):
-            # R_ARM_MOVT_ABS
+        elif pr.type =='R_ARM_MOVT_ABS':
             # (S + A) & 0xFFFF0000
             mask = 0xFFFF0000
             patch_value = symbol_address + pr.fields['r_addend']
             symbol_type = symbol_type + 0x04  # Absolut value
             scale = 0x10000
+            #print(f" *> {pr.type} {patch_value=} {symbol_address=}, {function_offset=}, {pr.fields['r_addend']=}")
 
         elif pr.type.endswith('_ABS32'):
             # R_ARM_ABS32
             # S + A (replaces full 32 bit)
+            assert not patch_offset % 4, 'R_ARM_ABS32 patched data like literals needs to be 4 Byte aligned'
+            # This might be caused by the call in entry_function_shell if not aligned
+
             patch_value = symbol_address + pr.fields['r_addend']
             symbol_type = symbol_type + 0x03  # Relative to data section
+
+        elif pr.type.endswith('_THM_JUMP24') or pr.type.endswith('_THM_CALL'):
+            # R_ARM_THM_JUMP24
+            # S + A - P
+            patch_value = symbol_address - patch_offset  + pr.fields['r_addend']
+            symbol_type = symbol_type + 0x05  # PATCH_FUNC_ARM32_THM
+            #print(f" *> {pr.type} {patch_value=} {symbol_address=} {pr.fields['r_addend']=} {pr.bits=}, {function_offset=} {patch_offset=}")
+
+        elif pr.type == 'R_ARM_THM_MOVW_ABS_NC':
+            # (S + A) & 0xFFFF
+            mask = 0xFFFF
+            patch_value = symbol_address + pr.fields['r_addend']
+            symbol_type = symbol_type + 0x06  # PATCH_OBJECT_ARM32_ABS_THM
+            #print(f" *> {pr.type} {patch_value=} {symbol_address=}, {function_offset=}, {pr.fields['r_addend']=}")
+        
+        elif pr.type == 'R_ARM_THM_MOVT_ABS':
+            # (S + A) & 0xFFFF0000
+            mask = 0xFFFF0000
+            patch_value = symbol_address + pr.fields['r_addend']
+            symbol_type = symbol_type + 0x06  # PATCH_OBJECT_ARM32_ABS_THM
+            scale = 0x10000
+            #print(f" *> {pr.type} {patch_value=} {symbol_address=}, {function_offset=}, {pr.fields['r_addend']=}")
 
         else:
             raise NotImplementedError(f"Relocation type {pr.type} in {relocation.pelfy_reloc.target_section.name} pointing to {relocation.pelfy_reloc.symbol.name} not implemented")
@@ -342,7 +391,8 @@ class stencil_database():
             func = self.elf.symbols[name]
             start_stencil, end_stencil = get_stencil_position(func)
             assert func.section
-            start_index = func.section['sh_offset'] + func['st_value'] + start_stencil
+
+            start_index = func.offset_in_file + start_stencil
             lengths = end_stencil - start_stencil
             self._stencil_cache[name] = (start_index, lengths)
 
@@ -380,7 +430,7 @@ class stencil_database():
 
     def get_symbol_offset(self, name: str) -> int:
         """Returns the offset of a specified symbol in the section."""
-        return self.elf.symbols[name].fields['st_value']
+        return self.elf.symbols[name].offset_in_section
 
     def get_symbol_section_index(self, name: str) -> int:
         """Returns the section index for a specified symbol name."""
