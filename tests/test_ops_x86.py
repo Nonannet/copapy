@@ -1,5 +1,5 @@
 from copapy import NumLike, iif, value
-from copapy.backend import Store, compile_to_dag, add_read_command
+from copapy.backend import Store, compile_to_dag, add_read_value_remote
 import subprocess
 from copapy import _binwrite
 import copapy.backend as backend
@@ -122,7 +122,7 @@ def test_compile():
 
     for v in ret_test:
         assert isinstance(v, value)
-        add_read_command(dw, variables, v.net)
+        add_read_value_remote(dw, variables, v.net)
 
     #dw.write_com(_binwrite.Command.READ_DATA)
     #dw.write_int(0)
@@ -196,7 +196,7 @@ def test_vector_compile():
 
     for v in ret:
         assert isinstance(v, cp.value)
-        add_read_command(il, variables, v.net)
+        add_read_value_remote(il, variables, v.net)
 
     il.write_com(_binwrite.Command.END_COM)
 
@@ -258,7 +258,7 @@ def test_sinus():
 
     for v in ret_test:
         assert isinstance(v, value)
-        add_read_command(dw, variables, v.net)
+        add_read_value_remote(dw, variables, v.net)
 
     #dw.write_com(_binwrite.Command.READ_DATA)
     #dw.write_int(0)

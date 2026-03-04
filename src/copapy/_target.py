@@ -13,7 +13,15 @@ TRet = TypeVar("TRet", Iterable[int | float], int, float)
 _jit_cache: dict[Any, tuple['Target', tuple[value[Any] | Iterable[value[Any]], ...], NumLike | Iterable[NumLike]]] = {}
 
 
-def add_read_command(dw: binw.data_writer, variables: dict[Net, tuple[int, int, str]], net: Net) -> None:
+def add_read_value_remote(dw: binw.data_writer, variables: dict[Net, tuple[int, int, str]], net: Net) -> None:
+    """Adds a read memory to stdout command to the data_writer dw.
+
+    Arguments:
+        dw: data_writer to add the command to
+        variables: A dict for looking up variables by Net. The value is a tuple.
+            of relative address in memory, size in bytes and data type.
+        net: Variable specified by Net to read from memory and write to stdout.
+    """
     assert net in variables, f"Variable {net} not found in data writer variables"
     addr, lengths, _ = variables[net]
     dw.write_com(binw.Command.READ_DATA)
@@ -188,5 +196,5 @@ class Target():
     def read_value_remote(self, variable: value[Any]) -> None:
         """Reads the raw data of a value by the runner."""
         dw = binw.data_writer(self.sdb.byteorder)
-        add_read_command(dw, self._values, variable.net)
+        add_read_value_remote(dw, self._values, variable.net)
         assert coparun(self._context, dw.get_data()) > 0

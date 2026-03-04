@@ -7,6 +7,7 @@ from ._basic_types import Net, Node, Store, CPConstant, Op, transl_type
 
 def stable_toposort(edges: Iterable[tuple[Node, Node]]) -> list[Node]:
     """Perform a stable topological sort on a directed acyclic graph (DAG).
+
     Arguments:
         edges: Iterable of (u, v) pairs meaning u -> v
 
@@ -133,7 +134,7 @@ def get_const_nets(nodes: list[Node]) -> list[Net]:
 
 
 def add_load_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], None, None]:
-    """Add read node before each op where arguments are not already positioned
+    """Add load/read node before each op where arguments are not already positioned
     correctly in the registers
 
     Arguments:
@@ -171,7 +172,7 @@ def add_load_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], No
 
 
 def add_store_ops(net_node_list: list[tuple[Net | None, Node]], const_nets: list[Net]) -> Generator[tuple[Net | None, Node], None, None]:
-    """Add write operation for each new defined net if a read operation is later followed
+    """Add store/write operation for each new defined net if a read operation is later followed
 
     Returns:
         Yields tuples of a net and a node. The associated net is provided for read and write nodes.
@@ -392,6 +393,7 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
     # assemble stencils to main program and patch stencils
     data = sdb.get_function_code('entry_function_shell', 'start')
     data_list.append(data)
+    #print(f"* entry_function_shell (0) " + ' '.join(f'{d:02X}' for d in data))
     offset = aux_func_len + len(data)
 
     for associated_net, node in extended_output_ops:
@@ -450,10 +452,8 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
         #print('--> ', name, list(sdb.get_relocations(name)))
         for reloc in sdb.get_relocations(name):
 
-            #assert reloc.target_symbol_info != 'STT_FUNC', "Not tested yet!"
-
             if not reloc.target_section_index:
-                assert reloc.pelfy_reloc.type == 'R_ARM_V4BX'
+                assert reloc.pelfy_reloc.type == 'R_ARM_V4BX', (reloc.pelfy_reloc.type, name, reloc.pelfy_reloc.symbol.name)
 
             elif reloc.target_symbol_info in {'STT_OBJECT', 'STT_NOTYPE', 'STT_SECTION'}:
                 # Patch constants/variable addresses on heap
@@ -488,6 +488,6 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
         dw.write_int(patch.value, signed=True)
 
     dw.write_com(binw.Command.ENTRY_POINT)
-    dw.write_int(aux_func_len)
+    dw.write_int(aux_func_len + sdb.thumb_mode)
 
     return dw, variables

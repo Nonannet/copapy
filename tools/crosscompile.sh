@@ -36,15 +36,20 @@ arm-none-eabi-gcc -march=armv6 -mfpu=vfp -mfloat-abi=hard -marm $FLAGS -$OPT -c 
 LIBGCC=$(arm-none-eabi-gcc -print-libgcc-file-name)
 arm-none-eabi-ld -r $STMP /object_files/musl_objects_armv6.o $LIBGCC -o $DEST/stencils_armv6_$OPT.o
 
-# ARMv7 hardware fp
+# ARMv7 hardware fp for Cortex-A
 arm-none-eabi-gcc -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -marm $FLAGS -$OPT -c $SRC -o $STMP
 LIBGCC=$(arm-none-eabi-gcc -print-libgcc-file-name)
 arm-none-eabi-ld -r $STMP /object_files/musl_objects_armv7.o $LIBGCC -o $DEST/stencils_armv7_$OPT.o
 
+# ARMv7 Thumb for Cortex-A with hardware fp
+arm-none-eabi-gcc -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -mthumb $FLAGS -$OPT -c $SRC -o $STMP
+LIBGCC=$(arm-none-eabi-gcc -march=armv7 -mfpu=vfp3 -mthumb -print-libgcc-file-name)
+arm-none-eabi-ld -r $STMP /object_files/musl_objects_armv7thumb.o $LIBGCC -o $DEST/stencils_armv7thumb_$OPT.o
+
 # Armv7 Thumb for Cortex-M3..7 hardware fp
 arm-none-eabi-gcc -march=armv7e-m -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb $FLAGS -$OPT -c $SRC -o $STMP
-LIBGCC=$(arm-none-eabi-gcc -print-libgcc-file-name)
-arm-none-eabi-ld -r $STMP /object_files/musl_objects_armv7thumb.o $LIBGCC -o $DEST/stencils_armv7thumb_$OPT.o
+LIBGCC=$(arm-none-eabi-gcc -march=armv7e-m -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -print-libgcc-file-name)
+arm-none-eabi-ld -r $STMP /object_files/musl_objects_armv7mthumb.o $LIBGCC -o $DEST/stencils_armv7mthumb_$OPT.o
 
 # PowerPC64LE
 # powerpc64le-linux-gnu-gcc-13 $FLAGS -$OPT -c $SRC -o $DEST/stencils_ppc64le_$OPT.o

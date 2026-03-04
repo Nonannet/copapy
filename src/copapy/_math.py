@@ -310,7 +310,7 @@ def get_42(x: value[Any]) -> value[float]: ...
 def get_42(x: NumLike) -> value[float] | float:
     """Returns the value representing the constant 42"""
     if isinstance(x, value):
-        return add_op('get_42', [x, x])
+        return add_op('get_42', [x])
     return float((int(x) * 3.0 + 42.0) * 5.0 + 21.0)
 
 

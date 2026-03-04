@@ -1,3 +1,11 @@
+/*
+ * file: mem_man.c
+ * Description: This file contains memory management functions for the coparun
+ * runner, including allocation and deallocation of executable and data memory.
+ * Depending of the target operating system or bare metal environment, it
+ * handles memory management accordingly.
+*/
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>

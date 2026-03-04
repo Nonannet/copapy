@@ -1,6 +1,6 @@
 from copapy import value, NumLike
-from copapy.backend import Store, compile_to_dag, add_read_command
-import copapy
+from copapy.backend import Store, compile_to_dag, add_read_value_remote
+import copapy as cp
 import subprocess
 from copapy import _binwrite
 import pytest
@@ -28,14 +28,14 @@ def test_compile():
 
     out = [Store(r) for r in ret]
 
-    il, vars = compile_to_dag(out, copapy.generic_sdb)
+    il, vars = compile_to_dag(out, cp.generic_sdb)
 
     # run program command
     il.write_com(_binwrite.Command.RUN_PROG)
 
     for v in ret:
         assert isinstance(v, value)
-        add_read_command(il, vars, v.net)
+        add_read_value_remote(il, vars, v.net)
 
     il.write_com(_binwrite.Command.END_COM)
 

@@ -13,9 +13,10 @@ import copapy as cp
 if os.name == 'nt':
     # On Windows wsl and qemu-user is required:
     # sudo apt install qemu-user
-    qemu_command = ['wsl', 'qemu-aarch64']
+    qemu_command = ['wsl', 'qemu-arm']
 else:
-    qemu_command = ['qemu-aarch64']
+    qemu_command = ['qemu-arm']
+
 
 def parse_results(log_text: str) -> dict[int, bytes]:
     regex = r"^READ_DATA offs=(\d*) size=(\d*) data=(.*)$"
@@ -30,6 +31,7 @@ def parse_results(log_text: str) -> dict[int, bytes]:
             var_dict[int(match.group(1))] = value
 
     return var_dict
+
 
 def run_command(command: list[str]) -> str:
     result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf8', check=False)
@@ -52,6 +54,9 @@ def function1(c1: NumLike) -> list[NumLike]:
             c1 * 4, c1 * -4,
             c1 + 4, c1 - 4,
             c1 > 2, c1 > 100, c1 < 4, c1 < 100]
+
+def function1ex(c1: NumLike) -> list[NumLike]:
+    return [c1 // 4]
 
 
 def function2(c1: NumLike) -> list[NumLike]:
@@ -93,19 +98,16 @@ def test_compile():
 
     out = [Store(r) for r in ret_test]
 
-    #ret_test += [c_i, v2]
-    #ret_ref += [9, 4.44, -4.44]
-
-    sdb = backend.stencil_db_from_package('arm64')
+    sdb = backend.stencil_db_from_package('armv7mthumb')
     dw, variables = compile_to_dag(out, sdb)
 
     #dw.write_com(_binwrite.Command.READ_DATA)
     #dw.write_int(0)
     #dw.write_int(28)
 
-    # run program command
+    du = dw.copy()
     dw.write_com(_binwrite.Command.RUN_PROG)
-    #dw.write_com(_binwrite.Command.DUMP_CODE)
+    du.write_com(_binwrite.Command.DUMP_CODE)
 
     for v in ret_test:
         assert isinstance(v, value)
@@ -116,25 +118,29 @@ def test_compile():
     #dw.write_int(28)
 
     dw.write_com(_binwrite.Command.END_COM)
+    du.write_com(_binwrite.Command.END_COM)
 
     #print('* Data to runner:')
     #dw.print()
 
-    dw.to_file('build/runner/test-arm64.copapy')
+    dw.to_file('build/runner/test-armv7mthumb.copapy')
+    du.to_file('build/runner/test-armv7mthumb-dump.copapy')
 
     if not check_for_qemu():
-        warnings.warn("qemu-aarch64 not found, aarch64 test skipped!", UserWarning)
+        warnings.warn("qemu-armv7 not found, armv7 test skipped!", UserWarning)
         return
-    if not os.path.isfile('build/runner/coparun-aarch64'):
-        warnings.warn("aarch64 runner not found, aarch64 test skipped!", UserWarning)
+    if not os.path.isfile('build/runner/coparun-armv7'):
+        warnings.warn("armv7 runner not found, armv7 test skipped!", UserWarning)
         return
 
-    command = qemu_command + ['build/runner/coparun-aarch64', 'build/runner/test-arm64.copapy'] + ['build/runner/test-arm64.copapy.bin']
-    #try:
+    print('----- Dump code...')
+    command = qemu_command + ['build/runner/coparun-armv7', 'build/runner/test-armv7mthumb-dump.copapy', 'build/runner/test.copapy-armv7mthumb.bin']
     result = run_command(command)
-    #except FileNotFoundError:
-    #    warnings.warn(f"Test skipped, executable not found.", UserWarning)
-    #    return
+
+    print('----- Run code...')
+    command = qemu_command + ['build/runner/coparun-armv7', 'build/runner/test-armv7mthumb.copapy']
+    result = run_command(command)
+
 
     print('* Output from runner:\n--')
     print(result)
@@ -165,5 +171,4 @@ def test_compile():
 
 
 if __name__ == "__main__":
-    #test_example()
     test_compile()

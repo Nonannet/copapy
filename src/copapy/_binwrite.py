@@ -6,11 +6,14 @@ ByteOrder = Literal['little', 'big']
 
 Command = Enum('Command', [('ALLOCATE_DATA', 1), ('COPY_DATA', 2),
                            ('ALLOCATE_CODE', 3), ('COPY_CODE', 4),
-                           ('PATCH_FUNC', 0x1000), ('PATCH_OBJECT', 0x2000),
+                           ('PATCH_FUNC', 0x1000),
+                           ('PATCH_FUNC_ARM32_THM', 0x1005),
+                           ('PATCH_OBJECT', 0x2000),
                            ('PATCH_OBJECT_HI21', 0x2001),
                            ('PATCH_OBJECT_ABS', 0x2002),
                            ('PATCH_OBJECT_REL', 0x2003),
                            ('PATCH_OBJECT_ARM32_ABS', 0x2004),
+                           ('PATCH_OBJECT_ARM32_ABS_THM', 0x2006),
                            ('ENTRY_POINT', 7),
                            ('RUN_PROG', 64), ('READ_DATA', 65),
                            ('END_COM', 256), ('FREE_MEMORY', 257), ('DUMP_CODE', 258)])
@@ -21,6 +24,11 @@ class data_writer():
     def __init__(self, byteorder: ByteOrder):
         self._data: list[tuple[str, bytes, int]] = []
         self.byteorder: ByteOrder = byteorder
+
+    def copy(self) -> 'data_writer':
+        cp = data_writer(self.byteorder)
+        cp._data = self._data.copy()
+        return cp
 
     def write_int(self, value: int, num_bytes: int = 4, signed: bool = False) -> None:
         self._data.append((f"INT {value}", value.to_bytes(length=num_bytes, byteorder=self.byteorder, signed=signed), 0))

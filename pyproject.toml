@@ -2,7 +2,7 @@
 name = "copapy"
 dynamic = ["version"]
 authors = [
-  { name="Nicolas Kruse", email="nicolas.kruse@nonan.net" },
+    { name="Nicolas Kruse", email="nicolas.kruse@nonan.net" },
 ]
 description = "Copy-Patch Compiler"
 readme = "README.md"
@@ -45,14 +45,18 @@ dev = [
     "ruff",
     "mypy",
     "pytest",
-    "pelfy>=1.0.7"
+    "pelfy>=1.0.8"
+]
+mindev = [
+    "pytest",
+    "pelfy>=1.0.8"
 ]
 doc_build = [
-  "sphinx",
-  "pydata_sphinx_theme",
-  "sphinx-autodoc-typehints",
-  "myst-parser",
-  "pelfy>=1.0.7"
+    "sphinx",
+    "pydata_sphinx_theme",
+    "sphinx-autodoc-typehints",
+    "myst-parser",
+    "pelfy>=1.0.8"
 ]
 
 [tool.mypy]

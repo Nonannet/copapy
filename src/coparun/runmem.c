@@ -1,3 +1,10 @@
+/*
+ * file: runmem.c
+ * Description: This file contain the core functions of the runner
+ * to receive data, code and patch instruction, does the patching
+ * and jumps to the entry point of the copapy program
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -48,6 +55,67 @@ void patch_arm32_abs(uint8_t *patch_addr, uint32_t imm16)
     instr |= imm12;
 
     *((uint32_t *)patch_addr) = instr;
+}
+
+void patch_arm_thm_abs(uint8_t *patch_addr, uint32_t imm16)
+{
+    // Thumb MOVW (T3) / MOVT (T1) encoding
+    
+    uint16_t *instr16 = (uint16_t *)patch_addr;
+    uint16_t first_half = instr16[0];
+    uint16_t second_half = instr16[1];
+
+    // Extract fields from imm16
+    uint32_t imm4 = (imm16 >> 12) & 0xF;
+    uint32_t i    = (imm16 >> 11) & 0x1;
+    uint32_t imm3 = (imm16 >> 8) & 0x7;
+    uint32_t imm8 = imm16 & 0xFF;
+
+    // Clear bits
+    first_half &= (uint16_t)(~(0x000F | (1 << 10)));
+    second_half &= (uint16_t)(~(0x00FF | (0x7 << 12)));
+
+    // Set new fields
+    first_half |= (uint16_t)((imm4 << 0) | (i << 10));
+    second_half |= (uint16_t)(imm8 | (imm3 << 12));
+
+    instr16[0] = first_half;
+    instr16[1] = second_half;
+}
+
+void patch_arm_thm_jump24(uint8_t *patch_addr, int32_t imm24)
+{
+    // Read the 32-bit instruction (two halfwords)
+    uint16_t *instr16 = (uint16_t *)patch_addr;
+    uint16_t first_half  = instr16[0];
+    uint16_t second_half = instr16[1];
+
+    // Thumb branch instructions always have LSB = 0 (halfword aligned)
+    // The imm24 offset in Thumb is shifted right by 1 when encoded
+    int32_t offset = imm24 >> 1;
+
+    // Split into S, J1, J2, imm10, imm11
+    uint32_t S     = (offset >> 23) & 0x1;
+    uint32_t I1    = (offset >> 22) & 0x1;
+    uint32_t I2    = (offset >> 21) & 0x1;
+    uint32_t imm10 = (offset >> 11) & 0x3FF;
+    uint32_t imm11 = offset & 0x7FF;
+
+    // Re-encode J1 and J2
+    uint32_t J1 = (~(I1 ^ S)) & 0x1;
+    uint32_t J2 = (~(I2 ^ S)) & 0x1;
+
+    // Clear old imm fields
+    first_half  &= 0xF800;           // Keep upper 5 bits
+    second_half &= 0xD000;           // Keep upper 5 bits
+
+    // Set new imm fields
+    first_half  |= (uint16_t)((S << 10) | imm10);
+    second_half |= (uint16_t)((J1 << 13) | (J2 << 11) | imm11);
+
+    // Write back
+    instr16[0] = first_half;
+    instr16[1] = second_half;
 }
 
 void free_memory(runmem_t *context) {
@@ -178,6 +246,26 @@ int parse_commands(runmem_t *context, uint8_t *bytes) {
                 LOG("PATCH_OBJECT_ARM32_ABS patch_offs=%i patch_mask=%#08x scale=%i value=%i imm16=%#04x\n",
                     offs, patch_mask, patch_scale, value, (uint32_t)((uintptr_t)(context->data_memory + value) & patch_mask) / (uint32_t)patch_scale);
                 patch_arm32_abs(context->executable_memory + offs, (uint32_t)((uintptr_t)(context->data_memory + value) & patch_mask) / (uint32_t)patch_scale);
+                break;
+
+            case PATCH_FUNC_ARM32_THM:
+                offs = *(uint32_t*)bytes; bytes += 4;
+                patch_mask = *(uint32_t*)bytes; bytes += 4;
+                patch_scale = *(int32_t*)bytes; bytes += 4;
+                value = *(int32_t*)bytes; bytes += 4;
+                LOG("PATCH_FUNC_ARM32_THM patch_offs=%i patch_mask=%#08x scale=%i value=%i\n",
+                    offs, patch_mask, patch_scale, value);
+                patch_arm_thm_jump24(context->executable_memory + offs, value);
+                break;
+
+            case PATCH_OBJECT_ARM32_ABS_THM:
+                offs = *(uint32_t*)bytes; bytes += 4;
+                patch_mask = *(uint32_t*)bytes; bytes += 4;
+                patch_scale = *(int32_t*)bytes; bytes += 4;
+                value = *(int32_t*)bytes; bytes += 4;
+                LOG("PATCH_OBJECT_ARM32_ABS_THM patch_offs=%i patch_mask=%#08x scale=%i value=%i imm16=%#04x\n",
+                    offs, patch_mask, patch_scale, value, (uint32_t)((uintptr_t)(context->data_memory + value) & patch_mask) / (uint32_t)patch_scale);
+                patch_arm_thm_abs(context->executable_memory + offs, (uint32_t)((uintptr_t)(context->data_memory + value) & patch_mask) / (uint32_t)patch_scale);
                 break;
 
             case ENTRY_POINT:
