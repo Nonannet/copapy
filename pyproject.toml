@@ -77,7 +77,12 @@ markers = [
     "runner: requires to have an compiled runner executable"]
 
 [tool.ruff]
-lint.ignore = ["E501", "E226", "E265"]
+ignore = [
+    "E501",
+    "E226",
+    "E265",
+    "C901"
+]
 
 # Equivalent to Flake8's "exclude"
 exclude = [
