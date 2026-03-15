@@ -51,11 +51,10 @@ arm-none-eabi-gcc -march=armv7e-m -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb $FL
 LIBGCC=$(arm-none-eabi-gcc -march=armv7e-m -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -print-libgcc-file-name)
 arm-none-eabi-ld -r $STMP /object_files/musl_objects_armv7mthumb.o $LIBGCC -o $DEST/stencils_armv7mthumb_$OPT.o
 
-# PowerPC64LE
-# powerpc64le-linux-gnu-gcc-13 $FLAGS -$OPT -c $SRC -o $DEST/stencils_ppc64le_$OPT.o
-
-# S390x
-# s390x-linux-gnu-gcc-13 $FLAGS -$OPT -c $SRC -o $DEST/stencils_s390x_$OPT.o
+# Armv8.1 Thumb for Cortex-M55 and M85
+arm-none-eabi-gcc -march=armv8.1-m.main+mve.fp -mfloat-abi=hard -mthumb $FLAGS -$OPT -c $SRC -o $STMP
+LIBGCC=$(arm-none-eabi-gcc -march=armv8.1-m.main+mve.fp -mfloat-abi=hard -mthumb -print-libgcc-file-name)
+arm-none-eabi-ld -r $STMP /object_files/musl_objects_armv8mthumb.o $LIBGCC -o $DEST/stencils_armv8mthumb_$OPT.o
 
 # Mips (Big Endian)
 #mips-linux-gnu-gcc-13 $FLAGS -$OPT -c $SRC -o $DEST/stencils_mips_$OPT.o

@@ -173,13 +173,13 @@ jobs:
       with:
         name: stencil-object-files
         path: src/copapy/obj
-    - name: Set up QEMU for ARMv6
+    - name: Set up QEMU for ARMv7
       uses: docker/setup-qemu-action@v3
       with:
-        platforms: linux/arm/v6
-    - name: Use ARMv6 container
+        platforms: linux/arm/v7
+    - name: Use ARMv7 container for ARMv6
       run: |
-        docker run --rm -v $PWD:/app -w /app --platform linux/arm/v6 ghcr.io/nonannet/armv6_test:1 \
+        docker run --rm -v $PWD:/app -w /app --platform linux/arm/v6 ghcr.io/nonannet/armv7_test:1 \
         bash -lc "set -x && \
                   pip install .[mindev] && \
                   mkdir -p build/runner && \
@@ -297,6 +297,41 @@ jobs:
         name: runner-linux-armv7mthumb
         path: build/runner/*
 
+  build-armv8mthumb:
+    needs: [build_stencils]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/download-artifact@v4
+      with:
+        name: stencil-object-files
+        path: src/copapy/obj
+    - name: Set up QEMU for ARMv7
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: linux/arm/v7
+    - name: Use ARMv7 container
+      run: |
+        docker run --rm -v $PWD:/app -w /app --platform linux/arm/v7 ghcr.io/nonannet/armv7_test:1 \
+        bash -lc "set -x && \
+                  pip install .[mindev] && \
+                  mkdir -p build/runner && \
+                  gcc -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -marm -static \
+                  -Wall -Wextra -Wconversion -Wsign-conversion \
+                  -Wshadow -Wstrict-overflow -O3 \
+                  -DENABLE_LOGGING \
+                  -o build/runner/coparun src/coparun/runmem.c \
+                  src/coparun/coparun.c src/coparun/mem_man.c && \
+                  export CP_TARGET_ARCH=armv8mthumb && \
+                  pytest && \
+                  bash tools/create_asm.sh"
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: runner-linux-armv8mthumb
+        path: build/runner/*
+
   build-windows:
     needs: [build_stencils]
     runs-on: windows-latest
@@ -346,7 +381,7 @@ jobs:
         path: build/runner/*
 
   release-stencils:
-    needs: [build_stencils, build-ubuntu, build-windows, build-arm64, build-armv6, build-armv7, build-armv7thumb, build-armv7mthumb]
+    needs: [build_stencils, build-ubuntu, build-windows, build-arm64, build-armv6, build-armv7, build-armv7thumb, build-armv7mthumb, build-armv8mthumb]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
@@ -395,7 +430,7 @@ jobs:
           fi
 
   build-docs:
-    needs: [build_stencils, build-ubuntu, build-windows, build-arm64, build-armv6, build-armv7, build-armv7thumb, build-armv7mthumb]
+    needs: [build_stencils, build-ubuntu, build-windows, build-arm64, build-armv6, build-armv7, build-armv7thumb, build-armv7mthumb, build-armv8mthumb]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
