@@ -142,7 +142,7 @@ int floor_div(int a, int b) {
 
 int parse_commands(runmem_t *context, uint8_t *bytes, uint32_t lengths) {
     int32_t value;
-    uint32_t command;
+    uint32_t command = 0;
     uint32_t patch_mask;
     int32_t patch_scale;
     uint32_t offs;
@@ -156,19 +156,20 @@ int parse_commands(runmem_t *context, uint8_t *bytes, uint32_t lengths) {
         if (context->rx_state == RX_STATE_IDLE) {
             uint32_t remaining_bytes = (uint32_t)(byte_offset + lengths - bytes);
             if (remaining_bytes < 4) {
-                return bytes - byte_offset; // Return the number of bytes processed
+                return (int)(bytes - byte_offset); // Return the number of bytes processed
             }
             command = *(uint32_t*)bytes;
             header_size = (command >> 16) & 0xFFFF;
             if (remaining_bytes < 4 + header_size) {
-                return bytes - byte_offset; // Return the number of bytes processed
+                return (int)(bytes - byte_offset); // Return the number of bytes processed
             }
             //LOG("+ Switch to RX_STATE_HEADER; context->rx_state=%i byte_index=%i lengths=%i\n", context->rx_state, bytes - byte_offset, lengths);
             context->rx_state = RX_STATE_HEADER;
         } else if (context->rx_state == RX_STATE_DATA) {
             uint32_t chunk_size = context->data_size;
-            if (lengths - (bytes - byte_offset) < chunk_size) {
-                chunk_size = lengths - (bytes - byte_offset);
+            uint32_t remaining_bytes = (uint32_t)(byte_offset + lengths - bytes);
+            if (remaining_bytes < chunk_size) {
+                chunk_size = (uint32_t)remaining_bytes;
             }
             //LOG("   -> COPY_DATA chunk_size=%i remaining_data_size=%i\n", chunk_size, context->data_size);
             memcpy(context->data_dest, context->data_src, chunk_size);
@@ -348,5 +349,5 @@ int parse_commands(runmem_t *context, uint8_t *bytes, uint32_t lengths) {
             }
         }
     }
-    return bytes - byte_offset;
+    return (int)(bytes - byte_offset);
 }

@@ -67,7 +67,7 @@ int main(int argc, char *argv[]) {
     targ.rx_state = RX_STATE_IDLE;
     targ.state_flag = 0;
 
-    int ret = parse_commands(&targ, file_buff, (uint32_t)sz);
+    parse_commands(&targ, file_buff, (uint32_t)sz);
 
     /*int offs = 0;
     for (int i = 0; i < sz + 1; i++) {
