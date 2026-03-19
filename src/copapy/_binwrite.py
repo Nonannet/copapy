@@ -4,19 +4,20 @@ import struct
 
 ByteOrder = Literal['little', 'big']
 
-Command = Enum('Command', [('ALLOCATE_DATA', 1), ('COPY_DATA', 2),
-                           ('ALLOCATE_CODE', 3), ('COPY_CODE', 4),
-                           ('PATCH_FUNC', 0x1000),
-                           ('PATCH_FUNC_ARM32_THM', 0x1005),
-                           ('PATCH_OBJECT', 0x2000),
-                           ('PATCH_OBJECT_HI21', 0x2001),
-                           ('PATCH_OBJECT_ABS', 0x2002),
-                           ('PATCH_OBJECT_REL', 0x2003),
-                           ('PATCH_OBJECT_ARM32_ABS', 0x2004),
-                           ('PATCH_OBJECT_ARM32_ABS_THM', 0x2006),
-                           ('ENTRY_POINT', 7),
-                           ('RUN_PROG', 64), ('READ_DATA', 65),
-                           ('END_COM', 256), ('FREE_MEMORY', 257), ('DUMP_CODE', 258)])
+# header lengths in bytes, command id
+Command = Enum('Command', [('ALLOCATE_DATA', 0x04_0001), ('COPY_DATA', 0x08_0002),
+                           ('ALLOCATE_CODE', 0x04_0003), ('COPY_CODE', 0x08_0004),
+                           ('PATCH_FUNC', 0x10_1000),
+                           ('PATCH_FUNC_ARM32_THM', 0x10_1005),
+                           ('PATCH_OBJECT', 0x10_2000),
+                           ('PATCH_OBJECT_HI21', 0x10_2001),
+                           ('PATCH_OBJECT_ABS', 0x10_2002),
+                           ('PATCH_OBJECT_REL', 0x10_2003),
+                           ('PATCH_OBJECT_ARM32_ABS', 0x10_2004),
+                           ('PATCH_OBJECT_ARM32_ABS_THM', 0x10_2006),
+                           ('ENTRY_POINT', 0x04_0007),
+                           ('RUN_PROG', 0x00_0040), ('READ_DATA', 0x08_0041),
+                           ('END_COM', 0x00_0100), ('FREE_MEMORY', 0x00_0101), ('DUMP_CODE', 0x00_0102)])
 COMMAND_SIZE = 4
 
 
