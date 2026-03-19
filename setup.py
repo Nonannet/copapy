@@ -6,7 +6,8 @@ ext = Extension(
         "src/coparun/coparun_module.c",
         "src/coparun/runmem.c",
         "src/coparun/mem_man.c"
-    ]
+    ],
+    #define_macros=[("ENABLE_BASIC_LOGGING", None)]
 )
 
 setup(

@@ -6,12 +6,46 @@
  * handles memory management accordingly.
 */
 
-#include <stdio.h>
 #include <stdint.h>
-#include <stdlib.h>
 
-#ifdef _WIN32
+
+#if defined DATA_MEMORY_ADDR || defined EXECUTABLE_MEMORY_ADDR
+/* Bare metal implementations */
+#if not defined(EXECUTABLE_MEMORY_ADDR) || not defined(DATA_MEMORY_ADDR)
+    #error "For bare metal, you must define DATA_MEMORY_ADDR and DATA_EXECUTABLE_MEMORY_ADDR."
+#endif
+
+uint8_t *allocate_executable_memory(uint32_t num_bytes) {
+    return (uint8_t*)EXECUTABLE_MEMORY_ADDR;
+}
+
+uint8_t *allocate_data_memory(uint32_t num_bytes) {
+    return (uint8_t*)DATA_MEMORY_ADDR;
+}
+
+int mark_mem_executable(uint8_t *memory, uint32_t memory_len) {
+    /* No-op for bare metal */
+    return 1;
+}
+
+void deallocate_memory(uint8_t *memory, uint32_t memory_len) {
+    /* No-op for bare metal */
+}
+
+void memcpy(void *dest, const void *src, size_t n) {
+    uint8_t *d = (uint8_t*)dest;
+    const uint8_t *s = (const uint8_t*)src;
+    for (size_t i = 0; i < n; i++) {
+        d[i] = s[i];
+    }
+    return 0;
+}
+
+
+#elif defined _WIN32
 #include <windows.h>
+#include <string.h>
+#include <stdio.h>
 
 /* Windows implementations */
 
@@ -62,6 +96,9 @@ void deallocate_memory(uint8_t *memory, uint32_t memory_len) {
 #else
 
 #include <sys/mman.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
 
 /* POSIX implementations */
 

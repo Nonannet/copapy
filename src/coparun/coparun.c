@@ -64,10 +64,22 @@ int main(int argc, char *argv[]) {
     targ.data_memory = NULL;
     targ.entr_point = NULL;
     targ.data_offs = 0;
+    targ.rx_state = RX_STATE_IDLE;
+    targ.state_flag = 0;
 
-    int ret = parse_commands(&targ, file_buff);
+    int ret = parse_commands(&targ, file_buff, (uint32_t)sz);
 
-    if (ret == 2) {
+    /*int offs = 0;
+    for (int i = 0; i < sz + 1; i++) {
+        if (i - offs < 0) {
+            printf("Error: parse_commands returned invalid offset i=%i offs=%i\n", i, offs);
+            return EXIT_FAILURE;
+        }
+        offs += parse_commands(&targ, file_buff + offs, i - offs);
+        printf("> i=%i offs=%i\n", i, offs);
+    }*/
+
+    if (targ.state_flag == STATE_FLAG_DUMP_CODE) {
         /* Dump code for debugging */
         if (argc != 3) {
             fprintf(stderr, "Usage: %s <code_file> <memory_dump_file>\n", argv[0]);
@@ -80,5 +92,5 @@ int main(int argc, char *argv[]) {
 
     free_memory(&targ);
 
-    return ret < 0;
+    return targ.state_flag < 0;
 }

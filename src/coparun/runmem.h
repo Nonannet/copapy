@@ -10,6 +10,13 @@
 
 #include <stdint.h>
 
+#ifdef DATA_MEMORY_ADDR
+    #define PRINTF(...)
+#else
+    #include <stdio.h>
+    #define PRINTF(...) printf(__VA_ARGS__)
+#endif
+
 #ifdef ENABLE_LOGGING
     #define LOG(...) printf(__VA_ARGS__)
     #define BLOG(...) printf(__VA_ARGS__)

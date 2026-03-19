@@ -5,10 +5,6 @@
  * and jumps to the entry point of the copapy program
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
 #include "runmem.h"
 #include "mem_man.h"
 
@@ -60,7 +56,7 @@ void patch_arm32_abs(uint8_t *patch_addr, uint32_t imm16)
 void patch_arm_thm_abs(uint8_t *patch_addr, uint32_t imm16)
 {
     // Thumb MOVW (T3) / MOVT (T1) encoding
-    
+
     uint16_t *instr16 = (uint16_t *)patch_addr;
     uint16_t first_half = instr16[0];
     uint16_t second_half = instr16[1];
@@ -144,176 +140,213 @@ int floor_div(int a, int b) {
     return a / b - ((a % b != 0) && ((a < 0) != (b < 0)));
 }
 
-int parse_commands(runmem_t *context, uint8_t *bytes) {
+int parse_commands(runmem_t *context, uint8_t *bytes, uint32_t lengths) {
     int32_t value;
     uint32_t command;
     uint32_t patch_mask;
     int32_t patch_scale;
     uint32_t offs;
     uint32_t size;
-    int end_flag = 0;
     uint32_t rel_entr_point = 0;
+    uint32_t header_size;
+    uint8_t *byte_offset = bytes;
 
-    while(!end_flag) {
-        command = *(uint32_t*)bytes;
-        bytes += 4;
-        switch(command) {
-            case ALLOCATE_DATA:
-                size = *(uint32_t*)bytes; bytes += 4;
-                context->data_memory = allocate_data_memory(size);
-                context->data_memory_len = size;
-                LOG("ALLOCATE_DATA size=%i mem_addr=%p\n", size, (void*)context->data_memory);
-                if (!update_data_offs(context)) end_flag = -4;
-                break;
+    while(bytes < byte_offset + lengths) {
+        //LOG("# LOOP START: context->rx_state=%i byte_index=%i lengths=%i\n", context->rx_state, bytes - byte_offset, lengths);
+        if (context->rx_state == RX_STATE_IDLE) {
+            uint32_t remaining_bytes = (uint32_t)(byte_offset + lengths - bytes);
+            if (remaining_bytes < 4) {
+                return bytes - byte_offset; // Return the number of bytes processed
+            }
+            command = *(uint32_t*)bytes;
+            header_size = (command >> 16) & 0xFFFF;
+            if (remaining_bytes < 4 + header_size) {
+                return bytes - byte_offset; // Return the number of bytes processed
+            }
+            //LOG("+ Switch to RX_STATE_HEADER; context->rx_state=%i byte_index=%i lengths=%i\n", context->rx_state, bytes - byte_offset, lengths);
+            context->rx_state = RX_STATE_HEADER;
+        } else if (context->rx_state == RX_STATE_DATA) {
+            uint32_t chunk_size = context->data_size;
+            if (lengths - (bytes - byte_offset) < chunk_size) {
+                chunk_size = lengths - (bytes - byte_offset);
+            }
+            //LOG("   -> COPY_DATA chunk_size=%i remaining_data_size=%i\n", chunk_size, context->data_size);
+            memcpy(context->data_dest, context->data_src, chunk_size);
+            context->data_dest += chunk_size;
+            context->data_src += chunk_size;
+            context->data_size -= chunk_size;
+            bytes += chunk_size;
+            if (context->data_size == 0) {
+                //LOG("   -> COPY_DATA completed\n");
+                context->rx_state = RX_STATE_IDLE;
+            }
+        } else if (context->rx_state == RX_STATE_HEADER) {
+            bytes += 4;
+            context->rx_state = RX_STATE_IDLE;
+            switch(command) {
+                case ALLOCATE_DATA:
+                    size = *(uint32_t*)bytes; bytes += 4;
+                    context->data_memory = allocate_data_memory(size);
+                    context->data_memory_len = size;
+                    LOG("ALLOCATE_DATA size=%i mem_addr=%p\n", size, (void*)context->data_memory);
+                    if (!update_data_offs(context)) context->state_flag = STATE_FLAG_MEM_DIST;
+                    break;
 
-            case COPY_DATA:
-                offs = *(uint32_t*)bytes; bytes += 4;
-                size = *(uint32_t*)bytes; bytes += 4;
-                LOG("COPY_DATA offs=%i size=%i\n", offs, size);
-                memcpy(context->data_memory + offs, bytes, size); bytes += size;
-                break;
+                case COPY_DATA:
+                    offs = *(uint32_t*)bytes; bytes += 4;
+                    size = *(uint32_t*)bytes; bytes += 4;
+                    LOG("COPY_DATA offs=%i size=%i\n", offs, size);
+                    context->data_src = bytes;
+                    context->data_dest = context->data_memory + offs;
+                    context->data_size = size;
+                    context->rx_state = RX_STATE_DATA;
+                    break;
 
-            case ALLOCATE_CODE:
-                size = *(uint32_t*)bytes; bytes += 4;
-                context->executable_memory = allocate_executable_memory(size);
-                context->executable_memory_len = size;
-                LOG("ALLOCATE_CODE size=%i mem_addr=%p\n", size, (void*)context->executable_memory);
-                if (!update_data_offs(context)) end_flag = -4;
-                break;
+                case ALLOCATE_CODE:
+                    size = *(uint32_t*)bytes; bytes += 4;
+                    context->executable_memory = allocate_executable_memory(size);
+                    context->executable_memory_len = size;
+                    LOG("ALLOCATE_CODE size=%i mem_addr=%p\n", size, (void*)context->executable_memory);
+                    if (!update_data_offs(context)) context->state_flag = STATE_FLAG_MEM_DIST;
+                    break;
 
-            case COPY_CODE:
-                offs = *(uint32_t*)bytes; bytes += 4;
-                size = *(uint32_t*)bytes; bytes += 4;
-                LOG("COPY_CODE offs=%i size=%i\n", offs, size);
-                memcpy(context->executable_memory + offs, bytes, size); bytes += size;
-                break;
+                case COPY_CODE:
+                    offs = *(uint32_t*)bytes; bytes += 4;
+                    size = *(uint32_t*)bytes; bytes += 4;
+                    LOG("COPY_CODE offs=%i size=%i\n", offs, size);
+                    context->data_src = bytes;
+                    context->data_dest = context->executable_memory + offs;
+                    context->data_size = size;
+                    context->rx_state = RX_STATE_DATA;
+                    break;
 
-            case PATCH_FUNC:
-                offs = *(uint32_t*)bytes; bytes += 4;
-                patch_mask = *(uint32_t*)bytes; bytes += 4;
-                patch_scale = *(int32_t*)bytes; bytes += 4;
-                value = *(int32_t*)bytes; bytes += 4;
-                LOG("PATCH_FUNC patch_offs=%i patch_mask=%#08x scale=%i value=%i\n",
-                    offs, patch_mask, patch_scale, value);
-                patch(context->executable_memory + offs, patch_mask, value / patch_scale);
-                break;
+                case PATCH_FUNC:
+                    offs = *(uint32_t*)bytes; bytes += 4;
+                    patch_mask = *(uint32_t*)bytes; bytes += 4;
+                    patch_scale = *(int32_t*)bytes; bytes += 4;
+                    value = *(int32_t*)bytes; bytes += 4;
+                    LOG("PATCH_FUNC patch_offs=%i patch_mask=%#08x scale=%i value=%i\n",
+                        offs, patch_mask, patch_scale, value);
+                    patch(context->executable_memory + offs, patch_mask, value / patch_scale);
+                    break;
 
-            case PATCH_OBJECT:
-                offs = *(uint32_t*)bytes; bytes += 4;
-                patch_mask = *(uint32_t*)bytes; bytes += 4;
-                patch_scale = *(int32_t*)bytes; bytes += 4;
-                value = *(int32_t*)bytes; bytes += 4;
-                LOG("PATCH_OBJECT patch_offs=%i patch_mask=%#08x scale=%i value=%i\n",
-                    offs, patch_mask, patch_scale, value);
-                patch(context->executable_memory + offs, patch_mask, value / patch_scale + context->data_offs / patch_scale);
-                break;
+                case PATCH_OBJECT:
+                    offs = *(uint32_t*)bytes; bytes += 4;
+                    patch_mask = *(uint32_t*)bytes; bytes += 4;
+                    patch_scale = *(int32_t*)bytes; bytes += 4;
+                    value = *(int32_t*)bytes; bytes += 4;
+                    LOG("PATCH_OBJECT patch_offs=%i patch_mask=%#08x scale=%i value=%i\n",
+                        offs, patch_mask, patch_scale, value);
+                    patch(context->executable_memory + offs, patch_mask, value / patch_scale + context->data_offs / patch_scale);
+                    break;
 
-            case PATCH_OBJECT_ABS:
-                offs = *(uint32_t*)bytes; bytes += 4;
-                patch_mask = *(uint32_t*)bytes; bytes += 4;
-                patch_scale = *(int32_t*)bytes; bytes += 4;
-                value = *(int32_t*)bytes; bytes += 4;
-                LOG("PATCH_OBJECT_ABS patch_offs=%i patch_mask=%#08x scale=%i value=%i\n",
-                    offs, patch_mask, patch_scale, value);
-                patch(context->executable_memory + offs, patch_mask, value / patch_scale);
-                break;
+                case PATCH_OBJECT_ABS:
+                    offs = *(uint32_t*)bytes; bytes += 4;
+                    patch_mask = *(uint32_t*)bytes; bytes += 4;
+                    patch_scale = *(int32_t*)bytes; bytes += 4;
+                    value = *(int32_t*)bytes; bytes += 4;
+                    LOG("PATCH_OBJECT_ABS patch_offs=%i patch_mask=%#08x scale=%i value=%i\n",
+                        offs, patch_mask, patch_scale, value);
+                    patch(context->executable_memory + offs, patch_mask, value / patch_scale);
+                    break;
 
-            case PATCH_OBJECT_REL:
-                offs = *(uint32_t*)bytes; bytes += 4;
-                bytes += 4;
-                patch_scale = *(int32_t*)bytes; bytes += 4;
-                value = *(int32_t*)bytes; bytes += 4;
-                LOG("PATCH_OBJECT_REL patch_offs=%i patch_addr=%p scale=%i value=%i\n",
-                    offs, (void*)(context->data_memory + value), patch_scale, value);
-                *(void **)(context->executable_memory + offs) = context->data_memory + value;
-                break;
+                case PATCH_OBJECT_REL:
+                    offs = *(uint32_t*)bytes; bytes += 4;
+                    bytes += 4;
+                    patch_scale = *(int32_t*)bytes; bytes += 4;
+                    value = *(int32_t*)bytes; bytes += 4;
+                    LOG("PATCH_OBJECT_REL patch_offs=%i patch_addr=%p scale=%i value=%i\n",
+                        offs, (void*)(context->data_memory + value), patch_scale, value);
+                    *(void **)(context->executable_memory + offs) = context->data_memory + value;
+                    break;
 
-            case PATCH_OBJECT_HI21:
-                offs = *(uint32_t*)bytes; bytes += 4;
-                bytes += 4;
-                patch_scale = *(int32_t*)bytes; bytes += 4;
-                value = *(int32_t*)bytes; bytes += 4;
-                LOG("PATCH_OBJECT_HI21 patch_offs=%i scale=%i value=%i res_value=%i\n",
-                    offs, patch_scale, value, floor_div(context->data_offs + value, patch_scale) - (int32_t)offs / patch_scale);
-                patch_hi21(context->executable_memory + offs, floor_div(context->data_offs + value, patch_scale) - (int32_t)offs / patch_scale);
-                break;
+                case PATCH_OBJECT_HI21:
+                    offs = *(uint32_t*)bytes; bytes += 4;
+                    bytes += 4;
+                    patch_scale = *(int32_t*)bytes; bytes += 4;
+                    value = *(int32_t*)bytes; bytes += 4;
+                    LOG("PATCH_OBJECT_HI21 patch_offs=%i scale=%i value=%i res_value=%i\n",
+                        offs, patch_scale, value, floor_div(context->data_offs + value, patch_scale) - (int32_t)offs / patch_scale);
+                    patch_hi21(context->executable_memory + offs, floor_div(context->data_offs + value, patch_scale) - (int32_t)offs / patch_scale);
+                    break;
 
-            case PATCH_OBJECT_ARM32_ABS:
-                offs = *(uint32_t*)bytes; bytes += 4;
-                patch_mask = *(uint32_t*)bytes; bytes += 4;
-                patch_scale = *(int32_t*)bytes; bytes += 4;
-                value = *(int32_t*)bytes; bytes += 4;
-                LOG("PATCH_OBJECT_ARM32_ABS patch_offs=%i patch_mask=%#08x scale=%i value=%i imm16=%#04x\n",
-                    offs, patch_mask, patch_scale, value, (uint32_t)((uintptr_t)(context->data_memory + value) & patch_mask) / (uint32_t)patch_scale);
-                patch_arm32_abs(context->executable_memory + offs, (uint32_t)((uintptr_t)(context->data_memory + value) & patch_mask) / (uint32_t)patch_scale);
-                break;
+                case PATCH_OBJECT_ARM32_ABS:
+                    offs = *(uint32_t*)bytes; bytes += 4;
+                    patch_mask = *(uint32_t*)bytes; bytes += 4;
+                    patch_scale = *(int32_t*)bytes; bytes += 4;
+                    value = *(int32_t*)bytes; bytes += 4;
+                    LOG("PATCH_OBJECT_ARM32_ABS patch_offs=%i patch_mask=%#08x scale=%i value=%i imm16=%#04x\n",
+                        offs, patch_mask, patch_scale, value, (uint32_t)((uintptr_t)(context->data_memory + value) & patch_mask) / (uint32_t)patch_scale);
+                    patch_arm32_abs(context->executable_memory + offs, (uint32_t)((uintptr_t)(context->data_memory + value) & patch_mask) / (uint32_t)patch_scale);
+                    break;
 
-            case PATCH_FUNC_ARM32_THM:
-                offs = *(uint32_t*)bytes; bytes += 4;
-                patch_mask = *(uint32_t*)bytes; bytes += 4;
-                patch_scale = *(int32_t*)bytes; bytes += 4;
-                value = *(int32_t*)bytes; bytes += 4;
-                LOG("PATCH_FUNC_ARM32_THM patch_offs=%i patch_mask=%#08x scale=%i value=%i\n",
-                    offs, patch_mask, patch_scale, value);
-                patch_arm_thm_jump24(context->executable_memory + offs, value);
-                break;
+                case PATCH_FUNC_ARM32_THM:
+                    offs = *(uint32_t*)bytes; bytes += 4;
+                    patch_mask = *(uint32_t*)bytes; bytes += 4;
+                    patch_scale = *(int32_t*)bytes; bytes += 4;
+                    value = *(int32_t*)bytes; bytes += 4;
+                    LOG("PATCH_FUNC_ARM32_THM patch_offs=%i patch_mask=%#08x scale=%i value=%i\n",
+                        offs, patch_mask, patch_scale, value);
+                    patch_arm_thm_jump24(context->executable_memory + offs, value);
+                    break;
 
-            case PATCH_OBJECT_ARM32_ABS_THM:
-                offs = *(uint32_t*)bytes; bytes += 4;
-                patch_mask = *(uint32_t*)bytes; bytes += 4;
-                patch_scale = *(int32_t*)bytes; bytes += 4;
-                value = *(int32_t*)bytes; bytes += 4;
-                LOG("PATCH_OBJECT_ARM32_ABS_THM patch_offs=%i patch_mask=%#08x scale=%i value=%i imm16=%#04x\n",
-                    offs, patch_mask, patch_scale, value, (uint32_t)((uintptr_t)(context->data_memory + value) & patch_mask) / (uint32_t)patch_scale);
-                patch_arm_thm_abs(context->executable_memory + offs, (uint32_t)((uintptr_t)(context->data_memory + value) & patch_mask) / (uint32_t)patch_scale);
-                break;
+                case PATCH_OBJECT_ARM32_ABS_THM:
+                    offs = *(uint32_t*)bytes; bytes += 4;
+                    patch_mask = *(uint32_t*)bytes; bytes += 4;
+                    patch_scale = *(int32_t*)bytes; bytes += 4;
+                    value = *(int32_t*)bytes; bytes += 4;
+                    LOG("PATCH_OBJECT_ARM32_ABS_THM patch_offs=%i patch_mask=%#08x scale=%i value=%i imm16=%#04x\n",
+                        offs, patch_mask, patch_scale, value, (uint32_t)((uintptr_t)(context->data_memory + value) & patch_mask) / (uint32_t)patch_scale);
+                    patch_arm_thm_abs(context->executable_memory + offs, (uint32_t)((uintptr_t)(context->data_memory + value) & patch_mask) / (uint32_t)patch_scale);
+                    break;
 
-            case ENTRY_POINT:
-                rel_entr_point = *(uint32_t*)bytes; bytes += 4;
-                context->entr_point = (entry_point_t)(context->executable_memory + rel_entr_point);
-                LOG("ENTRY_POINT rel_entr_point=%i\n", rel_entr_point); 
-                mark_mem_executable(context->executable_memory, context->executable_memory_len);
-                break;
+                case ENTRY_POINT:
+                    rel_entr_point = *(uint32_t*)bytes; bytes += 4;
+                    context->entr_point = (entry_point_t)(context->executable_memory + rel_entr_point);
+                    LOG("ENTRY_POINT rel_entr_point=%i\n", rel_entr_point);
+                    mark_mem_executable(context->executable_memory, context->executable_memory_len);
+                    break;
 
-            case RUN_PROG:
-                LOG("RUN_PROG\n");
-                {
-                    int ret = context->entr_point();
-                    (void)ret;
-                    BLOG("Return value: %i\n", ret);
-                }
-                break;
+                case RUN_PROG:
+                    LOG("RUN_PROG\n");
+                    {
+                        int ret = context->entr_point();
+                        (void)ret;
+                        BLOG("Return value: %i\n", ret);
+                    }
+                    break;
 
-            case READ_DATA:
-                offs = *(uint32_t*)bytes; bytes += 4;
-                size = *(uint32_t*)bytes; bytes += 4;
-                BLOG("READ_DATA offs=%i size=%i data=", offs, size);
-                for (uint32_t i = 0; i < size; i++) {
-                    printf("%02X ", context->data_memory[offs + i]);
-                }
-                printf("\n");
-                break;
+                case READ_DATA:
+                    offs = *(uint32_t*)bytes; bytes += 4;
+                    size = *(uint32_t*)bytes; bytes += 4;
+                    BLOG("READ_DATA offs=%i size=%i data=", offs, size);
+                    for (uint32_t i = 0; i < size; i++) {
+                        PRINTF("%02X ", context->data_memory[offs + i]);
+                    }
+                    PRINTF("\n");
+                    break;
 
-            case FREE_MEMORY:
-                LOG("FREE_MENORY\n");
-                free_memory(context);
-                break;
+                case FREE_MEMORY:
+                    LOG("FREE_MENORY\n");
+                    free_memory(context);
+                    break;
 
-            case DUMP_CODE:
-                LOG("DUMP_CODE\n");
-                end_flag = 2;
-                break;
+                case DUMP_CODE:
+                    LOG("DUMP_CODE\n");
+                    context->state_flag = STATE_FLAG_DUMP_CODE;
+                    break;
 
-            case END_COM:
-                LOG("END_COM\n");
-                end_flag = 1;
-                break;
+                case END_COM:
+                    LOG("END_COM\n");
+                    context->state_flag = STATE_FLAG_END_COM;
+                    break;
 
-            default:
-                LOG("Unknown command\n");
-                end_flag = -1;
-                break;
+                default:
+                    LOG("Unknown command\n");
+                    context->state_flag = STATE_FLAG_UNKNOWN_COMMAND;
+                    break;
+            }
         }
     }
-    return end_flag;
+    return bytes - byte_offset;
 }

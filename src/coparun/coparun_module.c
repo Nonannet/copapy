@@ -14,7 +14,6 @@ static PyObject* coparun(PyObject* self, PyObject* args) {
     PyObject *handle_obj;
     const char *buf;
     Py_ssize_t buf_len;
-    int result;
 
     // Expect: handle, bytes
     if (!PyArg_ParseTuple(args, "Oy#", &handle_obj, &buf, &buf_len)) {
@@ -30,10 +29,10 @@ static PyObject* coparun(PyObject* self, PyObject* args) {
 
     /* If parse_commands may run for a long time, release the GIL. */
     Py_BEGIN_ALLOW_THREADS
-    result = parse_commands(context, (uint8_t*)buf);
+    parse_commands(context, (uint8_t*)buf, (uint32_t)buf_len);
     Py_END_ALLOW_THREADS
 
-    return PyLong_FromLong(result);
+    return PyLong_FromLong(context->state_flag);
 }
 
 static PyObject* read_data_mem(PyObject* self, PyObject* args) {
@@ -74,6 +73,7 @@ static PyObject* read_data_mem(PyObject* self, PyObject* args) {
 }
 
 static PyObject* create_target(PyObject* self, PyObject* args) {
+    // Allocate a new runmem_t struct, zero-initialized
     runmem_t *context = (runmem_t*)calloc(1, sizeof(runmem_t));
     if (!context) {
         return PyErr_NoMemory();
