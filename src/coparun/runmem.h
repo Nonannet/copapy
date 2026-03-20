@@ -9,8 +9,9 @@
 #define RUNMEM_H
 
 #include <stdint.h>
+#include <stddef.h>
 
-#ifdef DATA_MEMORY_ADDR
+#ifdef DATA_MEMORY_LEN
     #define PRINTF(...)
 #else
     #include <stdio.h>
@@ -81,6 +82,9 @@ typedef struct runmem_s {
 /* Command parser: takes a pointer to the command stream and returns
    an error flag (0 on success according to current code) */
 int parse_commands(runmem_t *context, uint8_t *bytes, uint32_t lengths);
+
+/* Initialize runmem context to default/empty state */
+void runmem_init(runmem_t *context);
 
 /* Free program and data memory */
 void free_memory(runmem_t *context);

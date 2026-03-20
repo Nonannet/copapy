@@ -8,6 +8,21 @@
 #include "runmem.h"
 #include "mem_man.h"
 
+void runmem_init(runmem_t *context)
+{
+    context->data_memory = NULL;
+    context->data_memory_len = 0;
+    context->executable_memory = NULL;
+    context->executable_memory_len = 0;
+    context->data_offs = 0;
+    context->entr_point = NULL;
+    context->rx_state = RX_STATE_IDLE;
+    context->state_flag = STATE_FLAG_NONE;
+    context->data_src = NULL;
+    context->data_dest = NULL;
+    context->data_size = 0;
+}
+
 void patch(uint8_t *patch_addr, uint32_t patch_mask, int32_t value) {
     uint32_t *val_ptr = (uint32_t*)patch_addr;
     uint32_t original = *val_ptr;
@@ -119,9 +134,9 @@ void free_memory(runmem_t *context) {
     deallocate_memory(context->data_memory, context->data_memory_len);
     context->executable_memory_len = 0;
     context->data_memory_len = 0;
-    context->executable_memory = NULL;
-    context->data_memory = NULL;
-    context->entr_point = NULL;
+    context->executable_memory = 0;
+    context->data_memory = 0;
+    context->entr_point = 0;
     context->data_offs = 0;
 }
 
@@ -129,7 +144,6 @@ int update_data_offs(runmem_t *context) {
     if (context->data_memory && context->executable_memory &&
         (context->data_memory - context->executable_memory > 0x7FFFFFFF ||
          context->executable_memory - context->data_memory > 0x7FFFFFFF)) {
-        perror("Error: code and data memory to far apart");
         return 0;
     }
     context->data_offs = (int)(context->data_memory - context->executable_memory);

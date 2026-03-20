@@ -9,37 +9,51 @@
 #include <stdint.h>
 
 
-#if defined DATA_MEMORY_ADDR || defined EXECUTABLE_MEMORY_ADDR
+#if defined DATA_MEMORY_LEN || defined EXECUTABLE_MEMORY_LEN
 /* Bare metal implementations */
-#if not defined(EXECUTABLE_MEMORY_ADDR) || not defined(DATA_MEMORY_ADDR)
-    #error "For bare metal, you must define DATA_MEMORY_ADDR and DATA_EXECUTABLE_MEMORY_ADDR."
+#if !defined(EXECUTABLE_MEMORY_LEN) || !defined(DATA_MEMORY_LEN)
+    #error "For bare metal, you must define DATA_MEMORY_LEN and DATA_EXECUTABLE_MEMORY_LEN."
 #endif
 
-uint8_t *allocate_executable_memory(uint32_t num_bytes) {
-    return (uint8_t*)EXECUTABLE_MEMORY_ADDR;
+__attribute__((section(".mem_exec_itcm"), used)) 
+volatile uint8_t executable_memory_pool[EXECUTABLE_MEMORY_LEN];
+
+__attribute__((section(".mem_data_itcm"), used)) 
+volatile uint8_t data_memory_pool[DATA_MEMORY_LEN];
+
+volatile uint8_t *allocate_executable_memory(uint32_t num_bytes) {
+    if (num_bytes > EXECUTABLE_MEMORY_LEN) return 0;
+    return executable_memory_pool;
 }
 
-uint8_t *allocate_data_memory(uint32_t num_bytes) {
-    return (uint8_t*)DATA_MEMORY_ADDR;
+volatile uint8_t *allocate_data_memory(uint32_t num_bytes) {
+    if (num_bytes > DATA_MEMORY_LEN) return 0;
+    return data_memory_pool;
 }
 
 int mark_mem_executable(uint8_t *memory, uint32_t memory_len) {
     /* No-op for bare metal */
+    (void)memory;        // Mark as used
+    (void)memory_len;    // Mark as used
     return 1;
 }
 
 void deallocate_memory(uint8_t *memory, uint32_t memory_len) {
+    (void)memory;        // Mark as used
+    (void)memory_len;    // Mark as used
     /* No-op for bare metal */
 }
 
-void memcpy(void *dest, const void *src, size_t n) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wbuiltin-declaration-mismatch"
+void memcpy(void *dest, const void *src, unsigned int n) {
     uint8_t *d = (uint8_t*)dest;
     const uint8_t *s = (const uint8_t*)src;
-    for (size_t i = 0; i < n; i++) {
+    for (unsigned int i = 0; i < n; i++) {
         d[i] = s[i];
     }
-    return 0;
 }
+#pragma GCC diagnostic pop
 
 
 #elif defined _WIN32
