@@ -4,6 +4,7 @@ from coparun_module import coparun, read_data_mem, create_target, clear_target
 import struct
 from ._basic_types import value, Net, Node, Store, NumLike, ArrayType, stencil_db_from_package
 from ._compiler import compile_to_dag
+from ._transfer_channel import TransferChannel
 
 T = TypeVar("T", int, float)
 Values: TypeAlias = 'Iterable[NumLike] | NumLike'
@@ -59,7 +60,7 @@ def jit(func: Callable[..., TRet]) -> Callable[..., TRet]:
 class Target():
     """Target device for compiling for and running on copapy code.
     """
-    def __init__(self, arch: str = 'native', optimization: str = 'O3') -> None:
+    def __init__(self, arch: str = 'native', interface_name: str = '', optimization: str = 'O3') -> None:
         """Initialize Target object
 
         Arguments:
@@ -68,10 +69,14 @@ class Target():
         """
         self.sdb = stencil_db_from_package(arch, optimization)
         self._values: dict[Net, tuple[int, int, str]] = {}
-        self._context = create_target()
+        if interface_name:
+            self._context: TransferChannel | int = TransferChannel(interface_name)
+        else:
+            self._context = create_target()
 
     def __del__(self) -> None:
-        clear_target(self._context)
+        if isinstance(self._context, int):
+            clear_target(self._context)
 
     def compile(self, *values: NumLike | value[T] | ArrayType[T] | Iterable[T | value[T]]) -> None:
         """Compiles the code to compute the given values.
@@ -94,7 +99,11 @@ class Target():
 
         dw, self._values = compile_to_dag(nodes, self.sdb)
         dw.write_com(binw.Command.END_COM)
-        assert coparun(self._context, dw.get_data()) > 0
+
+        if isinstance(self._context, TransferChannel):
+            TransferChannel.send(self._context, dw.get_data())
+        else:
+            assert coparun(self._context, dw.get_data()) > 0
 
     def run(self) -> None:
         """Runs the compiled code on the target device.
@@ -102,7 +111,11 @@ class Target():
         dw = binw.data_writer(self.sdb.byteorder)
         dw.write_com(binw.Command.RUN_PROG)
         dw.write_com(binw.Command.END_COM)
-        assert coparun(self._context, dw.get_data()) > 0
+
+        if isinstance(self._context, TransferChannel):
+            TransferChannel.send(self._context, dw.get_data())
+        else:
+            assert coparun(self._context, dw.get_data()) > 0
 
     @overload
     def read_value(self, variables: value[T]) -> T: ...
@@ -135,7 +148,11 @@ class Target():
         addr, lengths, _ = self._values[variables.net]
         var_type = variables.dtype
         assert lengths > 0
-        data = read_data_mem(self._context, addr, lengths)
+
+        if isinstance(self._context, TransferChannel):
+            raise NotImplementedError("Reading values is not implemented for TransferChannel targets yet. Use read_value_remote to read the raw data of a value by the runner.")
+        else:
+            data = read_data_mem(self._context, addr, lengths)
         assert data is not None and len(data) == lengths, f"Failed to read value {variables}"
         en = {'little': '<', 'big': '>'}[self.sdb.byteorder]
         if var_type == 'float':
@@ -191,10 +208,18 @@ class Target():
             raise ValueError(f"Unsupported value type: {var_type}")
 
         dw.write_com(binw.Command.END_COM)
-        assert coparun(self._context, dw.get_data()) > 0
+
+        if isinstance(self._context, TransferChannel):
+            TransferChannel.send(self._context, dw.get_data())
+        else:
+            assert coparun(self._context, dw.get_data()) > 0
 
     def read_value_remote(self, variable: value[Any]) -> None:
         """Reads the raw data of a value by the runner."""
         dw = binw.data_writer(self.sdb.byteorder)
         add_read_value_remote(dw, self._values, variable.net)
-        assert coparun(self._context, dw.get_data()) > 0
+
+        if isinstance(self._context, TransferChannel):
+            TransferChannel.send(self._context, dw.get_data())
+        else:
+            assert coparun(self._context, dw.get_data()) > 0
