@@ -7,8 +7,6 @@ import sys
 import numpy as np
 from numpy.core._multiarray_umath import __cpu_features__
 
-from copapy._matrices import diagonal
-
 CPU_SIMD_FEATURES = "SSE SSE2 SSE3 SSSE3 SSE41 SSE42 AVX AVX2 AVX512F FMA3"
 
 
@@ -217,7 +215,7 @@ def save_svg_with_theme_styles(pyplot_obj, path):
 
     # --- Step 1: Capture SVG to memory ---
     buf = io.StringIO()
-    
+
     # pyplot_obj can be a module (plt) or a Figure instance
     if hasattr(pyplot_obj, "gcf"):
         fig = pyplot_obj.gcf()
