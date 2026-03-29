@@ -18,7 +18,7 @@ def forward_kinematics(theta1: cp.value[float] | float, theta2: cp.value[float] 
     return joint, end_effector
 
 
-def test_two_arms():    
+def test_two_arms():
     target_vec = cp.vector(target)
     theta = cp.vector([cp.value(0.0), cp.value(0.0)])
 

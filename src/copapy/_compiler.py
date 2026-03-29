@@ -79,7 +79,7 @@ def get_all_dag_edges_between(roots: Iterable[Node], leaves: Iterable[Node]) -> 
 
     # Walk the DAG in reverse direction starting from given leaves to given roots
     emitted_edges: set[tuple[Node, Node]] = set()
-    node_list = [n for n in leaves]
+    node_list = list(leaves)
     while(node_list):
         child_node = node_list.pop()
         if child_node in parent_lookup:
@@ -104,13 +104,13 @@ def get_all_dag_edges(nodes: Iterable[Node]) -> Generator[tuple[Node, Node], Non
     """
     emitted_edges: set[tuple[Node, Node]] = set()
     used_nets: dict[Net, Net] = {}
-    node_list: list[Node] = [n for n in nodes]
+    node_list: list[Node] = list(nodes)
 
     while(node_list):
         node = node_list.pop()
         for net in node.args:
 
-            # In case there is already net with equivalent value use this 
+            # In case there is already net with equivalent value use this
             if net in used_nets:
                 net = used_nets[net]
             else:

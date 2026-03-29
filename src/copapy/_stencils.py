@@ -362,7 +362,7 @@ class stencil_database():
             patch_value = symbol_address + pr.fields['r_addend']
             symbol_type = symbol_type + 0x06  # PATCH_OBJECT_ARM32_ABS_THM
             #print(f" *> {pr.type} {patch_value=} {symbol_address=}, {function_offset=}, {pr.fields['r_addend']=}")
-        
+
         elif pr.type == 'R_ARM_THM_MOVT_ABS':
             # (S + A) & 0xFFFF0000
             mask = 0xFFFF0000

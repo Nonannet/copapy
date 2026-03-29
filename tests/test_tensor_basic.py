@@ -68,7 +68,7 @@ def test_tensor_basic():
     assert result_2d_1d.shape == (2, 3)
     assert result_2d_1d[0, 0] == 11.0
     assert result_2d_1d[1, 2] == 36.0
-    
+
     # 3D tensor + 2D tensor
     t3d = cp.tensor([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]])
     t2d_broadcast = cp.tensor([[100.0, 200.0], [300.0, 400.0]])
@@ -77,7 +77,7 @@ def test_tensor_basic():
     assert result_3d_2d.shape == (2, 2, 2)
     assert result_3d_2d[0, 0, 0] == 101.0
     assert result_3d_2d[1, 1, 1] == 408.0
-    
+
     # 3D tensor + 1D tensor
     t1d_broadcast = cp.tensor([1.0, 2.0])
     result_3d_1d = t3d + t1d_broadcast
@@ -106,7 +106,7 @@ def test_tensor_basic():
     assert c2d.shape == (2, 2)
     assert c2d[0, 0] == 2.0
     assert c2d[1, 1] == 20.0
-    
+
     # 3D - 2D
     t3d_sub = cp.tensor([[[10.0, 20.0], [30.0, 40.0]], [[50.0, 60.0], [70.0, 80.0]]])
     t2d_sub = cp.tensor([[1.0, 2.0], [3.0, 4.0]])
@@ -173,7 +173,7 @@ def test_tensor_basic():
     print("Test 10b: Sum with multiple axes and keepdims")
     t3d = cp.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
     print(f"Original 3D tensor: shape={t3d.shape}")
-    
+
     # Sum along multiple axes
     sum_axes_0_2 = t3d.sum(axis=(0, 2))
     print(f"Sum along axes (0, 2): shape={sum_axes_0_2.shape}")
@@ -181,17 +181,17 @@ def test_tensor_basic():
     assert sum_axes_0_2[0] == 1 + 2 + 5 + 6  # Elements from [0,:,*] and [1,:,*]
     assert sum_axes_0_2[1] == 3 + 4 + 7 + 8
     print(f"Values: {[sum_axes_0_2[i] for i in range(len(sum_axes_0_2))]}")
-    
+
     # Sum with keepdims
     sum_keepdims = t3d.sum(axis=1, keepdims=True)
     print(f"Sum along axis 1 with keepdims: shape={sum_keepdims.shape}")
     assert sum_keepdims.shape == (2, 1, 2), f"Expected (2, 1, 2), got {sum_keepdims.shape}"
-    
+
     # Sum multiple axes with keepdims
     sum_multi_keepdims = t3d.sum(axis=(0, 2), keepdims=True)
     print(f"Sum along axes (0, 2) with keepdims: shape={sum_multi_keepdims.shape}")
     assert sum_multi_keepdims.shape == (1, 2, 1), f"Expected (1, 2, 1), got {sum_multi_keepdims.shape}"
-    
+
     # Sum all axes with keepdims
     sum_all_keepdims = t3d.sum(keepdims=True)
     print(f"Sum all with keepdims: shape={sum_all_keepdims.shape}")
