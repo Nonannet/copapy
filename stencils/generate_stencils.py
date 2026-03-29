@@ -303,7 +303,7 @@ if __name__ == "__main__":
     code += get_custom_stencil('abs_int(int arg1)', 'result_int(__builtin_abs(arg1));')
 
     for t in types:
-        code += get_custom_stencil(f"sign_{t}({t} arg1)", f"result_int((arg1 > 0) - (arg1 < 0));")
+        code += get_custom_stencil(f"sign_{t}({t} arg1)", "result_int((arg1 > 0) - (arg1 < 0));")
 
     fnames = ['atan2', 'pow']
     for fn, t1, t2 in permutate(fnames, types, types):
