@@ -1,4 +1,4 @@
-from typing import overload, Iterable, Callable, Any
+from typing import overload, Iterable, Callable, Any, Iterator
 from ._vectors import vector
 from ._tensors import tensor
 import copapy as cp
@@ -207,6 +207,9 @@ class quaternion(ArrayType[float]):
             A new quaternion with the function applied to each element.
         """
         return quaternion(func(x) for x in self.values)
+
+    def __iter__(self) -> Iterator[value[float] | float]:
+        return iter(self.values)
 
     def __neg__(self) -> 'quaternion':
         return quaternion(-self.w, -self.x, -self.y, -self.z)
