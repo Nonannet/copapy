@@ -1,3 +1,5 @@
+from copapy._quaternion import quaternion
+
 from . import value, vector, tensor
 import copapy.backend as cpb
 from typing import Any, Sequence, overload
@@ -12,8 +14,10 @@ def grad(x: Any, y: vector[Any]) -> vector[float]: ...
 @overload
 def grad(x: Any, y: tensor[Any]) -> tensor[float]: ...
 @overload
+def grad(x: Any, y: quaternion) -> quaternion: ...
+@overload
 def grad(x: Any, y: Sequence[value[Any]]) -> list[unifloat]: ...
-def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any]) -> Any:
+def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any] | quaternion) -> Any:
     """Returns the partial derivative dx/dy where x needs to be a scalar
     and y might be a scalar, a list of scalars, a vector or matrix. It
     uses automatic differentiation in reverse-mode.
@@ -27,12 +31,14 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
     """
     assert isinstance(x, value), f"Argument x for grad function must be a copapy value but is {type(x)}."
 
+    y_set: set[value[float] | float]
+
     if isinstance(y, value):
         y_set = {y}
     if isinstance(y, tensor):
         y_set = {v.get_scalar(0) for v in y.flatten()}
     else:
-        assert isinstance(y, Sequence) or isinstance(y, vector)
+        assert isinstance(y, Sequence) or isinstance(y, vector) or isinstance(y, quaternion)
         y_set = set(y)
 
     edges = cpb.get_all_dag_edges_between([x.net.source], (v.net.source for v in y_set if isinstance(v, value)))
@@ -125,6 +131,8 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
         return grad_dict[y.net]
     if isinstance(y, vector):
         return vector(grad_dict[yi.net] if isinstance(yi, value) else 0.0 for yi in y.values)
+    if isinstance(y, quaternion):
+        return quaternion(grad_dict[yi.net] if isinstance(yi, value) else 0.0 for yi in y.values)
     if isinstance(y, tensor):
         return tensor([grad_dict[yi.net] if isinstance(yi, value) else 0.0 for yi in y.values], y.shape)
     return [grad_dict[yi.net] for yi in y]

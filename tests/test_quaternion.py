@@ -1,7 +1,7 @@
 import math
-from copapy import quaternion, tensor
-from copapy import vector, Target
+from copapy import quaternion, tensor, vector, Target
 import copapy as cp
+import pytest
 
 
 def isclose(a, b, rel_tol=1e-9, abs_tol=0.0):
@@ -294,3 +294,40 @@ def test_satellite_attitude_correction():
     assert isclose(result_normal[0], expected_rotated[0], abs_tol=1e-6)
     assert isclose(result_normal[1], expected_rotated[1], abs_tol=1e-6)
     assert isclose(result_normal[2], expected_rotated[2], abs_tol=1e-6)
+
+
+def test_sensor_fusion():
+    # Based on Sebastian O. H. Madgwick's sensor fusion algorithm for orientation estimation.
+    # https://x-io.co.uk/open-source-imu-and-ahrs-algorithms
+
+    def update_orientation(q: quaternion, gyro: vector[float], accel: vector[float], dt: float = 0.01):
+        # Compute the cost function and its gradient
+        objective = q.rotate_vector(vector([0.0, 0.0, 1.0])) - accel.normalize()
+        cost = 0.5 * objective.dot(objective)
+        gradient = cp.grad(cost, q).normalize()
+
+        # Quaternion derivative from gyroscope measurements
+        gyro_quat = cp.quaternion(0.0, *gyro)
+        q_dot_gyro = 0.5 * (q @ gyro_quat)
+
+        # Update quaternion using gradient descent
+        q_dot = q_dot_gyro - 0.1 * gradient
+        
+        return (q + q_dot * dt).normalize()
+    
+    q: quaternion = quaternion(cp.value(0.7071), cp.value(0.7071), cp.value(0.0), cp.value(0.0))  # Initial orientation (45 degrees around X-axis)
+    gyro = vector([0.01, 0.02, 0.015])
+    accel = vector([0.0, 0.0, 1.0])
+
+    new_q = update_orientation(q, gyro, accel)
+
+    tg = Target()
+    tg.compile(new_q)
+    tg.run()
+
+    new_q_value = tg.read_value(new_q)
+
+    assert pytest.approx(new_q_value[0], abs=1e-4) == 0.7072948217391968
+    assert pytest.approx(new_q_value[1], abs=1e-4) == 0.7069186568260193
+    assert pytest.approx(new_q_value[2], abs=1e-4) == 0.7660913727013394e-05
+    assert pytest.approx(new_q_value[3], abs=1e-4) == 0.00012362639245111495
