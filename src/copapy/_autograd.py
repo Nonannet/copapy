@@ -31,6 +31,8 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
     """
     assert isinstance(x, value), f"Argument x for grad function must be a copapy value but is {type(x)}."
 
+    y_set: set[value[float] | float]
+
     if isinstance(y, value):
         y_set = {y}
     if isinstance(y, tensor):

@@ -218,7 +218,7 @@ class quaternion(ArrayType[float]):
         return self.norm()
 
     def __repr__(self) -> str:
-        return f"vector({self.values})"
+        return f"quaternion(w={self.w}, x={self.x}, y={self.y}, z={self.z})"
 
     def __len__(self) -> int:
         return len(self.values)
