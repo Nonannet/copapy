@@ -30,7 +30,7 @@ where = ["src"]
 copapy = ["obj/*.o", "py.typed"]
 
 [tool.setuptools_scm]
-version_scheme = "post-release"
+version_scheme = "no-guess-next"
 local_scheme = "no-local-version"
 tag_regex = "^v(?P<version>\\d+\\.\\d+\\.\\d+(?:-beta)?)$"
 fallback_version = "0.0.0"
