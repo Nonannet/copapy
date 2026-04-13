@@ -4,10 +4,10 @@ set -eu
 ARCH=${1:-x86_64}
 
 case "$ARCH" in
-    (x86_64|arm64|arm-v6|arm-v7|arm-v7-thumb|arm-v7m-thumb|all)
+    (x86_64|arm64|arm-v6|arm-v7|arm-v7-thumb|arm-v7m-thumb|tricore|all)
         ;;
     (*)
-        echo "Usage: $0 [x86_64|arm64|arm-v6|arm-v7|arm-v6-thumb|arm-v7m-thumb|all]"
+        echo "Usage: $0 [x86_64|arm64|arm-v6|arm-v7|arm-v6-thumb|arm-v7m-thumb|tricore|all]"
         exit 1
         ;;
 esac
@@ -206,4 +206,29 @@ if [[ "$ARCH" == "arm-v7m-thumb" || "$ARCH" == "all" ]]; then
         src/coparun/coparun.c \
         src/coparun/mem_man.c \
         -o build/runner/coparun-armv7thumb
+fi
+
+#######################################
+# TRICORE
+#######################################
+if [[ "$ARCH" == "tricore" || "$ARCH" == "all" ]]; then
+    echo "--------------tricore----------------"
+
+    # https://github.com/NoMore201/tricore-gcc-toolchain/releases/download/11.3.1-20250101/tricore-gcc-11.3.1-20250101-linux.zip
+    # -foptimize-sibling-calls forces TCO
+    LIBGCC=$(tricore-elf-gcc -print-libgcc-file-name)
+    LIBM=$(tricore-elf-gcc -print-file-name=libm.a)
+
+    tricore-elf-gcc -fno-pic -ffunction-sections \
+        -c $SRC -O3 -foptimize-sibling-calls -o build/stencils/stencils.o
+
+    tricore-elf-ld -r \
+        build/stencils/stencils.o \
+        $LIBGCC \
+        $LIBM \
+        -o $DEST/stencils_tricore_O3.o
+
+    tricore-elf-objdump -d -x \
+        $DEST/stencils_tricore_O3.o \
+        > build/stencils/stencils_tricore_O3.asm
 fi

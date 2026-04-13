@@ -9,8 +9,9 @@ if not "%ARCH%"=="x86" ^
 if not "%ARCH%"=="arm64" ^
 if not "%ARCH%"=="arm-v6" ^
 if not "%ARCH%"=="arm-v7" ^
+if not "%ARCH%"=="tricore" ^
 if not "%ARCH%"=="all" (
-    echo Usage: %0 [x86_64^|x86^|arm64^|arm-v6^|arm-v7^|all]
+    echo Usage: %0 [x86_64^|x86^|arm64^|arm-v6^|arm-v7^|tricore^|all]
     exit /b 1
 )
 
@@ -80,6 +81,29 @@ wsl i686-linux-gnu-ld -r build/stencils/stencils.o build/musl/musl_objects_x86.o
 wsl i686-linux-gnu-objdump -d -x src/copapy/obj/stencils_x86_O3.o > build/stencils/stencils_x86_O3.asm
 
 :SKIP_X86
+
+REM ============================================================
+REM TRICORE
+REM ============================================================
+if "%ARCH%"=="tricore" goto BUILD_TRICORE
+if "%ARCH%"=="all"    goto BUILD_TRICORE
+goto SKIP_TRICORE
+
+:BUILD_TRICORE
+echo --------------tricore----------------
+REM https://github.com/NoMore201/tricore-gcc-toolchain/releases/download/11.3.1-20250101/tricore-gcc-11.3.1-20250101-linux.zip
+REM -foptimize-sibling-calls forces TCO
+wsl /opt/tricore/bin/tricore-elf-gcc -fno-pic -ffunction-sections ^
+    -c build/stencils/stencils.c -O3 -foptimize-sibling-calls -o build/stencils/stencils.o
+
+wsl /opt/tricore/bin/tricore-elf-ld -r build/stencils/stencils.o ^
+    $(/opt/tricore/bin/tricore-elf-gcc -print-libgcc-file-name) ^
+    $(/opt/tricore/bin/tricore-elf-gcc -print-file-name=libm.a) ^
+    -o src/copapy/obj/stencils_tricore_O3.o
+
+wsl /opt/tricore/bin/tricore-elf-objdump -d -x src/copapy/obj/stencils_tricore_O3.o > build/stencils/stencils_tricore_O3.asm
+
+:SKIP_TRICORE
 
 REM ============================================================
 REM ARM64
