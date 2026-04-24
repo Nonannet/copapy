@@ -414,9 +414,13 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
                 elif reloc.target_symbol_name.startswith('result_'):
                     # Set return jump address to address of following stencil
                     patch = sdb.get_patch(reloc, offset + len(data), offset, binw.Command.PATCH_FUNC.value)
+                elif reloc.pelfy_reloc.type == 'R_TRICORE_RELAX':
+                    pass
+                elif reloc.pelfy_reloc.symbol.index == 0:
+                    assert reloc.pelfy_reloc.type == 'R_TRICORE_15REL'
                 else:
                     # Patch constants addresses on heap
-                    assert reloc.target_section_index in section_addr_lookup, f"- Function or object in {node.name} missing: {reloc.pelfy_reloc.symbol.name}"
+                    assert reloc.target_section_index in section_addr_lookup, f"- Function or object in {node.name} missing: {reloc.pelfy_reloc.symbol.name} ({reloc.pelfy_reloc.type})"
                     obj_addr = reloc.target_symbol_offset + section_addr_lookup[reloc.target_section_index]
                     patch = sdb.get_patch(reloc, obj_addr, offset, binw.Command.PATCH_OBJECT.value)
                     #print('* constants stancils', patch.type, patch.patch_address, binw.Command.PATCH_OBJECT, node.name)
@@ -453,7 +457,8 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
         for reloc in sdb.get_relocations(name):
 
             if not reloc.target_section_index:
-                assert reloc.pelfy_reloc.type == 'R_ARM_V4BX', (reloc.pelfy_reloc.type, name, reloc.pelfy_reloc.symbol.name)
+                if reloc.pelfy_reloc.symbol.name != '__errno':  # TODO: Temporary workaround for tricore
+                    assert reloc.pelfy_reloc.type in ('R_ARM_V4BX', 'R_TRICORE_RELAX', 'R_TRICORE_15REL', 'R_TRICORE_24REL'), (reloc.pelfy_reloc.type, name, reloc.pelfy_reloc.symbol.name)
 
             elif reloc.target_symbol_info in {'STT_OBJECT', 'STT_NOTYPE', 'STT_SECTION'}:
                 # Patch constants/variable addresses on heap

@@ -371,6 +371,28 @@ class stencil_database():
             scale = 0x10000
             #print(f" *> {pr.type} {patch_value=} {symbol_address=}, {function_offset=}, {pr.fields['r_addend']=}")
 
+        elif pr.type == 'R_TRICORE_HIADJ':
+            # S + A + 0x8000 >> 16
+            mask = 0xFFFF
+            patch_value = symbol_address + pr.fields['r_addend'] + 0x8000
+            symbol_type = symbol_type + 0x04  # Absolut value
+            scale = 0x10000
+            #print(f" *> {pr.type} {patch_value=} {symbol_address=}, {function_offset=}")
+
+        elif pr.type == 'R_TRICORE_LO2':
+            # S + A & 0xFFFF
+            mask = 0xFFFF
+            patch_value = symbol_address + pr.fields['r_addend']
+            symbol_type = symbol_type + 0x04  # Absolut value
+            #print(f" *> {pr.type} {patch_value=} {symbol_address=}, {function_offset=}")
+
+        elif pr.type == 'R_TRICORE_24REL':
+            # S + A - P
+            mask = 0xffffff  # 24 bit
+            patch_value = symbol_address + pr.fields['r_addend'] - patch_offset
+            assert not patch_value & 0x01, hex(patch_value)
+            scale = 2
+
         else:
             raise NotImplementedError(f"Relocation type {pr.type} in {relocation.pelfy_reloc.target_section.name} pointing to {relocation.pelfy_reloc.symbol.name} not implemented")
 
