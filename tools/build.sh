@@ -219,10 +219,10 @@ if [[ "$ARCH" == "tricore" || "$ARCH" == "all" ]]; then
     LIBGCC=$(tricore-elf-gcc -print-libgcc-file-name)
     LIBM=$(tricore-elf-gcc -print-file-name=libm.a)
 
-    tricore-elf-gcc -fno-pic -ffunction-sections \
+    tricore-elf-gcc -fno-pic -ffunction-sections -mcpu=tc1130 \
         -c $SRC -O3 -foptimize-sibling-calls -o build/stencils/stencils.o
 
-    tricore-elf-ld -r \
+    tricore-elf-ld --mcpu=tc131 -r \
         build/stencils/stencils.o \
         $LIBGCC \
         $LIBM \

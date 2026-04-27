@@ -93,10 +93,10 @@ goto SKIP_TRICORE
 echo --------------tricore----------------
 REM https://github.com/NoMore201/tricore-gcc-toolchain/releases/download/11.3.1-20250101/tricore-gcc-11.3.1-20250101-linux.zip
 REM -foptimize-sibling-calls forces TCO
-wsl /opt/tricore/bin/tricore-elf-gcc -fno-pic -ffunction-sections ^
+wsl /opt/tricore/bin/tricore-elf-gcc -fno-pic -ffunction-sections -mcpu=tc1130 ^
     -c build/stencils/stencils.c -O3 -foptimize-sibling-calls -o build/stencils/stencils.o
 
-wsl /opt/tricore/bin/tricore-elf-ld -r build/stencils/stencils.o ^
+wsl /opt/tricore/bin/tricore-elf-ld --mcpu=tc131 -r build/stencils/stencils.o ^
     $(/opt/tricore/bin/tricore-elf-gcc -print-libgcc-file-name) ^
     $(/opt/tricore/bin/tricore-elf-gcc -print-file-name=libm.a) ^
     -o src/copapy/obj/stencils_tricore_O3.o
