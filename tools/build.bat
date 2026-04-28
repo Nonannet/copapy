@@ -36,7 +36,7 @@ echo - Compile stencil test...
 cl /Zi /Od stencils\test.c /Fe:build\stencils\test.exe
 
 echo - Build runner for Windows 64 bit...
-cl /Zi /Od /DENABLE_BASIC_LOGGING ^
+cl /Zi /Od /DENABLE_LOGGING ^
     src\coparun\runmem.c ^
     src\coparun\coparun.c ^
     src\coparun\mem_man.c ^
