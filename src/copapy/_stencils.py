@@ -232,7 +232,7 @@ class stencil_database():
                 yield reloc_entry
 
 
-    def get_patch(self, relocation: relocation_entry, symbol_address: int, function_offset: int, symbol_type: int) -> patch_entry:
+    def get_patch(self, relocation: relocation_entry, symbol_address: int, function_offset: int, symbol_type: int) -> list[patch_entry]:
         """Return patch positions for a provided symbol (function or object)
 
         Arguments:
@@ -371,10 +371,32 @@ class stencil_database():
             scale = 0x10000
             #print(f" *> {pr.type} {patch_value=} {symbol_address=}, {function_offset=}, {pr.fields['r_addend']=}")
 
+        elif pr.type == 'R_RISCV_HI20':
+            # (S + A) & 0xFFFFF000
+            mask = 0xFFFFF000
+            patch_value = symbol_address + pr.fields['r_addend']
+            scale = 0x1000
+            #print(f" *> {pr.type} {patch_value=} {symbol_address=}, {function_offset=}, {pr.fields['r_addend']=}")
+
+        elif pr.type == 'R_RISCV_LO12_I':
+            # S + A
+            mask = 0xFFF00000
+            patch_value = symbol_address + pr.fields['r_addend']
+            #print(f" *> {pr.type} {patch_value=} {symbol_address=}, {function_offset=}")
+
+        elif pr.type == 'R_RISCV_CALL_PLT':
+            # S + A - P
+            mask = 0x3ffffff  # 26 bit (1<<26)-1
+            patch_value = symbol_address + pr.fields['r_addend'] - patch_offset
+            scale = 4
+
+            return [patch_entry(mask, patch_offset, patch_value, scale, symbol_type),
+                    patch_entry(mask, patch_offset, patch_value, scale, symbol_type)]
+
         else:
             raise NotImplementedError(f"Relocation type {pr.type} in {relocation.pelfy_reloc.target_section.name} pointing to {relocation.pelfy_reloc.symbol.name} not implemented")
 
-        return patch_entry(mask, patch_offset, patch_value, scale, symbol_type)
+        return [patch_entry(mask, patch_offset, patch_value, scale, symbol_type)]
 
     def get_stencil_code(self, name: str) -> bytes:
         """Return the striped function code for a provided function name
