@@ -9,8 +9,10 @@ if not "%ARCH%"=="x86" ^
 if not "%ARCH%"=="arm64" ^
 if not "%ARCH%"=="arm-v6" ^
 if not "%ARCH%"=="arm-v7" ^
+if not "%ARCH%"=="riscv32" ^
+if not "%ARCH%"=="riscv64" ^
 if not "%ARCH%"=="all" (
-    echo Usage: %0 [x86_64^|x86^|arm64^|arm-v6^|arm-v7^|all]
+    echo Usage: %0 [x86_64^|x86^|arm64^|arm-v6^|arm-v7^|riscv32^|riscv64^|all]
     exit /b 1
 )
 
@@ -130,7 +132,7 @@ REM ARM v7
 REM ============================================================
 if "%ARCH%"=="arm-v7" goto BUILD_ARMV7
 if "%ARCH%"=="all"    goto BUILD_ARMV7
-goto END
+goto SKIP_ARMV7
 
 :BUILD_ARMV7
 echo --------------arm-v7 32 bit----------------
@@ -150,6 +152,55 @@ wsl arm-linux-gnueabihf-gcc -static -O3 -DENABLE_LOGGING ^
     src/coparun/coparun.c ^
     src/coparun/mem_man.c ^
     -o build/runner/coparun-armv7
+
+:SKIP_ARMV7
+
+REM ============================================================
+REM RISC-V 64-bit
+REM ============================================================
+if "%ARCH%"=="riscv64" goto BUILD_RISCV64
+if "%ARCH%"=="all"     goto BUILD_RISCV64
+goto SKIP_RISCV64
+
+:BUILD_RISCV64
+echo -----------riscv64 64 bit-------------
+
+wsl riscv64-linux-gnu-gcc-12 -fno-pic -ffunction-sections -c build/stencils/stencils.c -O3 -o build/stencils/stencils.o
+wsl riscv64-linux-gnu-ld -r build/stencils/stencils.o build/musl/musl_objects_riscv64.o -o src/copapy/obj/stencils_riscv64_O3.o
+wsl riscv64-linux-gnu-objdump -d -x src/copapy/obj/stencils_riscv64_O3.o > build/stencils/stencils_riscv64_O3.asm
+
+echo - Build runner for RISC-V 64 bit...
+wsl riscv64-linux-gnu-gcc-12 -static -O3 -DENABLE_LOGGING ^
+    src/coparun/runmem.c ^
+    src/coparun/coparun.c ^
+    src/coparun/mem_man.c ^
+    -o build/runner/coparun-riscv64
+
+:SKIP_RISCV64
+
+REM ============================================================
+REM RISC-V 32-bit
+REM ============================================================
+if "%ARCH%"=="riscv32" goto BUILD_RISCV32
+if "%ARCH%"=="all"     goto BUILD_RISCV32
+goto SKIP_RISCV32
+
+:BUILD_RISCV32
+echo -----------riscv32 32 bit-------------
+REM cross compiler: https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2026.04.26/riscv32-musl-ubuntu-22.04-gcc.tar.xz
+
+wsl build/riscv_gcc/riscv/bin/riscv32-unknown-linux-musl-gcc -fno-pic -ffunction-sections -c build/stencils/stencils.c -O3 -o build/stencils/stencils.o
+wsl build/riscv_gcc/riscv/bin/riscv32-unknown-linux-musl-ld -r build/stencils/stencils.o build/musl/musl_objects_riscv32.o -o src/copapy/obj/stencils_riscv32_O3.o
+wsl build/riscv_gcc/riscv/bin/riscv32-unknown-linux-musl-objdump -d -x src/copapy/obj/stencils_riscv32_O3.o > build/stencils/stencils_riscv32_O3.asm
+
+echo - Build runner for RISC-V 32 bit...
+wsl build/riscv_gcc/riscv/bin/riscv32-unknown-linux-musl-gcc -static -O3 -DENABLE_LOGGING ^
+    src/coparun/runmem.c ^
+    src/coparun/coparun.c ^
+    src/coparun/mem_man.c ^
+    -o build/runner/coparun-riscv32
+
+:SKIP_RISCV32
 
 :END
 echo Build completed for %ARCH%
