@@ -401,6 +401,7 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
         data = sdb.get_stencil_code(node.name)
         data_list.append(data)
         #print(f"* {node.name} ({offset}) " + ' '.join(f'{d:02X}' for d in data))
+        patch: list[patch_entry] = []
 
         for reloc in sdb.get_relocations(node.name, stencil=True):
             if reloc.target_symbol_info in ('STT_OBJECT', 'STT_NOTYPE', 'STT_SECTION'):
@@ -414,9 +415,11 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
                 elif reloc.target_symbol_name.startswith('result_'):
                     # Set return jump address to address of following stencil
                     patch = sdb.get_patch(reloc, offset + len(data), offset, binw.Command.PATCH_FUNC.value)
+                elif reloc.pelfy_reloc.type.endswith('_RELAX'):
+                    pass  # Ignore *_RELAX relocations for now
                 else:
                     # Patch constants addresses on heap
-                    assert reloc.target_section_index in section_addr_lookup, f"- Function or object in {node.name} missing: {reloc.pelfy_reloc.symbol.name}"
+                    assert reloc.target_section_index in section_addr_lookup, f"- Function or object in {node.name} missing: {reloc.pelfy_reloc.symbol.name} ({reloc.pelfy_reloc.type})"
                     obj_addr = reloc.target_symbol_offset + section_addr_lookup[reloc.target_section_index]
                     patch = sdb.get_patch(reloc, obj_addr, offset, binw.Command.PATCH_OBJECT.value)
                     #print('* constants stancils', patch.type, patch.patch_address, binw.Command.PATCH_OBJECT, node.name)
@@ -428,7 +431,7 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
             else:
                 raise ValueError(f"Unsupported: {node.name} {reloc.target_symbol_info} {reloc.target_symbol_name}")
 
-            patch_list.append(patch)
+            patch_list += patch
 
         offset += len(data)
 
