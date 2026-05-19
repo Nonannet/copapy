@@ -15,6 +15,12 @@ RUN apt-get update && apt-get install -y \
     python3 \
     git
 
+RUN wget https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2026.04.26/riscv32-musl-ubuntu-22.04-gcc.tar.xz && \
+    tar -xf riscv32-musl-ubuntu-22.04-gcc.tar.xz && \
+    rm riscv32-musl-ubuntu-22.04-gcc.tar.xz
+
+ENV PATH=/home/riscv/bin:$PATH
+
 COPY *.sh ./
 
 RUN sh build_musl.sh

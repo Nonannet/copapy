@@ -32,9 +32,11 @@ sh ../packobjs.sh arm-none-eabi-gcc arm-none-eabi-ld /object_files/musl_objects_
 # Armv7 Thumb for Cortex-M3..7
 sh ../packobjs.sh arm-none-eabi-gcc arm-none-eabi-ld /object_files/musl_objects_armv7mthumb.o "-march=armv7e-m -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb"
 
-#sh ../packobjs.sh mips mips-linux-gnu-gcc-13 mips-linux-gnu-ld
+# RISC-V 32-bit
+sh ../packobjs.sh riscv32-unknown-linux-musl-gcc riscv32-unknown-linux-musl-ld /object_files/musl_objects_riscv32.o
 
-#sh ../packobjs.sh riscv64 riscv64-linux-gnu-gcc-13 riscv64-linux-gnu-ld
+# RISC-V 64-bit
+sh ../packobjs.sh riscv64-linux-gnu-gcc-13 riscv64-linux-gnu-ld /object_files/musl_objects_riscv64.o
 
 cp ./COPYRIGHT /object_files/
 
