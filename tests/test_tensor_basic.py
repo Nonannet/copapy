@@ -3,6 +3,7 @@
 
 import copapy as cp
 
+
 def test_tensor_basic():
     # Test 1: Create a scalar tensor
     print("Test 1: Scalar tensor")
@@ -225,6 +226,7 @@ def test_tensor_basic():
     assert t.ndim == 3
     print()
 
+
 def test_tensor_slicing():
     print("Test Numpy-style slicing")
     t = cp.tensor([[10, 20, 30], [40, 50, 60], [70, 80, 90]])
@@ -250,6 +252,25 @@ def test_tensor_slicing():
     assert slice4.shape == (3,)
     assert slice4[2] == 90
     print()
+
+
+def test_tensor_concat():
+    print("Test tensor concatenation")
+    t1 = cp.tensor([[1, 2], [3, 4]])
+    t2 = cp.tensor([[5, 6], [7, 8]])
+    t3 = cp.tensor([[9, 10], [11, 12]])
+
+    concat_0 = cp.concat([t1, t2, t3], axis=0)
+    print(f"Concatenate along axis 0: shape={concat_0.shape}")
+    assert concat_0.shape == (6, 2)
+    assert concat_0[4, 1] == 10
+
+    concat_1 = cp.concat([t1, t2, t3], axis=1)
+    print(f"Concatenate along axis 1: shape={concat_1.shape}")
+    assert concat_1.shape == (2, 6)
+    assert concat_1[1, 4] == 11
+    print()
+
 
 if __name__ == "__main__":
     test_tensor_basic()

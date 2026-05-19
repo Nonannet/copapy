@@ -114,6 +114,19 @@ def test_sort_vector():
     assert ref == result
 
 
+def test_vector_concat():
+    print("Test vector concatenation")
+    v1 = cp.vector([1, 2, 3])
+    v2 = cp.vector([4, 5])
+    v3 = cp.vector([6])
+
+    concat_vec = cp.concat([v1, v2, v3])
+    print(f"Concatenate vectors: shape={concat_vec.shape}")
+    assert concat_vec.shape == (6,)
+    assert concat_vec[4] == 5
+    print()
+
+
 if __name__ == "__main__":
     #test_vectors_init()
     #test_compiled_vectors()

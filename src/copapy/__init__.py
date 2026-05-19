@@ -37,8 +37,9 @@ from ._target import Target, jit
 from ._basic_types import NumLike, value, generic_sdb, iif
 from ._vectors import vector, distance, scalar_projection, angle_between, rotate_vector, vector_projection
 from ._quaternion import quaternion
-from ._tensors import tensor, zeros, ones, arange, eye, identity, diagonal
-from ._math import sqrt, abs, sign, sin, cos, tan, asin, acos, atan, atan2, log, exp, pow, get_42, clamp, min, max, relu
+from ._tensors import tensor, zeros, ones, arange, eye, identity, diagonal, concat
+from ._math import sqrt, abs, sign, sin, cos, tan, asin, acos, atan, atan2, log, exp, pow, get_42, clamp, minimum, maximum
+from ._nn import relu, sigmoid
 from ._autograd import grad
 from ._tensors import tensor as matrix
 from ._version import __version__  # Run "pip install -e ." to generate _version.py
@@ -74,16 +75,18 @@ __all__ = [
     "pow",
     "get_42",
     "clamp",
-    "min",
-    "max",
+    "minimum",
+    "maximum",
     "relu",
     "distance",
     "scalar_projection",
     "angle_between",
     "rotate_vector",
-"vector_projection",
+    "vector_projection",
     "quaternion",
     "grad",
     "eye",
+    "concat",
+    "sigmoid",
     "jit"
 ]
