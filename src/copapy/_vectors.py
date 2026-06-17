@@ -54,7 +54,14 @@ class vector(ArrayType[TNum]):
         return iter(self.values)
 
     def get_scalar(self, index: int) -> TNum | value[TNum]:
-        """Get a single scalar value from the vector."""
+        """Get a single scalar value from the vector.
+
+        Arguments:
+            index: The index of the element to retrieve.
+
+        Returns:
+            The scalar value at the specified index.
+        """
         return self.values[index]
 
     @overload
@@ -200,6 +207,14 @@ class vector(ArrayType[TNum]):
     @overload
     def dot(self, other: 'vector[int] | vector[float]') -> float | int | value[float] | value[int]: ...
     def dot(self, other: 'vector[int] | vector[float]') -> Any:
+        """Calculate the dot product of this vector with another.
+
+        Arguments:
+            other: Another vector of the same length.
+
+        Returns:
+            The dot product as a scalar value.
+        """
         assert len(self.values) == len(other.values), "Vectors must be of same length."
         return mixed_sum(a * b for a, b in zip(self.values, other.values))
 
@@ -216,7 +231,14 @@ class vector(ArrayType[TNum]):
         return self.dot(other)
 
     def cross(self: 'vector[float]', other: 'vector[float]') -> 'vector[float]':
-        """3D cross product"""
+        """Calculate the cross product of this vector with another 3D vector.
+
+        Arguments:
+            other: Another 3D vector.
+
+        Returns:
+            A new vector perpendicular to both vectors.
+        """
         assert len(self.values) == 3 and len(other.values) == 3, "Both vectors must be 3-dimensional."
         a1, a2, a3 = self.values
         b1, b2, b3 = other.values
@@ -286,20 +308,37 @@ class vector(ArrayType[TNum]):
     @overload
     def sum(self: 'vector[float]') -> float | value[float]: ...
     def sum(self) -> Any:
-        """Sum of all vector elements."""
+        """Sum of all vector elements.
+
+        Returns:
+            The sum of all vector elements as a scalar value.
+        """
         return mixed_sum(self.values)
 
     def magnitude(self) -> 'float | value[float]':
-        """Magnitude (length) of the vector."""
+        """Magnitude (length) of the vector.
+
+        Returns:
+            The magnitude of the vector as a scalar value.
+        """
         s = mixed_sum(a * a for a in self.values)
         return cp.sqrt(s)
 
     def normalize(self) -> 'vector[float]':
-        """Returns a normalized (unit length) version of the vector."""
+        """Calculate a normalized (unit length) version of the vector.
+
+        Returns:
+            A normalized (unit length) vector.
+        """
         mag = self.magnitude() + epsilon
         return self / mag
 
     def homogenize(self) -> 'vector[TNum]':
+        """Convert all elements to Copapy values if any element is a Copapy value.
+
+        Returns:
+            Vector with homogeneous element type.
+        """
         if any(isinstance(val, value) for val in self.values):
             return vector(mixed_homogenize(self))
         else:
