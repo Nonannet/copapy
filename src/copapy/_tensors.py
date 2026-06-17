@@ -128,7 +128,14 @@ class tensor(ArrayType[TNum]):
         return self.shape[0]
 
     def get_scalar(self: 'tensor[TNum]', *key: int) -> TNum | value[TNum]:
-        """Get a single scalar value from the tensor given multi-dimensional indices."""
+        """Get a single scalar value from the tensor given multi-dimensional indices.
+
+        Arguments:
+            *key: Variable number of indices for each dimension.
+
+        Returns:
+            The scalar value at the specified indices.
+        """
         assert len(key) == self.ndim, f"Expected {self.ndim} indices, got {len(key)}"
         flat_idx = self._get_flat_index(key)
         return self.values[flat_idx]
@@ -567,7 +574,11 @@ class tensor(ArrayType[TNum]):
     @overload
     def trace(self: 'tensor[float]') -> float | value[float]: ...
     def trace(self) -> Any:
-        """Calculate the trace (sum of diagonal elements)."""
+        """Calculate the trace (sum of diagonal elements).
+
+        Returns:
+            The sum of diagonal elements.
+        """
         assert self.ndim == 2 and self.shape[0] == self.shape[1], "Trace is only defined for square matrices"
         return mixed_sum(self.get_scalar(i, i) for i in range(self.shape[0]))
 
@@ -615,7 +626,11 @@ class tensor(ArrayType[TNum]):
         return self.reshape(-1)
 
     def size(self) -> int:
-        """Return total number of elements."""
+        """Count number of elements over all dimensions.
+
+        Returns:
+            Total number of elements.
+        """
         size = 1
         for dim in self.shape:
             size *= dim
@@ -820,7 +835,11 @@ class tensor(ArrayType[TNum]):
         return tensor(result_vals, self.shape)
 
     def homogenize(self) -> 'tensor[TNum]':
-        """Convert all elements to copapy values if any element is a copapy value."""
+        """Convert all elements to Copapy values if any element is a Copapy value.
+
+        Returns:
+            Tensor with all elements converted to Copapy values, or the input tensor if no value is a Copapy value.
+        """
         if any(isinstance(val, value) for val in self.values):
             homogenized: tuple[value[Any], ...] = tuple(value(val) if not isinstance(val, value) else val for val in self.values)
             return tensor(homogenized, self.shape)
@@ -833,7 +852,13 @@ class tensor(ArrayType[TNum]):
 
 
 def zeros(shape: Sequence[int] | int) -> tensor[int]:
-    """Create a zero tensor of given shape."""
+    """Create a zero tensor of given shape.
+    
+    Arguments:
+        shape: shape of the tensor to create.
+
+    Returns:
+        New tensor of given shape, initialized with zeros."""
     if isinstance(shape, int):
         shape = (shape,)
 
@@ -845,7 +870,13 @@ def zeros(shape: Sequence[int] | int) -> tensor[int]:
 
 
 def ones(shape: Sequence[int] | int) -> tensor[int]:
-    """Create a tensor of ones with given shape."""
+    """Create a tensor of ones with given shape.
+    
+    Arguments:
+        shape: shape of the tensor to create.
+
+    Returns:
+        New tensor of given shape, initialized with ones."""
     if isinstance(shape, int):
         shape = (shape,)
 
@@ -930,7 +961,14 @@ def concat(tensors: Sequence[tensor[U] | vector[U]], axis: int = 0) -> tensor[U]
 
 
 def flatten(t: tensor[U]) -> tensor[U]:
-    """Flatten a tensor to a 1D tensor."""
+    """Flatten a tensor to a 1D tensor.
+
+    Arguments:
+        t: n-dimensional tensor.
+
+    Returns:
+        A 1D tensor containing all elements from the input tensor.
+    """
     return t.flatten()
 
 
