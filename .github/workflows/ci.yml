@@ -299,7 +299,7 @@ jobs:
 
   build-windows:
     needs: [build_stencils]
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     strategy:
       matrix:
