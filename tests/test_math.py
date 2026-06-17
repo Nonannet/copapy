@@ -23,8 +23,8 @@ def test_fine():
                 cp.abs(-c_f),
                 cp.sign(c_i),
                 cp.sign(-c_f),
-                cp.min(c_i, 5),
-                cp.max(c_f, 5))
+                cp.minimum(c_i, 5),
+                cp.maximum(c_f, 5))
 
     re2_test = (a_f ** 2,
                 a_i ** -1,
@@ -39,8 +39,8 @@ def test_fine():
                 cp.abs(-a_f),
                 cp.sign(a_i),
                 cp.sign(-a_f),
-                cp.min(a_i, 5),
-                cp.max(a_f, 5))
+                cp.minimum(a_i, 5),
+                cp.maximum(a_f, 5))
 
     ret_refe = (a_f ** 2,
                 a_i ** -1,

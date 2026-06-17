@@ -393,12 +393,20 @@ def clamp(x: U | value[U] | vector[U], min_value: U | value[U], max_value:  U | 
 
 
 @overload
-def min(x: value[U], y: U | value[U]) -> value[U]: ...
+def minimum(x: U, y: U) -> U: ...
 @overload
-def min(x: U | value[U], y: value[U]) -> value[U]: ...
+def minimum(x: value[U], y: U | value[U]) -> value[U]: ...
 @overload
-def min(x: U, y: U) -> U: ...
-def min(x: U | value[U], y: U | value[U]) -> Any:
+def minimum(x: U | value[U], y: value[U]) -> value[U]: ...
+@overload
+def minimum(x: vector[U], y: U | value[U] | vector[U]) -> vector[U]: ...
+@overload
+def minimum(x: U | value[U] | vector[U], y: vector[U]) -> vector[U]: ...
+@overload
+def minimum(x: tensor[U], y: U | value[U] | tensor[U]) -> tensor[U]: ...
+@overload
+def minimum(x: U | value[U] | tensor[U], y: tensor[U]) -> tensor[U]: ...
+def minimum(x: U | value[U] | vector[U] | tensor[U], y: U | value[U] | vector[U] | tensor[U]) -> Any:
     """Minimum function to get the smaller of two values.
 
     Arguments:
@@ -408,22 +416,30 @@ def min(x: U | value[U], y: U | value[U]) -> Any:
     Returns:
         Minimum of x and y
     """
-    if isinstance(x, value):
+    if isinstance(x, tensor) or isinstance(y, tensor):
+        return _map2_tensor(x, y, minimum)
+    if isinstance(x, vector) or isinstance(y, vector):
+        return _map2_vector(x, y, minimum)
+    if isinstance(x, value) or isinstance(y, value):
         return add_op('min', [x, y])
-    if isinstance(x, tensor):
-        return _map2_tensor(x, y, min)
-    if isinstance(x, vector):
-        return _map2_vector(x, y, min)
     return x if x < y else y
 
 
 @overload
-def max(x: value[U], y: U | value[U]) -> value[U]: ...
+def maximum(x: U, y: U) -> U: ...
 @overload
-def max(x: U | value[U], y: value[U]) -> value[U]: ...
+def maximum(x: value[U], y: U | value[U]) -> value[U]: ...
 @overload
-def max(x: U, y: U) -> U: ...
-def max(x: U | value[U], y: U | value[U]) -> Any:
+def maximum(x: U | value[U], y: value[U]) -> value[U]: ...
+@overload
+def maximum(x: vector[U], y: U | value[U] | vector[U]) -> vector[U]: ...
+@overload
+def maximum(x: U | value[U] | vector[U], y: vector[U]) -> vector[U]: ...
+@overload
+def maximum(x: tensor[U], y: U | value[U] | tensor[U]) -> tensor[U]: ...
+@overload
+def maximum(x: U | value[U] | tensor[U], y: tensor[U]) -> tensor[U]: ...
+def maximum(x: U | value[U] | vector[U] | tensor[U], y: U | value[U] | vector[U] | tensor[U]) -> Any:
     """Maximum function to get the larger of two values.
 
     Arguments:
@@ -433,12 +449,12 @@ def max(x: U | value[U], y: U | value[U]) -> Any:
     Returns:
         Maximum of x and y
     """
-    if isinstance(x, value):
+    if isinstance(x, tensor) or isinstance(y, tensor):
+        return _map2_tensor(x, y, maximum)
+    if isinstance(x, vector) or isinstance(y, vector):
+        return _map2_vector(x, y, maximum)
+    if isinstance(x, value) or isinstance(y, value):
         return add_op('max', [x, y])
-    if isinstance(x, tensor):
-        return _map2_tensor(x, y, max)
-    if isinstance(x, vector):
-        return _map2_vector(x, y, max)
     return x if x > y else y
 
 
@@ -470,20 +486,6 @@ def lerp(v1: U | value[U] | vector[U], v2: U | value[U] | vector[U], t:  unifloa
     return v1 * (1 - t) + v2 * t
 
 
-@overload
-def relu(x: U) -> U: ...
-@overload
-def relu(x: value[U]) -> value[U]: ...
-@overload
-def relu(x: vector[U]) -> vector[U]: ...
-@overload
-def relu(x: tensor[U]) -> tensor[U]: ...
-def relu(x: U | value[U] | vector[U] | tensor[U]) -> Any:
-    """Returns x for x > 0 and otherwise 0."""
-    ret = x * (x > 0)
-    return ret
-
-
 def _map2_vector(self: VecNumLike, other: VecNumLike, func: Callable[[Any, Any], value[U] | U]) -> vector[U]:
     """Applies a function to each element of the vector and a second vector or scalar."""
     if isinstance(self, vector) and isinstance(other, vector):
@@ -499,9 +501,9 @@ def _map2_vector(self: VecNumLike, other: VecNumLike, func: Callable[[Any, Any],
 def _map2_tensor(self: TensorNumLike, other: TensorNumLike, func: Callable[[Any, Any], value[U] | U]) -> tensor[U]:
     """Applies a function to each element of the vector and a second vector or scalar."""
     if isinstance(self, vector):
-        self = tensor(self.values, (len(self.values),))
+        self = tensor(self)
     if isinstance(other, vector):
-        other = tensor(other.values, (len(other.values),))
+        other = tensor(other)
     if isinstance(self, tensor) and isinstance(other, tensor):
         assert self.shape == other.shape, "Tensors must have the same shape"
         return tensor([func(x, y) for x, y in zip(self.values, other.values)], self.shape)

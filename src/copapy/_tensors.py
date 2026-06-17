@@ -32,7 +32,7 @@ class tensor(ArrayType[TNum]):
             self.shape: tuple[int, ...] = tuple(shape)
             assert (isinstance(values, Sequence) and
                     any(isinstance(v, (value, int, float)) for v in values)), \
-                    "Values must be a sequence of values if shape is provided"
+                    "Values must be a sequence of scalars if shape is provided"
             self.values: tuple[TNum | value[TNum], ...] = tuple(v for v in values if not isinstance(v, Sequence))
             self.ndim: int = len(shape)
         elif isinstance(values, (int, float)):
@@ -856,6 +856,84 @@ def ones(shape: Sequence[int] | int) -> tensor[int]:
     return tensor([1] * size, tuple(shape))
 
 
+@overload
+def concat(tensors: Sequence[vector[U]]) -> vector[U]: ...
+@overload
+def concat(tensors: Sequence[tensor[U]], axis: int = 0) -> tensor[U]: ...
+def concat(tensors: Sequence[tensor[U] | vector[U]], axis: int = 0) -> tensor[U] | vector[U]:
+    """Concatenate tensors or vectors along a specified axis.
+
+    Arguments:
+        tensors: Tensors or vectors to concatenate. Must have the same shape except for the specified axis.
+        axis: Axis along which to concatenate (default 0).
+
+    Returns:
+        A new tensor or vector resulting from concatenation.
+    """
+    assert tensors, "At least one tensor must be provided"
+
+    # Check if all inputs are vectors
+    all_vectors = all(isinstance(item, vector) for item in tensors)
+
+    # Convert vectors to tensors for uniform processing
+    tensor_list: list[tensor[U]] = []
+    for item in tensors:
+        if isinstance(item, vector):
+            tensor_list.append(tensor(item.values, item.shape))
+        else:
+            tensor_list.append(item)
+
+    first_shape = tensor_list[0].shape
+    ndim = len(first_shape)
+
+    if axis < 0:
+        axis += ndim
+
+    assert 0 <= axis < ndim
+
+    # Shape checks
+    for t in tensor_list:
+        assert len(t.shape) == ndim
+        for i in range(ndim):
+            if i != axis:
+                assert t.shape[i] == first_shape[i]
+
+    # Output shape
+    new_shape = list(first_shape)
+    new_shape[axis] = sum(t.shape[axis] for t in tensor_list)
+
+    # Compute block sizes
+    inner_block: int = 1
+    for s in first_shape[axis + 1:]:
+        inner_block *= s
+
+    outer_block: int = 1
+    for s in first_shape[:axis]:
+        outer_block *= s
+
+    new_values: list[value[U] | U] = []
+
+    for outer in range(outer_block):
+        for t in tensor_list:
+            axis_size = t.shape[axis]
+            start = outer * axis_size * inner_block
+            end = start + axis_size * inner_block
+            new_values.extend(t.values[start:end])
+
+    result_tensor = tensor(new_values, tuple(new_shape))
+
+    # If all inputs were vectors and result is 1D, return as vector
+    if all_vectors and result_tensor.ndim == 1:
+        return vector(result_tensor.values)
+
+    return result_tensor
+
+
+def flatten(t: tensor[U]) -> tensor[U]:
+    """Flatten a tensor to a 1D tensor."""
+    return t.flatten()
+
+
 def arange(start: int | float, stop: int | float | None = None,
            step: int | float = 1) -> tensor[int] | tensor[float]:
     """Create a tensor with evenly spaced values.
@@ -927,10 +1005,10 @@ def identity(size: int) -> tensor[int]:
 
 
 @overload
-def diagonal(vec: 'tensor[int] | vector[int]') -> tensor[int]: ...
+def diagonal(vec: tensor[int] | vector[int]) -> tensor[int]: ...
 @overload
-def diagonal(vec: 'tensor[float] | vector[float]') -> tensor[float]: ...
-def diagonal(vec: 'tensor[Any] | vector[Any]') -> 'tensor[Any]':
+def diagonal(vec: tensor[float] | vector[float]) -> tensor[float]: ...
+def diagonal(vec: tensor[Any] | vector[Any]) -> tensor[Any]:
     """Create a diagonal tensor from a 1D tensor.
 
     Arguments:
