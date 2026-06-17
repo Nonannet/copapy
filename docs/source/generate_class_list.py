@@ -99,6 +99,8 @@ if __name__ == "__main__":
 
         write_functions(f, ['*'], 'copapy', title='Tensor/Matrix functions', path_patterns=['*_tensors*'], api_dir=api_dir)
 
+        write_functions(f, ['*'], 'copapy', title='ANN functions', path_patterns=['*_nn*'], api_dir=api_dir)
+
         #write_manual(f, ['NumLike'], title='Types')
 
     with open(f'{api_dir}/backend.md', 'w') as f:
