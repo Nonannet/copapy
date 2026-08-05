@@ -1,3 +1,7 @@
+<div align="center">
+<img src="docs/source/media/logo.svg" alt="Copapy logo" width="160" />
+</div>
+
 # Copapy
 
 Copapy is a Python framework for deterministic, low-latency realtime computation with automatic differentiation support, targeting hardware applications - for example in the fields of robotics, aerospace, SDR, embedded systems and control systems in general.

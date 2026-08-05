@@ -25,13 +25,17 @@ exclude_patterns = []
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-# html_theme = 'alabaster'
 html_theme = 'pydata_sphinx_theme'
 html_static_path = ['_static']
+html_title = "Python framework for deterministic, low-latency realtime computation"
+html_short_title = "Copapy"
+html_logo = 'media/logo.svg'
+html_favicon = 'media/logo.svg'
 html_css_files = ['custom.css']
 html_theme_options = {
   "secondary_sidebar_items": ["page-toc"],
-  "footer_start": ["copyright"]
+  "footer_start": ["copyright"],
+  "logo": {"text": "Copapy"}
 }
 html_theme_options["footer_end"] = []
 
