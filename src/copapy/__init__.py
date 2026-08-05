@@ -42,8 +42,15 @@ from ._math import sqrt, abs, sign, sin, cos, tan, asin, acos, atan, atan2, log,
 from ._nn import relu, sigmoid
 from ._autograd import grad
 from ._tensors import tensor as matrix
-from ._version import __version__  # Run "pip install -e ." to generate _version.py
+from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    __version__: str
+else:
+    try:
+        from ._version import __version__
+    except ImportError:
+        __version__ = "0.0.0"  # Run "pip install -e ." to generate _version.py
 
 __all__ = [
     "__version__",
