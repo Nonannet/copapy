@@ -62,9 +62,12 @@ if __name__ == '__main__':
         readme = extract_sections(f.read())
 
     with open(os.path.join(build_dir, 'start.md'), 'wt') as f:
-        f.write('\n'.join('\n'.join(readme[s]) if s != 'Copapy' else readme[s][1] for s in [
-            'Copapy', 'Current state', 'Install', 'Examples',
-            'Basic example', 'Inverse kinematics', 'License']))
+        f.write('# Introduction\n' + '\n'.join('\n'.join(readme[s]) if s != 'Copapy' else readme[s][1] for s in [
+            'Copapy', 'Current state', 'Install', 'License']))
+
+    with open(os.path.join(build_dir, 'examples.md'), 'wt') as f:
+        f.write('\n'.join(readme[s][1] for s in ['Examples',
+            'Basic example', 'Inverse kinematics']))
 
     with open(os.path.join(build_dir, 'compiler.md'), 'wt') as f:
         f.write('\n'.join(readme[s][1] for s in ['How it works']))
