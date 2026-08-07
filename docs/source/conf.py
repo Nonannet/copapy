@@ -27,7 +27,7 @@ exclude_patterns = []
 
 html_theme = 'pydata_sphinx_theme'
 html_static_path = ['_static']
-html_title = "Python framework for deterministic, low-latency realtime computation"
+html_title = "Copapy, a Python framework for deterministic, realtime computation"
 html_short_title = "Copapy"
 html_logo = 'media/logo.svg'
 html_favicon = 'media/logo.svg'

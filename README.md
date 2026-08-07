@@ -4,7 +4,7 @@
 
 # Copapy
 
-Copapy is a Python framework for deterministic, low-latency realtime computation with automatic differentiation support, targeting hardware applications - for example in the fields of robotics, aerospace, SDR, embedded systems and control systems in general.
+Copapy is a Python framework for deterministic, low-latency real-time computation with automatic differentiation support, targeting hardware applications - for example in the fields of robotics, aerospace, SDR, embedded systems and control systems in general.
 
 GPU frameworks like PyTorch, JAX and TensorFlow jump-started the development in the field of AI. With the right balance of flexibility and performance, they allow for fast iteration of new ideas while still being performant enough to test or even use them in production.
 
@@ -27,7 +27,7 @@ Execution of the compiled code is managed by a runner application. The runner is
 
 The design targets either an architecture with a realtime-patched Linux kernel - where the runner uses the same CPU and memory as Linux but executes in a realtime thread - or a setup where even higher determinism is required. In such cases, the runner can be executed on a separate crossover MCU running on bare metal or a RTOS.
 
-The Copapy framework also includes a runner as Python module build from the same C code. This allows frictionless testing of code and might be valuable for using Copapy in conventional application development.
+The Copapy framework also includes a runner as a Python module built from the same C code. This allows frictionless testing of code and might be valuable for using Copapy in conventional application development.
 
 ## Current state
 
@@ -41,11 +41,11 @@ Despite missing SIMD-optimization, benchmark performance shows promising numbers
 
 ![Copapy architecture](docs/source/media/benchmark_results_001.svg)
 
-For the benchmark (`tests/benchmark.py`) the timing of 30000 iterations for calculating the therm `sum((v1 + i) @ v2 for i in range(10))` where measured on an Ryzen 5 3400G. Where the vectors `v1` and `v2` both have a lengths of `v_size` which was varied according to the chart from 10 to 500. For the NumPy case the "i in range(10)" loop was vectorized like this: `np.sum((v1 + i) @ v2)` with i being here a `NDArray` with a dimension of `[10, 1]`. The number of calculated scalar operations is the same for both contenders. Obviously Copapy profits from less overheat by calling a single function from python per iteration, where the NumPy variant requires 3. Interestingly there is no indication visible in the chart that for increasing `v_size` the calling overhead for NumPy will be compensated by using faster SIMD instructions. It is to note that in this benchmark the Copapy case does not move any data between python and the compiled code.
+For the benchmark (`tests/benchmark.py`) timings for 30,000 iterations of calculating the term `sum((v1 + i) @ v2 for i in range(10))` were measured on a Ryzen 5 3400G. The vectors `v1` and `v2` both have lengths of `v_size`, which was varied from 10 to 500 according to the chart. For the NumPy case the `i in range(10)` loop was vectorized like this: `np.sum((v1 + i) @ v2)` with `i` being an `NDArray` of shape `[10, 1]`. The number of calculated scalar operations is the same for both implementations. Copapy benefits from lower overhead by calling a single function from Python per iteration, whereas the NumPy variant requires three. Interestingly, the chart shows no indication that for increasing `v_size` the calling overhead for NumPy will be compensated by faster SIMD instructions. Note that in this benchmark the Copapy case does not move any data between Python and the compiled code.
 
-Furthermore for many applications Copapy performance will benefit by reducing the actual number of operations significantly compared to a NumPy implementation, by precompute constant values know at compile time and benefiting from sparcity. Multiplying by zero (e.g. in a diagonal matrix) eliminate a hole branch in the computation graph. Operations without effect, like multiplications by 1 oder additions with zero gets eliminated at compile time.
+Furthermore, for many applications Copapy performance will benefit by reducing the actual number of operations significantly compared to a NumPy implementation, by precomputing constant values known at compile time and benefiting from sparsity. Multiplying by zero (e.g., in a diagonal matrix) eliminates a whole branch in the computation graph. Operations with no effect, like multiplications by 1 or additions with zero, get eliminated at compile time.
 
-For Testing and using Copapy to speed up computations in conventional Python programs there is also the `@cp.jit` decorator available, to compile functions on first use and cache the compiled version for later calls:
+For testing and using Copapy to speed up computations in conventional Python programs there is also the `@cp.jit` decorator available, to compile functions on first use and cache the compiled version for later calls:
 
 ```python
 import copapy as cp
@@ -61,7 +61,7 @@ result1 = calculation(2.5, 1.2)
 result2 = calculation(3.1, 4.7)
 ```
 
-It is to note that `cp.jit` is not optimized very much at the moment concerning transfer data between Python and the compiled code back and forth.
+Note that `cp.jit` is not currently highly optimized for data transfer between Python and the compiled code.
 
 
 ## Install
