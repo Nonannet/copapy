@@ -129,7 +129,10 @@ def test_compile():
     if not check_for_qemu():
         warnings.warn("qemu-armv7 not found, armv7 test skipped!", UserWarning)
         return
-    if not os.path.isfile('build/runner/coparun-armv7'):
+    if "wsl" in qemu_command:
+        warnings.warn("qemu-armv7 seams not work on wsl1, test skipped!", UserWarning)
+        return
+    if not os.path.isfile("build/runner/coparun-armv7"):
         warnings.warn("armv7 runner not found, armv7 test skipped!", UserWarning)
         return
 
