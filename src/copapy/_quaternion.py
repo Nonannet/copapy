@@ -5,6 +5,8 @@ import copapy as cp
 from ._basic_types import NumLike, value, unifloat, ArrayType
 from ._mixed import mixed_sum
 
+epsilon = 1e-20
+
 
 class quaternion(ArrayType[float]):
     """Mathematical quaternion class for representing 3D rotations.
@@ -91,11 +93,9 @@ class quaternion(ArrayType[float]):
         """Normalize the quaternion to unit length.
 
         Returns:
-            A normalized (unit) quaternion. Returns identity if the norm is zero.
+            A normalized (unit) quaternion.
         """
-        n = self.norm()
-        if not isinstance(n, value) and n == 0:
-            return quaternion.identity()
+        n = self.norm() + epsilon
         return quaternion(v / n for v in self.values)
 
     def toRotationMatrix(self) -> tensor[float]:
