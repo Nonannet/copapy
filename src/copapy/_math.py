@@ -299,7 +299,7 @@ def acos(x: Any) -> Any:
         return add_op('acos', [x])
     if isinstance(x, vector | tensor):
         return x.map(acos)
-    return math.asin(x)
+    return math.acos(x)
 
 
 # Debug test function
