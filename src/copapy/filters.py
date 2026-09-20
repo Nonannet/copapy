@@ -4,7 +4,18 @@ from._helper_types import TNum
 from typing import Any, Iterable
 
 
-def homogenize_vector(input_values: Iterable[TNum | value[TNum]]) -> Iterable[TNum] | Iterable[value[TNum]]:
+def _homogenize_values(input_values: Iterable[TNum | value[TNum]]) -> Iterable[TNum] | Iterable[value[TNum]]:
+    """
+    Homogenizes the input vector by converting all elements to the same type (either
+    constants or copapy variables). If any element is a copapy variable, all elements
+    are converted to copapy variables.
+
+    Arguments:
+        input_values: An iterable of numerical constants or copapy variables.
+    
+    Returns:
+        An iterable of homogenized values, either all constants or all copapy variables.
+    """
     input_list = list(input_values)
     if any(isinstance(val, value) for val in input_list):
         return (v if isinstance(v, value) else value(v) for v in input_list)
