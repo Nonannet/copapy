@@ -151,6 +151,39 @@ End-effector position: [0.6995794177055359, 0.7014330625534058]
 quadratic error = 2.2305819129542215e-06
 ```
 
+### IMU Sensor fusion
+
+This example demonstrates how concisely the Madgwick AHRS algorithm for IMU sensor fusion can be expressed in Copapy. While the original C implementation contains more than 130 lines of code (excluding blank lines and comments), the algorithm can be expressed in fewer than 10 lines with Copapy. One reason is Copapy's automatic differentiation, which computes the Madgwick correction gradient directly with cp.grad():
+
+```python
+import copapy as cp
+from copapy import vector, quaternion
+
+def madgwick_imu_update(q: quaternion, gyro: vector[float], accel: vector[float], dt: float = 0.01) -> quaternion:
+    BETA: float = 0.1
+    objective = q.rotate_vector(vector([0.0, 0.0, 1.0])) - accel.normalize()
+    cost = 0.5 * objective.dot(objective)
+    gradient = cp.grad(cost, q).normalize()
+    gyro_quat = quaternion(0.0, *gyro)
+    q_dot_gyro = 0.5 * (q @ gyro_quat)
+    q_dot = q_dot_gyro - BETA * gradient
+    return (q + q_dot * dt).normalize()
+
+# Usage
+q = quaternion(cp.value(0.7071), cp.value(0.7071), cp.value(0.0), cp.value(0.0))
+gyro = vector([0.01, 0.02, 0.015])
+accel = vector([0.0, 0.0, 1.0])
+
+new_q = madgwick_imu_update(q, gyro, accel)
+
+tg = cp.Target()
+tg.compile(new_q)
+tg.run()
+
+print(f"Updated orientation: {tg.read_value(new_q)}")
+```
+See `tests/test_quaternion.py` for the documented version.
+
 ## How it works
 
 The compilation step starts with tracing the Python code to generate an acyclic directed graph (DAG) of variables and operations. The code can contain functions, closures, branching, and so on, but conditional branching is only allowed when the condition is known at tracing time (a `cp.iif` function exists to work around this). In the next step, this DAG is optimized and linearized into a sequence of operations. Each operation is mapped to a precompiled stencil or a combination of several stencils. A stencil is a piece of machine code with placeholders for memory addresses pointing to other code or data. The compiler generates patch instructions that fill these placeholders with the correct memory addresses.
