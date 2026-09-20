@@ -40,6 +40,18 @@ def test_compiled_vectors():
     assert tg.read_value(t6) == pytest.approx(math.pi / 4, 0.001), tg.read_value(t6)  # pyright: ignore[reportUnknownMemberType]
 
 
+@pytest.mark.parametrize(
+    ("v1", "v2", "expected"),
+    [
+        (cp.vector([1.0]), cp.vector([2.0]), 0.0),
+        (cp.vector([1.0, 0.0]), cp.vector([0.0, 1.0]), math.pi / 2),
+        (cp.vector([1.0, 0.0, 0.0, 0.0]), cp.vector([1.0, 1.0, 0.0, 0.0]), math.pi / 4),
+    ],
+)
+def test_angle_between_vector_dimensions(v1, v2, expected):
+    assert cp.angle_between(v1, v2) == pytest.approx(expected)
+
+
 def test_non_compiled_vector_operations():
     v1 = cp.vector([1.0, 2.0, 3.0])
     v2 = cp.vector([4.0, 5.0, 6.0])

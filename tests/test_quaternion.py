@@ -296,30 +296,41 @@ def test_satellite_attitude_correction():
     assert isclose(result_normal[2], expected_rotated[2], abs_tol=1e-6)
 
 
+def madgwick_imu_update(q: quaternion, gyro: vector[float], accel: vector[float], dt: float = 0.01) -> quaternion:
+    """Update an orientation quaternion with a single Madgwick IMU step.
+
+    Arguments:
+        q: Current orientation quaternion.
+        gyro: Gyroscope measurement vector in rad/s.
+        accel: Accelerometer measurement vector.
+        dt: Integration time step in seconds.
+
+    Returns:
+        The updated, normalized orientation quaternion.
+    """
+    BETA: float = 0.1
+
+    # Compute the cost function and its gradient
+    objective = q.rotate_vector(vector([0.0, 0.0, 1.0])) - accel.normalize()
+    cost = 0.5 * objective.dot(objective)
+    gradient = cp.grad(cost, q).normalize()
+
+    # Quaternion derivative from gyroscope measurements
+    gyro_quat = cp.quaternion(0.0, *gyro)
+    q_dot_gyro = 0.5 * (q @ gyro_quat)
+
+    # Update quaternion using gradient descent
+    q_dot = q_dot_gyro - BETA * gradient
+
+    return (q + q_dot * dt).normalize()
+
+
 def test_sensor_fusion():
-    # Based on Sebastian O. H. Madgwick's sensor fusion algorithm for orientation estimation.
-    # https://x-io.co.uk/open-source-imu-and-ahrs-algorithms
-
-    def update_orientation(q: quaternion, gyro: vector[float], accel: vector[float], dt: float = 0.01):
-        # Compute the cost function and its gradient
-        objective = q.rotate_vector(vector([0.0, 0.0, 1.0])) - accel.normalize()
-        cost = 0.5 * objective.dot(objective)
-        gradient = cp.grad(cost, q).normalize()
-
-        # Quaternion derivative from gyroscope measurements
-        gyro_quat = cp.quaternion(0.0, *gyro)
-        q_dot_gyro = 0.5 * (q @ gyro_quat)
-
-        # Update quaternion using gradient descent
-        q_dot = q_dot_gyro - 0.1 * gradient
-        
-        return (q + q_dot * dt).normalize()
-    
     q: quaternion = quaternion(cp.value(0.7071), cp.value(0.7071), cp.value(0.0), cp.value(0.0))  # Initial orientation (45 degrees around X-axis)
     gyro = vector([0.01, 0.02, 0.015])
     accel = vector([0.0, 0.0, 1.0])
 
-    new_q = update_orientation(q, gyro, accel)
+    new_q = madgwick_imu_update(q, gyro, accel)
 
     tg = Target()
     tg.compile(new_q)
