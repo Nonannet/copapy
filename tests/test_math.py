@@ -126,6 +126,18 @@ def test_arcus_trig_precision():
         if not val == pytest.approx(ref, abs=1e-5):  # pyright: ignore[reportUnknownMemberType]
             warnings.warn(f"Result of {func_name} for input {test_vals[i // 5]} does not match: {val} and reference: {ref}", UserWarning)
 
+    non_compiled_test = [r for v in test_vals for r in (cp.asin(v),
+                                                        cp.acos(v),
+                                                        cp.atan(v),
+                                                        cp.atan2(v, 3),
+                                                        cp.atan2(v, -3),)]
+
+    for i, (test, ref) in enumerate(zip(non_compiled_test, ret_refe)):
+        func_name = ['asin', 'acos', 'atan', 'atan2[1]', 'atan2[2]'][i % 5]
+        assert not isinstance(test, cp.value)
+        print(f"+ Non-compiled result of {func_name}: {test}; reference: {ref}")
+        assert test == pytest.approx(ref, abs=1e-5), f"Non-compiled result of {func_name} for input {test_vals[i // 5]} does not match: {test} and reference: {ref}"  # pyright: ignore[reportUnknownMemberType]
+
 
 def test_sqrt_precision():
     test_vals = [0.0, 0.0001, 0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.28318530718, 100.0, 1000.0, 100000.0]
