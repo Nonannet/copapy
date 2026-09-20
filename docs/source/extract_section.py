@@ -66,7 +66,7 @@ if __name__ == '__main__':
             'Copapy', 'Current state', 'Install', 'License']))
 
     with open(os.path.join(build_dir, 'examples.md'), 'wt') as f:
-        f.write('\n'.join(readme[s][1] for s in ['Examples',
+        f.write('\n'.join('\n'.join(readme[s]) for s in ['Examples',
             'Basic example', 'Inverse kinematics']))
 
     with open(os.path.join(build_dir, 'compiler.md'), 'wt') as f:
