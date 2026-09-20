@@ -12,17 +12,17 @@ jobs:
     container:
       image: ghcr.io/nonannet/cross_compiler_unix:2
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build object files
         run: bash tools/crosscompile.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: stencil-object-files
           path: src/copapy/obj/*.o
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: musl-object-files
           path: /object_files/*
@@ -37,17 +37,17 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           fetch-tags: true
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: stencil-object-files
           path: src/copapy/obj
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: musl-object-files
           path: /tmp/musl-object-files
@@ -71,7 +71,7 @@ jobs:
       # Only needed for Linux ARM builds
       - name: Set up QEMU
         if: runner.os == 'Linux'
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v4
         with:
           platforms: all
 
@@ -84,7 +84,7 @@ jobs:
           CIBW_TEST_REQUIRES: "pytest"
           CIBW_TEST_COMMAND: "pytest -m \"not runner\" {package}/tests/"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wheels-${{ matrix.os }}
           path: wheelhouse/*.whl
@@ -102,7 +102,7 @@ jobs:
       - name: Install Twine
         run: pip install --force-reinstall twine==6.2.0
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: wheelhouse
 
