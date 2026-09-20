@@ -101,6 +101,41 @@ print("Result d:", tg.read_value(d))
 print("Result e:", tg.read_value(e))
 ```
 
+### IMU Sensor fusion
+
+This example demonstrates how concisely the Madgwick AHRS algorithm for IMU sensor fusion can be expressed in Copapy. While the original C implementation contains more than 130 lines of code (excluding blank lines and comments), the algorithm can be expressed in about 10 lines with Copapy. One reason is Copapy's automatic differentiation, which computes the Madgwick correction gradient with cp.grad():
+
+```python
+import copapy as cp
+from copapy import vector, quaternion
+
+def madgwick_imu_update(q: quaternion, gyro: vector[float],
+                        accel: vector[float]) -> quaternion:
+    BETA: float = 0.1
+    SAMPLE_INTERVAL: float = 0.01  # seconds
+    objective = q.rotate_vector(vector([0.0, 0.0, 1.0])) - accel.normalize()
+    cost = 0.5 * objective.dot(objective)
+    gradient = cp.grad(cost, q).normalize()
+    gyro_quat = quaternion(0.0, *gyro)
+    q_dot_gyro = 0.5 * (q @ gyro_quat)
+    q_dot = q_dot_gyro - BETA * gradient
+    return (q + q_dot * SAMPLE_INTERVAL).normalize()
+
+# Usage
+q = quaternion(cp.value(0.7071), cp.value(0.7071), cp.value(0.0), cp.value(0.0))
+gyro = vector([0.01, 0.02, 0.015])
+accel = vector([0.0, 0.0, 1.0])
+
+new_q = madgwick_imu_update(q, gyro, accel)
+
+tg = cp.Target()
+tg.compile(new_q)
+tg.run()
+
+print(f"Updated orientation: {tg.read_value(new_q)}")
+```
+See `tests/test_quaternion.py` for the documented version.
+
 ### Inverse kinematics
 
 Another example using autograd in Copapy, here implementing gradient descent to solve an inverse kinematics problem for a two-joint 2D arm:
@@ -150,39 +185,6 @@ Joint position: [1.3509329557418823, -1.189529299736023]
 End-effector position: [0.6995794177055359, 0.7014330625534058]
 quadratic error = 2.2305819129542215e-06
 ```
-
-### IMU Sensor fusion
-
-This example demonstrates how concisely the Madgwick AHRS algorithm for IMU sensor fusion can be expressed in Copapy. While the original C implementation contains more than 130 lines of code (excluding blank lines and comments), the algorithm can be expressed in fewer than 10 lines with Copapy. One reason is Copapy's automatic differentiation, which computes the Madgwick correction gradient directly with cp.grad():
-
-```python
-import copapy as cp
-from copapy import vector, quaternion
-
-def madgwick_imu_update(q: quaternion, gyro: vector[float], accel: vector[float], dt: float = 0.01) -> quaternion:
-    BETA: float = 0.1
-    objective = q.rotate_vector(vector([0.0, 0.0, 1.0])) - accel.normalize()
-    cost = 0.5 * objective.dot(objective)
-    gradient = cp.grad(cost, q).normalize()
-    gyro_quat = quaternion(0.0, *gyro)
-    q_dot_gyro = 0.5 * (q @ gyro_quat)
-    q_dot = q_dot_gyro - BETA * gradient
-    return (q + q_dot * dt).normalize()
-
-# Usage
-q = quaternion(cp.value(0.7071), cp.value(0.7071), cp.value(0.0), cp.value(0.0))
-gyro = vector([0.01, 0.02, 0.015])
-accel = vector([0.0, 0.0, 1.0])
-
-new_q = madgwick_imu_update(q, gyro, accel)
-
-tg = cp.Target()
-tg.compile(new_q)
-tg.run()
-
-print(f"Updated orientation: {tg.read_value(new_q)}")
-```
-See `tests/test_quaternion.py` for the documented version.
 
 ## How it works
 
