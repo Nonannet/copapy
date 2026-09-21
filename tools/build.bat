@@ -34,12 +34,20 @@ call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliar
 echo - Compile stencil test...
 cl /Zi /Od stencils\test.c /Fe:build\stencils\test.exe
 
-echo - Build runner for Windows 64 bit...
-cl /Zi /Od /DENABLE_BASIC_LOGGING ^
-    src\coparun\runmem.c ^
-    src\coparun\coparun.c ^
-    src\coparun\mem_man.c ^
-    /Fe:build\runner\coparun.exe
+echo - Build entry wrapper...
+ml64 /c /Fobuild\runner\x86_64_abi_shim.obj src\coparun\x86_64_abi_shim.asm
+
+echo - Compile runner C files...
+cl /Zi /O2 /DENABLE_LOGGING /c src\coparun\runmem.c /Fobuild\runner\runmem.obj
+cl /Zi /O2 /DENABLE_LOGGING /c src\coparun\coparun.c /Fobuild\runner\coparun.obj
+cl /Zi /O2 /DENABLE_LOGGING /c src\coparun\mem_man.c /Fobuild\runner\mem_man.obj
+
+echo - Link runner...
+link /OUT:build\runner\coparun.exe ^
+    build\runner\runmem.obj ^
+    build\runner\coparun.obj ^
+    build\runner\mem_man.obj ^
+    build\runner\x86_64_abi_shim.obj
 
 echo - Build stencils for x86_64...
 wsl gcc -fno-pic -ffunction-sections -c build/stencils/stencils.c -O3 -o build/stencils/stencils.o

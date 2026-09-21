@@ -278,8 +278,7 @@ int parse_commands(runmem_t *context, uint8_t *bytes) {
             case RUN_PROG:
                 LOG("RUN_PROG\n");
                 {
-                    int ret = context->entr_point();
-                    (void)ret;
+                    int ret = call_entry_point(context->entr_point);
                     BLOG("Return value: %i\n", ret);
                 }
                 break;
