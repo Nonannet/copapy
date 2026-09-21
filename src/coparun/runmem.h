@@ -44,7 +44,7 @@
 /* Entry point type */
 typedef int (*entry_point_t)(void);
 
-#ifdef _WIN32
+#ifdef _WIN64
 /* Assembly wrapper to preserve RSI/RDI when calling System V ABI code from Microsoft x64 ABI */
 extern int x86_64_abi_shim(entry_point_t entry_point);
 
