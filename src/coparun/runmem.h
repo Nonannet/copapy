@@ -44,6 +44,19 @@
 /* Entry point type */
 typedef int (*entry_point_t)(void);
 
+#ifdef _WIN64
+/* Assembly wrapper to preserve RSI/RDI when calling System V ABI code from Microsoft x64 ABI */
+extern int x86_64_abi_shim(entry_point_t entry_point);
+
+static inline int call_entry_point(entry_point_t fp) {
+    return x86_64_abi_shim(fp);
+}
+#else
+static inline int call_entry_point(entry_point_t fp) {
+    return fp();
+}
+#endif
+
 /* Struct for run-time memory state */
 typedef struct runmem_s {
     uint8_t *data_memory;            // Pointer to data memory

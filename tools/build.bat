@@ -34,11 +34,15 @@ call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliar
 echo - Compile stencil test...
 cl /Zi /Od stencils\test.c /Fe:build\stencils\test.exe
 
-echo - Build runner for Windows 64 bit...
-cl /Zi /Od /DENABLE_BASIC_LOGGING ^
+echo - Build entry wrapper...
+ml64 /c /Fobuild\runner\x86_64_abi_shim.obj src\coparun\x86_64_abi_shim.asm
+
+echo - Compile and link runner...
+cl /Zi /O2 /DENABLE_LOGGING /Fobuild\runner\ ^
     src\coparun\runmem.c ^
     src\coparun\coparun.c ^
     src\coparun\mem_man.c ^
+    build\runner\x86_64_abi_shim.obj ^
     /Fe:build\runner\coparun.exe
 
 echo - Build stencils for x86_64...
