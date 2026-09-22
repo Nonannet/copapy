@@ -27,19 +27,6 @@ import subprocess
 import sys
 from typing import Any, Optional
 
-MACHINES = {
-    0x014C: "i386",
-    0x01C0: "ARM",
-    0x01C4: "ARMNT",
-    0x0200: "IA64",
-    0x8664: "x86_64",
-    0xAA64: "ARM64",
-    0x01F0: "POWERPC",
-    0x01F2: "POWERPCFP",
-    0x9041: "M32R",
-    0xC0EE: "EBC",
-}
-
 IMAGE_FILE_HEADER_SIZE = 20
 IMAGE_SECTION_HEADER_SIZE = 40
 IMAGE_SYMBOL_SIZE = 18
@@ -90,7 +77,7 @@ def symbol_name(raw: bytes, string_table: bytes) -> str:
 def fh_from(buf: bytes) -> Optional[dict[str, int]]:
     if len(buf) < IMAGE_FILE_HEADER_SIZE:
         return None
-    (machine, nsec, ts, sym_ptr, sym_count, opt, chars) = \
+    (machine, nsec, ts, sym_ptr, sym_count, opt, _chars) = \
         struct.unpack_from("<HHIIIHH", buf, 0)
     return {
         "Machine": machine,
@@ -99,7 +86,6 @@ def fh_from(buf: bytes) -> Optional[dict[str, int]]:
         "PointerToSymbolTable": sym_ptr,
         "NumberOfSymbols": sym_count,
         "SizeOfOptionalHeader": opt,
-        "Characteristics": chars,
     }
 
 
@@ -231,8 +217,7 @@ def hex_group(chunk: bytes) -> str:
 
 SEC_HEADER_RE = re.compile(r"^Disassembly of section (\S+):\s*$")
 SYM_LINE_RE = re.compile(r"^[0-9a-f]+ <(.+)>:\s*$")
-INSN_TAB_RE = re.compile(r"^\s*([0-9a-f]+):\t(.*?)\t(.*?)\s*$")
-INSN_SP_RE = re.compile(r"^\s*([0-9a-f]+):\s+((?:[0-9a-f]{2} )+[0-9a-f]{2})\s\s+(.*)$")
+INSN_RE = re.compile(r"^\s*([0-9a-f]+):\t(.*?)\t(.*?)\s*$")
 
 Disasm = dict[str, list[tuple[int, list[int], str]]]
 
@@ -265,7 +250,7 @@ def parse_objdump_disasm(text: str) -> Disasm:
             continue
         if SYM_LINE_RE.match(line):
             continue
-        m = INSN_TAB_RE.match(line) or INSN_SP_RE.match(line)
+        m = INSN_RE.match(line)
         if not m:
             continue
         addr = int(m.group(1), 16)
@@ -392,7 +377,7 @@ def main(argv: list[str]) -> int:
 
     out = ["; annotated hex dump of %s" % in_path.replace("\\", "/")]
     if fh:
-        arch = MACHINES.get(fh["Machine"], "0x%04X" % fh["Machine"])
+        arch = "x86_64" if fh["Machine"] == 0x8664 else "0x%04X" % fh["Machine"]
         out.append("; machine=%s  sections=%d  symbols=%d  time=0x%08X  size=%d bytes"
                    % (arch, fh["NumberOfSections"], fh["NumberOfSymbols"],
                       fh["TimeDateStamp"], size))
