@@ -1,7 +1,6 @@
 from pathlib import Path
 import importlib.util
 import os
-
 from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext
 
@@ -25,12 +24,8 @@ class BuildExt(build_ext):
             obj_dir.mkdir(parents=True, exist_ok=True)
             obj = obj_dir / "x86_64_abi_shim.obj"
 
-            print(f"shim: reassembling {shim_hex.name} -> {obj.name}")
-
             if mod.reassemble(str(shim_hex), str(obj)) != 0:
-                raise RuntimeError(
-                    f"Failed to reassemble {obj.name} from {shim_hex.name}"
-                )
+                raise RuntimeError(f"Failed to reassemble {obj.name} from {shim_hex.name}")
 
             ext.extra_objects = [*(ext.extra_objects or []), str(obj)]
 
