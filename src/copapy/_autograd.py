@@ -74,6 +74,9 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
                 add_grad(a, b * g)
                 add_grad(b, a * g)
 
+            elif opn == 'square':
+                add_grad(a, 2 * a * g)
+
             elif opn == 'div':
                 add_grad(a, g / b)
                 add_grad(b, -a * g / (b**2))

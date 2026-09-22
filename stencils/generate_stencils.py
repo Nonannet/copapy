@@ -295,6 +295,9 @@ if __name__ == "__main__":
     for t in types:
         code += get_neg(t)
 
+    for t in types:
+        code += get_custom_stencil(f"square_{t}({t} arg1)", f"result_{t}(arg1 * arg1);")
+
     fnames = ['sqrt', 'exp', 'log', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan']
     for fn, t1 in permutate(fnames, types):
         code += get_math_func1(fn + 'f', t1, fn)

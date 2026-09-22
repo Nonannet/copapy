@@ -343,7 +343,7 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
     data_list: list[bytes] = []
     patch_list: list[patch_entry] = []
 
-    ordered_ops = list(stable_toposort(get_all_dag_edges(node_list)))
+    ordered_ops = stable_toposort(get_all_dag_edges(node_list))
     const_net_list = get_const_nets(ordered_ops)
     output_ops = list(add_load_ops(ordered_ops))
     extended_output_ops = list(add_store_ops(output_ops, const_net_list))
