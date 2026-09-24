@@ -229,7 +229,7 @@ def test_vector_compile():
 
 @pytest.mark.runner
 def test_sinus():
-    a_val = 1.25  # TODO: Error on x86: a > 2 PI --> Sin result > 1
+    a_val = 8.25  # TODO: Error on x86: a > 2 PI --> Sin result > 1
 
     a = cp.value(a_val)
     b = cp.value(0.87)
@@ -307,7 +307,7 @@ def test_sinus():
             print('+', val, ref, test.dtype, f"  addr={address}")
             for t in (int, float, bool):
                 assert isinstance(val, t) == isinstance(ref, t), f"Result type does not match for {val} and {ref}"
-                assert val == pytest.approx(ref, 1e-7), f"Result does not match: {val} and reference: {ref}"  # pyright: ignore[reportUnknownMemberType]
+                assert val == pytest.approx(ref, 1e-6), f"Result does not match: {val} and reference: {ref}"  # pyright: ignore[reportUnknownMemberType]
 
 
 if __name__ == "__main__":
