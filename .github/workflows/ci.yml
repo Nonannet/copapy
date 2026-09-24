@@ -147,11 +147,12 @@ jobs:
       run: |
         docker run --rm -v $PWD:/app -w /app ghcr.io/nonannet/x86_test:1 \
         bash -lc "set -x && \
-                  pip install .[mindev] && \
+                  /opt/venv/bin/pip install .[mindev] && \
                   mkdir -p build/runner && \
                   gcc -m32 -O3 -static -DENABLE_LOGGING -o build/runner/coparun src/coparun/runmem.c \
                   src/coparun/coparun.c src/coparun/mem_man.c && \
-                  pytest"
+                  cp build/runner/coparun build/runner/coparun-x86 && \
+                  /opt/venv/bin/pytest"
 
     - uses: actions/upload-artifact@v7
       with:
