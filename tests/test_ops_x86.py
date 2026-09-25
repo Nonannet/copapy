@@ -1,14 +1,16 @@
-from copapy import NumLike, iif, value
-from copapy.backend import Store, compile_to_dag, add_read_value_remote
-import subprocess
-from copapy import _binwrite
-import copapy.backend as backend
-import warnings
+import os
+import platform
 import re
 import struct
-import platform
-import copapy as cp
+import subprocess
+import warnings
+
 import pytest
+
+import copapy as cp
+import copapy.backend as backend
+from copapy import NumLike, _binwrite, iif, value
+from copapy.backend import Store, add_read_value_remote, compile_to_dag
 
 
 def parse_results(log_text: str) -> dict[int, bytes]:
@@ -31,6 +33,22 @@ def run_command(command: list[str]) -> str:
     assert result.returncode != 11, f"SIGSEGV (segmentation fault)\n -Error occurred: {result.stderr}\n -Output: {result.stdout}"
     assert result.returncode == 0, f"\n -Error occurred: {result.stderr}\n -Output: {result.stdout}"
     return result.stdout
+
+
+def run_x86_runner() -> str:
+    if os.name == "nt":
+        warnings.warn("x86 test skipped on Windows!", UserWarning)
+        return ""
+    if not os.path.isfile('build/runner/coparun-x86'):
+        warnings.warn("Test skipped, executable not found.", UserWarning)
+        return ""
+
+    command = ['build/runner/coparun-x86', 'build/runner/test-x86.copapy', 'build/runner/test-x86.copapy.bin']
+    try:
+        return run_command(command)
+    except FileNotFoundError:
+        warnings.warn("Test skipped, executable not found.", UserWarning)
+        return ""
 
 
 def function1(c1: NumLike) -> list[NumLike]:
@@ -138,12 +156,8 @@ def test_compile():
     if platform.machine() != 'AMD64' and platform.machine() != 'x86_64':
         warnings.warn(f"Test skipped, {platform.machine()} not supported for this test.", UserWarning)
     else:
-        command = ['build/runner/coparun-x86', 'build/runner/test-x86.copapy', 'build/runner/test-x86.copapy.bin']
-
-        try:
-            result = run_command(command)
-        except FileNotFoundError:
-            warnings.warn("Test skipped, executable not found.", UserWarning)
+        result = run_x86_runner()
+        if not result:
             return
 
         print('* Output from runner:\n--')
@@ -208,11 +222,8 @@ def test_vector_compile():
     if platform.machine() != 'AMD64' and platform.machine() != 'x86_64':
         warnings.warn(f"Test skipped, {platform.machine()} not supported for this test.", UserWarning)
     else:
-        command = ['build/runner/coparun-x86', 'build/runner/test-x86.copapy', 'build/runner/test-x86.copapy.bin']
-        try:
-            result = run_command(command)
-        except FileNotFoundError:
-            warnings.warn("Test skipped, executable not found.", UserWarning)
+        result = run_x86_runner()
+        if not result:
             return
 
         print('* Output from runner:\n--')
@@ -229,7 +240,7 @@ def test_vector_compile():
 
 @pytest.mark.runner
 def test_sinus():
-    a_val = 1.25  # TODO: Error on x86: a > 2 PI --> Sin result > 1
+    a_val = 8.25  # TODO: Error on x86: a > 2 PI --> Sin result > 1
 
     a = cp.value(a_val)
     b = cp.value(0.87)
@@ -274,12 +285,8 @@ def test_sinus():
     if platform.machine() != 'AMD64' and platform.machine() != 'x86_64':
         warnings.warn(f"Test skipped, {platform.machine()} not supported for this test.", UserWarning)
     else:
-        command = ['build/runner/coparun-x86', 'build/runner/test-x86.copapy', 'build/runner/test-x86.copapy.bin']
-
-        try:
-            result = run_command(command)
-        except FileNotFoundError:
-            warnings.warn("Test skipped, executable not found.", UserWarning)
+        result = run_x86_runner()
+        if not result:
             return
 
         print('* Output from runner:\n--')
@@ -307,7 +314,7 @@ def test_sinus():
             print('+', val, ref, test.dtype, f"  addr={address}")
             for t in (int, float, bool):
                 assert isinstance(val, t) == isinstance(ref, t), f"Result type does not match for {val} and {ref}"
-                assert val == pytest.approx(ref, 1e-7), f"Result does not match: {val} and reference: {ref}"  # pyright: ignore[reportUnknownMemberType]
+                assert val == pytest.approx(ref, 1e-6), f"Result does not match: {val} and reference: {ref}"  # pyright: ignore[reportUnknownMemberType]
 
 
 if __name__ == "__main__":

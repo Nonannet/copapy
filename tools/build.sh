@@ -4,10 +4,10 @@ set -eu
 ARCH=${1:-x86_64}
 
 case "$ARCH" in
-    (x86_64|arm64|arm-v6|arm-v7|arm-v7-thumb|arm-v7m-thumb|all)
+    (x86_64|x86|arm64|arm-v6|arm-v7|arm-v7-thumb|arm-v7m-thumb|all)
         ;;
     (*)
-        echo "Usage: $0 [x86_64|arm64|arm-v6|arm-v7|arm-v6-thumb|arm-v7m-thumb|all]"
+        echo "Usage: $0 [x86_64|x86|arm64|arm-v6|arm-v7|arm-v7-thumb|arm-v7m-thumb|all]"
         exit 1
         ;;
 esac
@@ -40,6 +40,47 @@ if [[ "$ARCH" == "x86_64" || "$ARCH" == "all" ]]; then
         src/coparun/coparun.c \
         src/coparun/mem_man.c \
         -o build/runner/coparun
+fi
+
+#######################################
+# x86 32-bit
+#######################################
+if [[ "$ARCH" == "x86" || "$ARCH" == "all" ]]; then
+    echo "--------------x86 32 bit----------------"
+
+    if command -v i686-linux-gnu-gcc >/dev/null 2>&1; then
+        X86_CC=i686-linux-gnu-gcc
+        X86_LD=i686-linux-gnu-ld
+        X86_OBJDUMP=i686-linux-gnu-objdump
+        X86_EXTRA_FLAGS=""
+        X86_LD_FLAGS=""
+    elif gcc -m32 -x c -o /tmp/copapy_x86_probe - <<'EOF' >/dev/null 2>&1
+int main(void) { return 0; }
+EOF
+    then
+        X86_CC=gcc
+        X86_LD=ld
+        X86_OBJDUMP=objdump
+        X86_EXTRA_FLAGS="-m32"
+        X86_LD_FLAGS="-m elf_i386"
+    else
+        echo "x86 32-bit toolchain not available: install gcc-multilib or i686-linux-gnu-gcc" >&2
+        exit 1
+    fi
+
+    "$X86_CC" $X86_EXTRA_FLAGS -fno-pic -ffunction-sections \
+        -c $SRC -O3 -o build/stencils/stencils.o
+    "$X86_LD" $X86_LD_FLAGS -r build/stencils/stencils.o \
+        build/musl/musl_objects_x86.o \
+        -o $DEST/stencils_x86_O3.o
+    "$X86_OBJDUMP" -d -x $DEST/stencils_x86_O3.o \
+        > build/stencils/stencils_x86_O3.asm
+
+    "$X86_CC" $X86_EXTRA_FLAGS -static -O3 -DENABLE_LOGGING \
+        src/coparun/runmem.c \
+        src/coparun/coparun.c \
+        src/coparun/mem_man.c \
+        -o build/runner/coparun-x86
 fi
 
 #######################################

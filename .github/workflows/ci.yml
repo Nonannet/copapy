@@ -134,6 +134,31 @@ jobs:
         name: runner-linux-x86_64
         path: build/runner/*
 
+  build-ubuntu32:
+    needs: [build_stencils]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+    - uses: actions/download-artifact@v8
+      with:
+        name: stencil-object-files
+        path: src/copapy/obj
+    - name: Build and test 32-bit
+      run: |
+        docker run --rm -v $PWD:/app -w /app ghcr.io/nonannet/x86_test:1 \
+        bash -lc "set -x && \
+                  /opt/venv/bin/pip install .[mindev] && \
+                  mkdir -p build/runner && \
+                  gcc -m32 -O3 -static -DENABLE_LOGGING -o build/runner/coparun src/coparun/runmem.c \
+                  src/coparun/coparun.c src/coparun/mem_man.c && \
+                  cp build/runner/coparun build/runner/coparun-x86 && \
+                  /opt/venv/bin/pytest"
+
+    - uses: actions/upload-artifact@v7
+      with:
+        name: runner-linux-x86
+        path: build/runner/*
+
   build-arm64:
     needs: [build_stencils]
     runs-on: ubuntu-latest
@@ -332,10 +357,8 @@ jobs:
       run: |
         mkdir build\runner
         call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=amd64
-        ml64 /c /Fobuild\runner\x86_64_abi_shim.obj src\coparun\x86_64_abi_shim.asm
+        python tools\hexdump_annotated.py -r src\coparun\x86_64_abi_shim.hex build\runner\x86_64_abi_shim.obj
         cl /DENABLE_BASIC_LOGGING /O2 src\coparun\runmem.c src\coparun\coparun.c src\coparun\mem_man.c build\runner\x86_64_abi_shim.obj /Fe:build\runner\coparun.exe
-        call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x86
-        cl /DENABLE_BASIC_LOGGING /O2 src\coparun\runmem.c src\coparun\coparun.c src\coparun\mem_man.c /Fe:build\runner\coparun-x86.exe
 
     - name: Run tests with pytest
       run: pytest
@@ -347,7 +370,7 @@ jobs:
         path: build/runner/*
 
   release-stencils:
-    needs: [build_stencils, build-ubuntu, build-windows, build-arm64, build-armv6, build-armv7, build-armv7thumb, build-armv7mthumb]
+    needs: [build_stencils, build-ubuntu, build-ubuntu32, build-windows, build-arm64, build-armv6, build-armv7, build-armv7thumb, build-armv7mthumb]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
@@ -377,6 +400,7 @@ jobs:
           cp tmp/musl-object-files/*.o release/
           cp tmp/musl-object-files/COPYRIGHT release/MUSL-COPYRIGHT.txt
           cp tmp/runner-linux-x86_64/coparun release/
+          cp tmp/runner-linux-x86/coparun release/coparun-x86
           cp tmp/runner-linux-arm64/coparun release/coparun-aarch64
           cp tmp/runner-linux-armv6/coparun release/coparun-armv6
           cp tmp/runner-linux-armv7/coparun release/coparun-armv7

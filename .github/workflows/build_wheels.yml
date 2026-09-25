@@ -78,7 +78,7 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.3.0
         env:
-          CIBW_ARCHS_LINUX: "x86_64 aarch64 armv7l"  # i686
+          CIBW_ARCHS_LINUX: "x86_64 aarch64 armv7l i686"
           CIBW_ARCHS_MACOS: "x86_64 universal2"
           CIBW_ARCHS_WINDOWS: "AMD64"  # x86
           CIBW_TEST_REQUIRES: "pytest"

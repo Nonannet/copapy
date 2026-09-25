@@ -191,6 +191,8 @@ class value(Generic[TNum]):
                 return self
             elif other == 0:
                 return 0
+        if self is other:
+            return add_op('square', [self])
         return add_op('mul', [self, other], True)
 
     @overload

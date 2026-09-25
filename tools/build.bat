@@ -34,8 +34,8 @@ call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliar
 echo - Compile stencil test...
 cl /Zi /Od stencils\test.c /Fe:build\stencils\test.exe
 
-echo - Build entry wrapper...
-ml64 /c /Fobuild\runner\x86_64_abi_shim.obj src\coparun\x86_64_abi_shim.asm
+echo - Build entry wrapper (reassemble from committed hex)...
+python tools\hexdump_annotated.py -r src\coparun\x86_64_abi_shim.hex build\runner\x86_64_abi_shim.obj
 
 echo - Compile and link runner...
 cl /Zi /O2 /DENABLE_LOGGING /Fobuild\runner\ ^
@@ -64,12 +64,12 @@ echo ---------------x86 - 32 bit----------------
 
 call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x86
 
-echo - Build runner for Windows 32 bit...
-cl /Zi /Od /DENABLE_LOGGING ^
-    src\coparun\runmem.c ^
-    src\coparun\coparun.c ^
-    src\coparun\mem_man.c ^
-    /Fe:build\runner\coparun-x86.exe
+REM echo - Build runner for Windows 32 bit...
+REM cl /Zi /Od /DENABLE_LOGGING ^
+REM     src\coparun\runmem.c ^
+REM     src\coparun\coparun.c ^
+REM     src\coparun\mem_man.c ^
+REM     /Fe:build\runner\coparun-x86.exe
 
 echo - Build runner for Linux x86 32 bit...
 wsl i686-linux-gnu-gcc-12 -static -O3 -DENABLE_LOGGING ^
