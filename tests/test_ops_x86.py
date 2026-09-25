@@ -43,7 +43,7 @@ def run_x86_runner() -> str:
         warnings.warn("Test skipped, executable not found.", UserWarning)
         return ""
 
-    command = runner_command + ['build/runner/coparun-x86', 'build/runner/test-x86.copapy', 'build/runner/test-x86.copapy.bin']
+    command = ['build/runner/coparun-x86', 'build/runner/test-x86.copapy', 'build/runner/test-x86.copapy.bin']
     try:
         return run_command(command)
     except FileNotFoundError:
