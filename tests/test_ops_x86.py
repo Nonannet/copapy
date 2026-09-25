@@ -12,11 +12,6 @@ import copapy.backend as backend
 from copapy import NumLike, _binwrite, iif, value
 from copapy.backend import Store, add_read_value_remote, compile_to_dag
 
-if os.name == "nt":
-    runner_command = ["wsl"]
-else:
-    runner_command = []
-
 
 def parse_results(log_text: str) -> dict[int, bytes]:
     regex = r"^READ_DATA offs=(\d*) size=(\d*) data=(.*)$"
@@ -40,18 +35,9 @@ def run_command(command: list[str]) -> str:
     return result.stdout
 
 
-def check_for_wsl() -> bool:
-    command = ["wsl", "--status"]
-    try:
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
-    except Exception:
-        return False
-    return result.returncode == 0
-
-
 def run_x86_runner() -> str:
-    if os.name == "nt" and not check_for_wsl():
-        warnings.warn("WSL not found, x86 test skipped!", UserWarning)
+    if os.name == "nt":
+        warnings.warn("x86 test skipped on Windows!", UserWarning)
         return ""
     if not os.path.isfile('build/runner/coparun-x86'):
         warnings.warn("Test skipped, executable not found.", UserWarning)
