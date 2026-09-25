@@ -66,7 +66,7 @@ Note that `cp.jit` is not currently highly optimized for data transfer between P
 
 ## Install
 
-To install Copapy, you can use pip. Precompiled wheels are available for Linux (x86_64, AArch64, ARMv7), Windows (x86_64) and macOS (x86_64, AArch64):
+To install Copapy, you can use pip. Precompiled wheels are available for Linux (x86_64, AArch64, ARMv7, i686), Windows (x86_64) and macOS (x86_64, AArch64):
 
 ```bash
 pip install copapy
@@ -291,4 +291,4 @@ This project is licensed under the MIT license - see the [LICENSE](LICENSE) file
 
 [^2]: The compiler must support tail-call optimization (TCO). Currently, GCC is supported. Porting to a new architecture requires implementing a subset of relocation types used by that architecture.
 
-[^3]: Supported architectures: x86_64, AArch64, ARMv6/7 (non-Thumb) and ARMv7 Thumb for Cortex-A and Cortex-M. Code for x86 32-bit exists but has unresolved issues and a low priority.
+[^3]: Supported architectures: x86_64, x86 (32 Bit), AArch64, ARMv6/7 (non-Thumb) and ARMv7 Thumb for Cortex-A and Cortex-M.
