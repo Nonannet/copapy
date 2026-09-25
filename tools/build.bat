@@ -64,12 +64,12 @@ echo ---------------x86 - 32 bit----------------
 
 call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x86
 
-echo - Build runner for Windows 32 bit...
-cl /Zi /Od /DENABLE_LOGGING ^
-    src\coparun\runmem.c ^
-    src\coparun\coparun.c ^
-    src\coparun\mem_man.c ^
-    /Fe:build\runner\coparun-x86.exe
+REM echo - Build runner for Windows 32 bit...
+REM cl /Zi /Od /DENABLE_LOGGING ^
+REM     src\coparun\runmem.c ^
+REM     src\coparun\coparun.c ^
+REM     src\coparun\mem_man.c ^
+REM     /Fe:build\runner\coparun-x86.exe
 
 echo - Build runner for Linux x86 32 bit...
 wsl i686-linux-gnu-gcc-12 -static -O3 -DENABLE_LOGGING ^
