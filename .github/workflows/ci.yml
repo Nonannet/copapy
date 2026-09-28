@@ -152,7 +152,8 @@ jobs:
                   gcc -m32 -O3 -static -DENABLE_LOGGING -o build/runner/coparun src/coparun/runmem.c \
                   src/coparun/coparun.c src/coparun/mem_man.c && \
                   cp build/runner/coparun build/runner/coparun-x86 && \
-                  /opt/venv/bin/pytest"
+                  /opt/venv/bin/pytest && \
+                  bash tools/create_asm.sh"
 
     - uses: actions/upload-artifact@v7
       with:
@@ -420,7 +421,7 @@ jobs:
           fi
 
   build-docs:
-    needs: [build_stencils, build-ubuntu, build-windows, build-arm64, build-armv6, build-armv7, build-armv7thumb, build-armv7mthumb]
+    needs: [build_stencils, build-ubuntu, build-ubuntu32, build-windows, build-arm64, build-armv6, build-armv7, build-armv7thumb, build-armv7mthumb]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
