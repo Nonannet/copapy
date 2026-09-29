@@ -14,7 +14,9 @@ from copapy.backend import Store, add_read_value_remote, compile_to_dag
 if os.name == "nt":
     # On Windows wsl and qemu-user is required:
     # sudo apt install qemu-user
-    qemu_command = ["wsl", "qemu-arm"]
+    # On WSL1 qemu-arm can not reserve the low 4 GiB guest address
+    # space, the guest base must be placed above it with -B
+    qemu_command = ["wsl", "qemu-arm", "-B", "0x100000000"]
 else:
     qemu_command = ["qemu-arm"]
 
@@ -176,9 +178,6 @@ def test_compile():
 
     if not check_for_qemu():
         warnings.warn("qemu-armv7 not found, armv7 test skipped!", UserWarning)
-        return
-    if "wsl" in qemu_command:
-        warnings.warn("qemu-armv7 seams not work on wsl1, test skipped!", UserWarning)
         return
     if not os.path.isfile("build/runner/coparun-armv7"):
         warnings.warn("armv7 runner not found, armv7 test skipped!", UserWarning)

@@ -35,15 +35,35 @@ def run_command(command: list[str]) -> str:
     return result.stdout
 
 
+if os.name == "nt":
+    # On Windows wsl and qemu-user is required:
+    # sudo apt install qemu-user
+    # On WSL1 qemu-i386 can not reserve the low 4 GiB guest address
+    # space, the guest base must be placed above it with -B
+    qemu_command = ['wsl', 'qemu-i386', '-B', '0x100000000']
+else:
+    qemu_command = []
+
+
+def check_for_qemu() -> bool:
+    if not qemu_command:
+        return True
+    try:
+        result = subprocess.run(qemu_command + ['--version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    except Exception:
+        return False
+    return result.returncode == 0
+
+
 def run_x86_runner() -> str:
-    if os.name == "nt":
-        warnings.warn("x86 test skipped on Windows!", UserWarning)
+    if not check_for_qemu():
+        warnings.warn("qemu-i386 not found, x86 test skipped!", UserWarning)
         return ""
     if not os.path.isfile('build/runner/coparun-x86'):
         warnings.warn("Test skipped, executable not found.", UserWarning)
         return ""
 
-    command = ['build/runner/coparun-x86', 'build/runner/test-x86.copapy', 'build/runner/test-x86.copapy.bin']
+    command = qemu_command + ['build/runner/coparun-x86', 'build/runner/test-x86.copapy', 'build/runner/test-x86.copapy.bin']
     try:
         return run_command(command)
     except FileNotFoundError:

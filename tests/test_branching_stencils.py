@@ -2,8 +2,13 @@ from copapy import value
 from copapy.backend import Store, compile_to_dag, add_read_value_remote
 import copapy as cp
 import subprocess
+import os
 from copapy import _binwrite
 import pytest
+
+
+# Relative path with native separators, on Windows .exe is appended automatically
+runner_path = os.path.normpath('build/runner/coparun')
 
 
 def run_command(command: list[str]) -> str:
@@ -40,7 +45,7 @@ def test_compile():
 
     il.to_file('build/runner/test.copapy')
 
-    result = run_command(['build/runner/coparun', 'build/runner/test.copapy', 'build/runner/test.copapy.bin'])
+    result = run_command([runner_path, 'build/runner/test.copapy', 'build/runner/test.copapy.bin'])
     print('* Output from runner:\n--')
     print(result)
     print('--')
