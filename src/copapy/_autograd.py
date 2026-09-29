@@ -45,7 +45,7 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
     ordered_ops = cpb.stable_toposort(edges)
 
     net_lookup = {net.source: net for node in ordered_ops for net in node.args}
-    grad_dict: dict[Net, unifloat] = dict()
+    grad_dict: dict[Net, unifloat] = {}
 
     def add_grad(val: value[Any], gradient_value: unifloat) -> None:
         grad_dict[val.net] = grad_dict.get(val.net, 0.0) + gradient_value

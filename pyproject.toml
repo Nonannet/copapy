@@ -77,14 +77,6 @@ markers = [
     "runner: requires to have an compiled runner executable"]
 
 [tool.ruff]
-ignore = [
-    "E501",
-    "E226",
-    "E265",
-    "C901"
-]
-
-# Equivalent to Flake8's "exclude"
 exclude = [
     ".git",
     "__pycache__",
@@ -94,8 +86,15 @@ exclude = [
     ".venv",
 ]
 
+[tool.ruff.lint]
 # "D" for dockstrings
-lint.select = ["C", "E", "F", "W"]
+select = ["C", "E", "F", "W"]
+ignore = [
+    "E501",
+    "E226",
+    "E265",
+    "C901"
+]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["D", "E712"]

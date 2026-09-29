@@ -49,7 +49,7 @@ class Node:
         name (str): The name of the operation this Node represents.
     """
     def __init__(self) -> None:
-        self.args: tuple[Net, ...] = tuple()
+        self.args: tuple[Net, ...] = ()
         self.name: str = ''
         self.node_hash = 0
 
@@ -347,7 +347,7 @@ class CPConstant(Node):
             raise ValueError(f'Non supported data type: {type(value).__name__}')
 
         self.name = 'const_' + self.dtype
-        self.args = tuple()
+        self.args = ()
         self.node_hash = hash(value) ^ hash(self.dtype) if anonymous else id(self)
         self.anonymous = anonymous
 
@@ -436,7 +436,7 @@ class ArrayType(Generic[TNum]):
     def __init__(self, shape: tuple[int, ...]) -> None:
         self.shape = shape
         self.values: tuple[TNum | value[TNum], ...] = ()
-    
+
     def map(self, func: Callable[[TNum | value[TNum]], Any]) -> 'ArrayType[Any]':
         return self
 

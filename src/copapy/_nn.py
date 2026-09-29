@@ -1,5 +1,5 @@
 from . import vector
-from . import tensor 
+from . import tensor
 from . import value
 from typing import TypeVar, Any, overload
 import copapy as cp

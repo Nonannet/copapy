@@ -853,7 +853,7 @@ class tensor(ArrayType[TNum]):
 
 def zeros(shape: Sequence[int] | int) -> tensor[int]:
     """Create a zero tensor of given shape.
-    
+
     Arguments:
         shape: shape of the tensor to create.
 
@@ -871,7 +871,7 @@ def zeros(shape: Sequence[int] | int) -> tensor[int]:
 
 def ones(shape: Sequence[int] | int) -> tensor[int]:
     """Create a tensor of ones with given shape.
-    
+
     Arguments:
         shape: shape of the tensor to create.
 

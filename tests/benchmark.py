@@ -180,7 +180,6 @@ def plot_results(path: str):
 
     # Sort by v_size for plotting
     benchmarks = sorted(medians_by_benchmark.keys())
-    v_sizes_set = sorted(set(v for benchmark_data in medians_by_benchmark.values() for v in benchmark_data.keys()))
 
     # Create the plot
     plt.figure(figsize=(6, 4))

@@ -66,8 +66,8 @@ def get_all_dag_edges_between(roots: Iterable[Node], leaves: Iterable[Node]) -> 
         Tuples of (source_node, target_node) representing edges in the DAG
     """
     # Walk the full DAG starting from given roots to final leaves
-    parent_lookup: dict[Node, set[Node]] = dict()
-    node_list: list[Node] = [n for n in roots]
+    parent_lookup: dict[Node, set[Node]] = {}
+    node_list: list[Node] = list(roots)
     while(node_list):
         node = node_list.pop()
         for net in node.args:
