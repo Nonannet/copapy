@@ -1,95 +1,12 @@
-from copapy import NumLike
-from copapy.backend import Store, compile_to_dag, add_read_value_remote
-import subprocess
-from copapy import _binwrite
-import copapy.backend as backend
-import copapy as cp
-import os
-import warnings
 import pytest
 
-if os.name == 'nt':
-    # On Windows wsl and qemu-user is required:
-    # sudo apt install qemu-user
-    qemu_command = ['wsl', 'qemu-aarch64']
-else:
-    qemu_command = ['qemu-aarch64']
-
-
-def run_command(command: list[str]) -> str:
-    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf8', check=False)
-    assert result.returncode != 11, f"SIGSEGV (segmentation fault)\n -Error occurred: {result.stderr}\n -Output: {result.stdout}"
-    assert result.returncode == 0, f"\n -Error occurred: {result.stderr}\n -Output: {result.stdout}"
-    return result.stdout
-
-
-def check_for_qemu() -> bool:
-    command = qemu_command + ['--version']
-    try:
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
-    except Exception:
-        return False
-    return result.returncode == 0
-
-
-def function(c1: NumLike, c2: NumLike) -> tuple[NumLike, ...]:
-    i1 = c1 // 3.3 + 5
-    i2 = c2 * 5 + c1
-    r1 = i1 + i2 * 55 / 4
-    r2 = 4 * i2 + 5
-
-    return i1, i2, r1, r2
+from runner_helpers import qemu_command, run_vector_test
 
 
 @pytest.mark.runner
-def test_compile():
-    t1 = cp.vector([10, 11, 12]) + cp.vector(cp.value(v) for v in range(3))
-    t2 = t1.sum()
-
-    t3 = cp.vector(cp.value(1 / (v + 1)) for v in range(3))
-    t4 = ((t3 * t1) * 2).sum()
-    t5 = ((t3 * t1) * 2).magnitude()
-
-    ret = (t2, t4, t5)
-
-    out = [Store(r) for r in ret]
-
-    sdb = backend.stencil_db_from_package('arm64')
-    il, variables = compile_to_dag(out, sdb)
-
-    # run program command
-    il.write_com(_binwrite.Command.RUN_PROG)
-
-    for v in ret:
-        assert isinstance(v, cp.value)
-        add_read_value_remote(il, variables, v.net)
-
-    il.write_com(_binwrite.Command.END_COM)
-
-    #print('* Data to runner:')
-    #il.print()
-
-    il.to_file('build/runner/test-arm64.copapy')
-
-    if not check_for_qemu():
-        warnings.warn("qemu-aarch64 not found, aarch64 test skipped!", UserWarning)
-    elif not os.path.isfile('build/runner/coparun-aarch64'):
-        warnings.warn("aarch64 runner not found, aarch64 test skipped!", UserWarning)
-    else:
-        command = ['build/runner/coparun-aarch64', 'build/runner/test-arm64.copapy']
-        result = run_command(qemu_command + command)
-        print('* Output from runner:\n--')
-        print(result)
-        print('--')
-
-        assert 'Return value: 1' in result
-
-        # Compare to x86_64 reference results
-        assert " size=4 data=24 00 00 00" in result
-        assert " size=4 data=56 55 25 42" in result
-        assert " size=4 data=B4 F9 C8 41" in result
+def test_compile() -> None:
+    run_vector_test('arm64', 'build/runner/coparun-aarch64', qemu_command('qemu-aarch64'))
 
 
 if __name__ == "__main__":
-    #test_example()
     test_compile()

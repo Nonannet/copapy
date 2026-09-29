@@ -1,59 +1,20 @@
-from copapy import value
-from copapy.backend import Store, compile_to_dag, add_read_value_remote
-import copapy as cp
-import subprocess
-import os
-from copapy import _binwrite
 import pytest
 
-
-# Relative path with native separators, on Windows .exe is appended automatically
-runner_path = os.path.normpath('build/runner/coparun')
-
-
-def run_command(command: list[str]) -> str:
-    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf8', check=False)
-    assert result.returncode != 11, f"SIGSEGV (segmentation fault)\n -Error occurred: {result.stderr}\n -Output: {result.stdout}"
-    assert result.returncode == 0, f"\n -Error occurred: {result.stderr}\n -Output: {result.stdout}\n -Return code: {result.returncode}"
-    return result.stdout
+import copapy as cp
+from copapy import value
+from runner_helpers import NATIVE_RUNNER, run_program, write_program
 
 
 @pytest.mark.runner
-def test_compile():
-
+def test_compile() -> None:
     test_vals = [0.0, -1.5, -2.0, -2.5, -3.0]
 
     # Function with no passing-on-jump as last instruction:
-    ret_test = [r for v in test_vals for r in (cp.tan(value(v)),)]
+    ret = [cp.tan(value(v)) for v in test_vals]
 
-    out = [Store(r) for r in ret_test]
-
-    il, variables = compile_to_dag(out, cp.generic_sdb)
-
-    # run program command
-    il.write_com(_binwrite.Command.RUN_PROG)
-    #il.write_com(_binwrite.Command.DUMP_CODE)
-
-    for v in ret_test:
-        assert isinstance(v, value)
-        add_read_value_remote(il, variables, v.net)
-
-    il.write_com(_binwrite.Command.END_COM)
-
-    print('* Data to runner:')
-    #il.print()
-
-    il.to_file('build/runner/test.copapy')
-
-    result = run_command([runner_path, 'build/runner/test.copapy', 'build/runner/test.copapy.bin'])
-    print('* Output from runner:\n--')
-    print(result)
-    print('--')
-
-    assert 'Return value: 1' in result, 'No Return value: 1'
-    #assert 'END_COM' in result
+    write_program(ret, cp.generic_sdb, 'build/runner/test.copapy')
+    run_program(NATIVE_RUNNER, 'build/runner/test.copapy')
 
 
 if __name__ == "__main__":
-    #test_example()
     test_compile()

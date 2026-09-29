@@ -1,61 +1,17 @@
-from copapy import value, NumLike
-from copapy.backend import Store, compile_to_dag, add_read_value_remote
-import copapy as cp
-import subprocess
-import os
-from copapy import _binwrite
 import pytest
 
-
-# Relative path with native separators, on Windows .exe is appended automatically
-runner_path = os.path.normpath('build/runner/coparun')
-
-
-def run_command(command: list[str], encoding: str = 'utf8') -> str:
-    process = subprocess.Popen(command, stdout=subprocess.PIPE)
-    output, error = process.communicate()
-
-    assert error is None, f"Error occurred: {error.decode(encoding)}"
-    return output.decode(encoding)
-
-
-def function(c1: NumLike) -> list[NumLike]:
-    r1 = c1 / 2
-    return [r1]
+import copapy as cp
+from copapy import value
+from runner_helpers import NATIVE_RUNNER, run_program, write_program
 
 
 @pytest.mark.runner
-def test_compile():
+def test_compile() -> None:
+    ret = [value(16) / 2]
 
-    c1 = value(16)
-
-    ret = function(c1)
-
-    out = [Store(r) for r in ret]
-
-    il, vars = compile_to_dag(out, cp.generic_sdb)
-
-    # run program command
-    il.write_com(_binwrite.Command.RUN_PROG)
-
-    for v in ret:
-        assert isinstance(v, value)
-        add_read_value_remote(il, vars, v.net)
-
-    il.write_com(_binwrite.Command.END_COM)
-
-    #print('* Data to runner:')
-    #il.print()
-
-    il.to_file('build/runner/test.copapy')
-
-    result = run_command([runner_path, 'build/runner/test.copapy'])
-    print('* Output from runner:')
-    print(result)
-
-    assert 'Return value: 1' in result
+    write_program(ret, cp.generic_sdb, 'build/runner/test.copapy')
+    run_program(NATIVE_RUNNER, 'build/runner/test.copapy')
 
 
 if __name__ == "__main__":
-    #test_example()
     test_compile()
