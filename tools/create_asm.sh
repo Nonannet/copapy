@@ -3,15 +3,18 @@
 set -e
 set -v
 
+RUNNER="${RUNNER:-build/runner/coparun}"
+OBJDUMP="${OBJDUMP:-objdump}"
+
 mkdir -p build/runner
 
 cparch=$(python3 -c "import copapy; print(copapy._stencils.detect_process_arch())")
 
 # Disassemble stencil object file
-objdump -d -x src/copapy/obj/stencils_${cparch}_O3.o > build/runner/stencils.asm
+$OBJDUMP -d -x src/copapy/obj/stencils_${cparch}_O3.o > build/runner/stencils.asm
 
 python3 tools/make_example.py
-build/runner/coparun build/runner/test.copapy build/runner/test.copapy.bin
+$RUNNER build/runner/test.copapy build/runner/test.copapy.bin
 
 if [ "$cparch" = 'x86_64' ]; then
 	cparch="i386:x86-64"
@@ -32,9 +35,9 @@ fi
 echo "Archtitecture: '$cparch'"
 
 if [[ "$cparch" == *"thumb"* ]]; then
-	objdump -D -b binary -marm -M force-thumb --adjust-vma=0x10000 build/runner/test.copapy.bin > build/runner/example.asm
+	$OBJDUMP -D -b binary -marm -M force-thumb --adjust-vma=0x10000 build/runner/test.copapy.bin > build/runner/example.asm
 else
-	objdump -D -b binary -m $cparch --adjust-vma=0x10000 build/runner/test.copapy.bin > build/runner/example.asm
+	$OBJDUMP -D -b binary -m $cparch --adjust-vma=0x10000 build/runner/test.copapy.bin > build/runner/example.asm
 fi
 
 rm build/runner/test.copapy.bin
