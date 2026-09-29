@@ -371,9 +371,11 @@ jobs:
         name: stencil-object-files
         path: src/copapy/obj
     - name: Build RISC-V 32 runner
+      # No login shell (bash -l): /etc/profile would reset the PATH of the image,
+      # which contains the RISC-V 32 toolchain
       run: |
         docker run --rm -v $PWD:/app -w /app ghcr.io/nonannet/cross_compiler_unix:3 \
-        bash -lc "set -x && \
+        bash -c "set -x && \
                   mkdir -p build/runner && \
                   riscv32-unknown-linux-musl-gcc -static \
                   -Wall -Wextra -Wconversion -Wsign-conversion \
