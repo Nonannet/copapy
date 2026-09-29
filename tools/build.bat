@@ -11,8 +11,9 @@ if not "%ARCH%"=="arm-v6" ^
 if not "%ARCH%"=="arm-v7" ^
 if not "%ARCH%"=="riscv32" ^
 if not "%ARCH%"=="riscv64" ^
+if not "%ARCH%"=="tricore" ^
 if not "%ARCH%"=="all" (
-    echo Usage: %0 [x86_64^|x86^|arm64^|arm-v6^|arm-v7^|riscv32^|riscv64^|all]
+    echo Usage: %0 [x86_64^|x86^|arm64^|arm-v6^|arm-v7^|riscv32^|riscv64^|tricore^|all]
     exit /b 1
 )
 
@@ -190,7 +191,7 @@ REM RISC-V 32-bit
 REM ============================================================
 if "%ARCH%"=="riscv32" goto BUILD_RISCV32
 if "%ARCH%"=="all"     goto BUILD_RISCV32
-goto END
+goto SKIP_RISCV32
 
 :BUILD_RISCV32
 echo -----------riscv32 32 bit-------------
@@ -207,6 +208,19 @@ wsl build/riscv_gcc/riscv/bin/riscv32-unknown-linux-musl-gcc -static -O3 -DENABL
     src/coparun/coparun.c ^
     src/coparun/mem_man.c ^
     -o build/runner/coparun-riscv32
+
+:SKIP_RISCV32
+
+REM ============================================================
+REM TriCore
+REM ============================================================
+if "%ARCH%"=="tricore" goto BUILD_TRICORE
+if "%ARCH%"=="all"     goto BUILD_TRICORE
+goto END
+
+:BUILD_TRICORE
+REM Stencils and bare metal runner for qemu-system-tricore, toolchain in /opt/tricore in WSL
+wsl bash tools/tricore/build.sh all
 
 :END
 echo Build completed for %ARCH%

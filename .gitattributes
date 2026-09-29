@@ -1,0 +1,2 @@
+# Shell scripts are also executed in WSL from a Windows checkout
+*.sh text eol=lf

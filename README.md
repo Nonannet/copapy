@@ -17,7 +17,7 @@ The main features can be summarized as:
 - Memory and type safety with a minimal set of runtime errors
 - Deterministic execution
 - Automatic differentiation for efficient realtime optimization (reverse-mode)
-- Optimized machine code for x86_64, ARM32 (Cortex-A and Cortex-M), ARM64 and RISC-V (32 and 64 Bit)
+- Optimized machine code for x86_64, ARM32 (Cortex-A and Cortex-M), ARM64, RISC-V (32 and 64 Bit) and TriCore (AURIX)
 - Highly portable to new architectures
 - Small Python package with minimal dependencies and no cross-compile toolchain required
 
@@ -302,4 +302,4 @@ This project is licensed under the MIT license - see the [LICENSE](LICENSE) file
 
 [^2]: The compiler must support tail-call optimization (TCO). Currently, GCC is supported. Porting to a new architecture requires implementing a subset of relocation types used by that architecture.
 
-[^3]: Supported architectures: x86_64, x86 (32 Bit), AArch64, ARMv6/7 (non-Thumb), ARMv7 Thumb for Cortex-A and Cortex-M (M4 and M7), ARMv8.1-M Thumb with Helium (Cortex-M55 and M85) and RISC-V (RV32/RV64 with hardware floating point).
+[^3]: Supported architectures: x86_64, x86 (32 Bit), AArch64, ARMv6/7 (non-Thumb), ARMv7 Thumb for Cortex-A and Cortex-M (M4 and M7), ARMv8.1-M Thumb with Helium (Cortex-M55 and M85), RISC-V (RV32/RV64 with hardware floating point) and TriCore 1.6.1 (AURIX TC2xx).

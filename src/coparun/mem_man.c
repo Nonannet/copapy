@@ -59,6 +59,42 @@ void deallocate_memory(uint8_t *memory, uint32_t memory_len) {
     }
 }
 
+#elif defined(COPARUN_BARE_METAL)
+
+/* Bare metal implementations: code and data memory are taken from the heap,
+ * there is no memory protection */
+
+uint8_t *allocate_executable_memory(uint32_t num_bytes) {
+    uint8_t *mem = (uint8_t*)malloc((size_t)num_bytes);
+    if (mem == NULL) {
+        fprintf(stderr, "malloc failed (executable)\n");
+    }
+    return mem;
+}
+
+uint8_t *allocate_data_memory(uint32_t num_bytes) {
+    uint8_t *mem = (uint8_t*)malloc((size_t)num_bytes);
+    if (mem == NULL) {
+        fprintf(stderr, "malloc failed (data)\n");
+    }
+    return mem;
+}
+
+uint8_t *allocate_buffer_memory(uint32_t num_bytes) {
+    return (uint8_t*)malloc((size_t)num_bytes);
+}
+
+int mark_mem_executable(uint8_t *memory, uint32_t memory_len) {
+    (void)memory;
+    (void)memory_len;
+    return 1;
+}
+
+void deallocate_memory(uint8_t *memory, uint32_t memory_len) {
+    (void)memory_len;
+    free(memory);
+}
+
 #else
 
 #include <sys/mman.h>

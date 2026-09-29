@@ -1,6 +1,6 @@
 from typing import Generator, Iterable, Any
 from . import _binwrite as binw
-from ._stencils import stencil_database, patch_entry
+from ._stencils import stencil_database, patch_entry, TRICORE_BRANCH_RELOCATIONS
 from collections import defaultdict
 import heapq
 from ._basic_types import Net, Node, Store, HeadNode, Constant, Op, transl_type, ArrayNet, ArrayConst, ArrayOp, ArrayElement, ArrayPack
@@ -542,7 +542,11 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
         for reloc in sdb.get_relocations(name):
 
             if not reloc.target_section_index:
-                assert reloc.pelfy_reloc.type == 'R_ARM_V4BX', (reloc.pelfy_reloc.type, name, reloc.pelfy_reloc.symbol.name)
+                if reloc.pelfy_reloc.type in TRICORE_BRANCH_RELOCATIONS:
+                    # Branch to a local label without symbol
+                    patch_list.extend(sdb.get_patch(reloc, 0, start, binw.PatchFlag.CODE))
+                else:
+                    assert reloc.pelfy_reloc.type == 'R_ARM_V4BX', (reloc.pelfy_reloc.type, name, reloc.pelfy_reloc.symbol.name)
 
             elif reloc.target_in_code:
                 # Branch to a label inside the function
