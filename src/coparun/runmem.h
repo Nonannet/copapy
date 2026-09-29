@@ -61,6 +61,8 @@
 #define PATCH_ENC_RISCV_J_TYPE    7  /* RISC-V jal imm[20|10:1|11|19:12] (21 bit) */
 #define PATCH_ENC_RISCV_CB_TYPE   8  /* RISC-V compressed branch imm[8|4:3|7:6|2:1|5] (16 bit instr.) */
 #define PATCH_ENC_RISCV_CJ_TYPE   9  /* RISC-V compressed jump imm[11|4|9:8|10|6|7|3:1|5] (16 bit instr.) */
+#define PATCH_ENC_TRICORE_B      10  /* TriCore B format (j, call) disp24 (24 bit) */
+#define PATCH_ENC_TRICORE_BOL    11  /* TriCore BOL format (lea, ld, st) off16 (16 bit) */
 
 /* Patch flags: how the result is calculated */
 #define PATCH_FLAG_DATA   0x01  /* value is relative to data memory (else code memory) */

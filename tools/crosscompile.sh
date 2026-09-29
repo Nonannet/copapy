@@ -74,3 +74,6 @@ riscv32-unknown-linux-musl-ld -r $STMP /object_files/musl_objects_riscv32.o -o $
 # RISC-V 64 Bit
 riscv64-linux-gnu-gcc-13 $FLAGS $RISCV_FLAGS -$OPT -c $SRC -o $STMP
 riscv64-linux-gnu-ld -r $STMP /object_files/musl_objects_riscv64.o -o $DEST/stencils_riscv64_$OPT.o
+
+# TriCore (AURIX TC2xx), math functions from newlib
+bash tools/tricore/build.sh stencils

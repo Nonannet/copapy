@@ -184,6 +184,25 @@ void patch_riscv_cj_type(uint8_t *patch_addr, int32_t offset)
     memcpy(patch_addr, &instr, sizeof(instr));
 }
 
+void patch_tricore_b(uint8_t *patch_addr, int32_t offset)
+{
+    // B format (j, call): disp24[15:0] -> bits[31:16], disp24[23:16] -> bits[15:8]
+    uint32_t disp = (uint32_t)offset;
+    uint32_t instr = read_u32(patch_addr) & 0xFFu;
+    instr |= (disp & 0xFFFF) << 16 | ((disp >> 16) & 0xFF) << 8;
+    write_u32(patch_addr, instr);
+}
+
+void patch_tricore_bol(uint8_t *patch_addr, int32_t offset)
+{
+    // BOL format (lea, ld, st): off16[9:6] -> bits[31:28], off16[15:10] -> bits[27:22],
+    // off16[5:0] -> bits[21:16]
+    uint32_t off = (uint32_t)offset;
+    uint32_t instr = read_u32(patch_addr) & 0xFFFFu;
+    instr |= ((off >> 6) & 0xF) << 28 | ((off >> 10) & 0x3F) << 22 | (off & 0x3F) << 16;
+    write_u32(patch_addr, instr);
+}
+
 void free_memory(runmem_t *context) {
     deallocate_memory(context->executable_memory, context->executable_memory_len);
     deallocate_memory(context->data_memory, context->data_memory_len);
@@ -256,6 +275,12 @@ int apply_patch(runmem_t *context, uint32_t offs, int32_t value, uint32_t patch_
             break;
         case PATCH_ENC_RISCV_CJ_TYPE:
             patch_riscv_cj_type(patch_addr, (int32_t)result);
+            break;
+        case PATCH_ENC_TRICORE_B:
+            patch_tricore_b(patch_addr, (int32_t)result);
+            break;
+        case PATCH_ENC_TRICORE_BOL:
+            patch_tricore_bol(patch_addr, (int32_t)result);
             break;
         default:
             LOG("Unknown patch encoding\n");
@@ -337,7 +362,7 @@ int parse_commands(runmem_t *context, uint8_t *bytes) {
             case READ_DATA:
                 offs = *(uint32_t*)bytes; bytes += 4;
                 size = *(uint32_t*)bytes; bytes += 4;
-                BLOG("READ_DATA offs=%i size=%i data=", offs, size);
+                BLOG("READ_DATA offs=%i size=%i data=", (int)offs, (int)size);
                 for (uint32_t i = 0; i < size; i++) {
                     printf("%02X ", context->data_memory[offs + i]);
                 }

@@ -10,7 +10,7 @@ jobs:
   build_stencils:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/nonannet/cross_compiler_unix:3
+      image: ghcr.io/nonannet/cross_compiler_unix:4
     steps:
       - uses: actions/checkout@v7
 
@@ -374,7 +374,7 @@ jobs:
       # No login shell (bash -l): /etc/profile would reset the PATH of the image,
       # which contains the RISC-V 32 toolchain
       run: |
-        docker run --rm -v $PWD:/app -w /app ghcr.io/nonannet/cross_compiler_unix:3 \
+        docker run --rm -v $PWD:/app -w /app ghcr.io/nonannet/cross_compiler_unix:4 \
         bash -c "set -x && \
                   mkdir -p build/runner && \
                   riscv32-unknown-linux-musl-gcc -static \
@@ -396,6 +396,33 @@ jobs:
     - uses: actions/upload-artifact@v7
       with:
         name: runner-linux-riscv32
+        path: build/runner/*
+
+  build-tricore:
+    # No qemu-user exists for TriCore: the bare metal runner is tested in
+    # qemu-system-tricore, controlled by tricore-elf-gdb (both in the image)
+    needs: [build_stencils]
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/nonannet/cross_compiler_unix:4
+    steps:
+    - uses: actions/checkout@v7
+    - uses: actions/download-artifact@v8
+      with:
+        name: stencil-object-files
+        path: src/copapy/obj
+    - name: Build TriCore runner
+      run: bash tools/tricore/build.sh runner
+    - name: Install Python dependencies
+      run: |
+        python3 -m venv /tmp/venv
+        /tmp/venv/bin/python -m pip install .[mindev]
+    - name: Run TriCore tests with qemu-system-tricore
+      run: /tmp/venv/bin/python -m pytest tests/test_ops_tricore.py -W error::UserWarning
+
+    - uses: actions/upload-artifact@v7
+      with:
+        name: runner-tricore
         path: build/runner/*
 
   build-windows:
@@ -446,7 +473,7 @@ jobs:
         path: build/runner/*
 
   release-stencils:
-    needs: [build_stencils, build-ubuntu, build-ubuntu32, build-windows, build-arm64, build-armv6, build-armv7, build-armv7thumb, build-armv7mthumb, build-riscv64, build-riscv32]
+    needs: [build_stencils, build-ubuntu, build-ubuntu32, build-windows, build-arm64, build-armv6, build-armv7, build-armv7thumb, build-armv7mthumb, build-riscv64, build-riscv32, build-tricore]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:

@@ -40,10 +40,14 @@ class relocation_entry:
 
 
 # Relocations that are only hints for linker relaxation and require no patching
-HINT_RELOCATIONS = ('R_RISCV_RELAX', 'R_RISCV_ALIGN')
+HINT_RELOCATIONS = ('R_RISCV_RELAX', 'R_RISCV_ALIGN', 'R_TRICORE_RELAX')
 
 # Relocations for a call spanning two instructions (RISC-V auipc + jalr)
 DOUBLE_CALL_RELOCATIONS = ('R_RISCV_CALL', 'R_RISCV_CALL_PLT')
+
+# TriCore relative branches, for branches to local labels the assembler emits
+# them without symbol and with the branch displacement as addend
+TRICORE_BRANCH_RELOCATIONS = ('R_TRICORE_24REL', 'R_TRICORE_15REL')
 
 SHF_EXECINSTR = 0x4
 
@@ -214,6 +218,19 @@ class stencil_database():
         self._relocation_cache: dict[tuple[str, bool], list[relocation_entry]] = {}
         self._stencil_cache: dict[str, tuple[int, int]] = {}
 
+        # Functions by code section index (with -ffunction-sections each
+        # function has its own section)
+        self._section_functions = {s.section.index: s for s in self.elf.symbols
+                                   if s.info == 'STT_FUNC' and s.section and s.fields['st_value'] == 0}
+
+    def resolve_section_symbol(self, symbol: pelfy.elf_symbol) -> pelfy.elf_symbol:
+        """Returns for a section symbol of a code section the function located at the
+        start of the section (e.g. calls to static functions are relocated relative
+        to the section symbol), otherwise the symbol itself"""
+        if symbol.info == 'STT_SECTION' and symbol.section and symbol.section.index in self._section_functions:
+            return self._section_functions[symbol.section.index]
+        return symbol
+
     def const_sections_from_functions(self, symbol_names: Iterable[str]) -> list[int]:
         ret: set[int] = set()
 
@@ -254,7 +271,7 @@ class stencil_database():
 
             if patch_offset < end_index - start_index:  # Exclude the call to the result_* function
                 hi_reloc = None
-                target = reloc.symbol
+                target = self.resolve_section_symbol(reloc.symbol)
                 if reloc.type.startswith('R_RISCV_PCREL_LO12'):
                     # The symbol of a PCREL_LO12 relocation is the label of the auipc
                     # instruction, the actual target is defined by its PCREL_HI20 relocation
@@ -308,6 +325,10 @@ class stencil_database():
         shift = 0
         encoding = PatchEncoding.BITFIELD
         flags = base
+
+        if pr.type in TRICORE_BRANCH_RELOCATIONS and not pr.symbol.index:
+            # Branch to a local label: the addend is the displacement (S + A - P = A)
+            value = patch_offset + add_sign_int32(pr.fields['r_addend'])
 
         if relocation.hi_reloc:
             # RISC-V PCREL_LO12: S + A - P with S + A and P from the paired
@@ -443,6 +464,29 @@ class stencil_database():
             encoding = PatchEncoding.RISCV_CJ_TYPE
             flags |= PatchFlag.PC_REL
 
+        elif pr.type == 'R_TRICORE_24REL':
+            # j/call (B format): (S + A - P) >> 1
+            encoding = PatchEncoding.TRICORE_B
+            shift = 1
+            flags |= PatchFlag.PC_REL
+
+        elif pr.type == 'R_TRICORE_15REL':
+            # Conditional branch (BRC/BRN/BRR format): (S + A - P) >> 1
+            mask = 0x7FFF0000
+            shift = 1
+            flags |= PatchFlag.PC_REL
+
+        elif pr.type == 'R_TRICORE_HIADJ':
+            # movh.a/addih (RLC format): ((S + A) + 0x8000) >> 16
+            # (+0x8000 compensates the sign extension of the following 16 bit offset)
+            mask = 0x0FFFF000
+            shift = 16
+            value += 0x8000
+
+        elif pr.type == 'R_TRICORE_LO2':
+            # lea/ld/st (BOL format): (S + A) & 0xFFFF
+            encoding = PatchEncoding.TRICORE_BOL
+
         else:
             raise NotImplementedError(f"Relocation type {pr.type} in {relocation.pelfy_reloc.target_section.name} pointing to {relocation.pelfy_reloc.symbol.name} not implemented")
 
@@ -486,10 +530,11 @@ class stencil_database():
                 # assert name in self.elf.symbols, f"Stencil {name} not found" <-- see: https://github.com/Nonannet/pelfy/issues/1
                 func = self.elf.symbols[name]
                 for r in func.relocations:
-                    if r.symbol.info == 'STT_FUNC':
-                        #print('    ', r.symbol.name, r.symbol.section.type)
-                        name_set.add(r.symbol.name)
-                        name_set |= self.get_sub_functions([r.symbol.name])
+                    sym = self.resolve_section_symbol(r.symbol)
+                    if sym.info == 'STT_FUNC':
+                        #print('    ', sym.name, sym.section.type)
+                        name_set.add(sym.name)
+                        name_set |= self.get_sub_functions([sym.name])
         return name_set
 
     def get_type_size(self, type_name: str) -> int:

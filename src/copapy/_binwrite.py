@@ -26,6 +26,8 @@ class PatchEncoding(IntEnum):
     RISCV_J_TYPE = 7     # RISC-V jal imm[20|10:1|11|19:12] (21 bit)
     RISCV_CB_TYPE = 8    # RISC-V compressed branch imm[8|4:3|7:6|2:1|5] (9 bit, 16 bit instruction)
     RISCV_CJ_TYPE = 9    # RISC-V compressed jump imm[11|4|9:8|10|6|7|3:1|5] (12 bit, 16 bit instruction)
+    TRICORE_B = 10       # TriCore B format (j, call) disp24 (24 bit)
+    TRICORE_BOL = 11     # TriCore BOL format (lea, ld, st) off16 (16 bit)
 
 
 class PatchFlag(IntFlag):
