@@ -363,8 +363,10 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
     # Write data
     section_mem_layout, sections_length = get_section_layout(used_const_sections, sdb)
     variable_mem_layout, variables_data_lengths = get_data_layout(variable_list, sdb, sections_length)
-    dw.write_com(binw.Command.ALLOCATE_DATA)
-    dw.write_int(variables_data_lengths)
+    if variables_data_lengths:
+        # Skip for programs without variables or constants
+        dw.write_com(binw.Command.ALLOCATE_DATA)
+        dw.write_int(variables_data_lengths)
 
     # Heap constants
     for section_id, start, lengths in section_mem_layout:

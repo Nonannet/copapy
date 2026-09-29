@@ -69,6 +69,10 @@ uint8_t *allocate_executable_memory(uint32_t num_bytes) {
     uint8_t *mem = (uint8_t*)mmap(NULL, num_bytes,
                          PROT_READ | PROT_WRITE,
                          MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (mem == MAP_FAILED) {
+        perror("mmap failed (executable)");
+        return NULL;
+    }
     return mem;
 }
 
@@ -82,6 +86,10 @@ uint8_t *allocate_data_memory(uint32_t num_bytes) {
     uint8_t *mem = (uint8_t*)mmap(NULL, num_bytes,
                      PROT_READ | PROT_WRITE,
                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (mem == MAP_FAILED) {
+        perror("mmap failed (data)");
+        return NULL;
+    }
     return mem;
 }
 

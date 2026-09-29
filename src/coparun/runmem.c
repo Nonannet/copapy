@@ -196,9 +196,10 @@ void free_memory(runmem_t *context) {
 }
 
 int update_data_offs(runmem_t *context) {
-    if (context->data_memory && context->executable_memory &&
-        (context->data_memory - context->executable_memory > 0x7FFFFFFF ||
-         context->executable_memory - context->data_memory > 0x7FFFFFFF)) {
+    // Data memory is not allocated if a program has no data
+    if (!context->data_memory || !context->executable_memory) return 1;
+    if (context->data_memory - context->executable_memory > 0x7FFFFFFF ||
+        context->executable_memory - context->data_memory > 0x7FFFFFFF) {
         perror("Error: code and data memory to far apart");
         return 0;
     }
