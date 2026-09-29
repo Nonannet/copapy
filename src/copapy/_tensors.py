@@ -2,7 +2,7 @@ from copapy._basic_types import NumLike, ArrayType
 from . import value
 from ._vectors import vector, VecFloatLike, VecIntLike, VecNumLike
 from ._mixed import mixed_sum
-from typing import TypeVar, Any, overload, TypeAlias, Callable, Iterator, Sequence
+from typing import TypeVar, Any, overload, TypeAlias, Callable, Iterator, Sequence, Iterable
 from ._helper_types import TNum
 
 TensorNumLike: TypeAlias = 'tensor[Any] | vector[Any] | value[Any] | int | float | bool'
@@ -19,21 +19,20 @@ class tensor(ArrayType[TNum]):
     reshaping, transposition, and various reduction operations.
     """
 
-    def __init__(self, values: 'TNum | value[TNum] | vector[TNum] | tensor[TNum] | TensorSequence[TNum]', shape: Sequence[int] | None = None):
+    def __init__(self, values: 'TNum | value[TNum] | vector[TNum] | tensor[TNum] | TensorSequence[TNum] | Iterable[TNum | value[TNum]]', shape: Sequence[int] | None = None):
         """Create a tensor with given values.
 
         Arguments:
-            values: Nested iterables of constant values or copapy values.
-                    Can be a scalar, 1D iterable (vector),
-                    or n-dimensional nested structure.
+            values: Nested sequence of constant values or copapy values or
+                    a flat 1D iterable if shape is provided.
             shape: Optional shape of the tensor. If not provided, inferred from values.
         """
         if shape:
             self.shape: tuple[int, ...] = tuple(shape)
-            assert (isinstance(values, Sequence) and
+            assert (isinstance(values, Iterable) and
                     any(isinstance(v, (value, int, float)) for v in values)), \
                     "Values must be a sequence of scalars if shape is provided"
-            self.values: tuple[TNum | value[TNum], ...] = tuple(v for v in values if not isinstance(v, Sequence))
+            self.values: tuple[TNum | value[TNum], ...] = tuple(v for v in values if not isinstance(v, Iterable | tensor))
             self.ndim: int = len(shape)
         elif isinstance(values, (int, float)):
             # Scalar case: 0-dimensional tensor
@@ -57,6 +56,7 @@ class tensor(ArrayType[TNum]):
             self.ndim = values.ndim
         else:
             # General n-dimensional case
+            assert isinstance(values, Sequence), "Values must be a sequence if shape is not provided"
             self.values, self.shape = self._infer_shape_and_flatten(values)
             self.ndim = len(self.shape)
 
