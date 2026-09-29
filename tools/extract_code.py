@@ -64,6 +64,42 @@ def patch_thumb_branch(data: bytearray, offset: int, value: int, byteorder: Byte
     data[offset+2:offset+4] = second.to_bytes(2, byteorder)
 
 
+def patch_riscv_s_type(data: bytearray, offset: int, imm: int, byteorder: ByteOrder) -> None:
+    instr = read_u32(data, offset, byteorder) & ~((0x7F << 25) | (0x1F << 7))
+    instr |= ((imm >> 5) & 0x7F) << 25 | (imm & 0x1F) << 7
+    write_u32(data, offset, instr, byteorder)
+
+
+def patch_riscv_b_type(data: bytearray, offset: int, imm: int, byteorder: ByteOrder) -> None:
+    instr = read_u32(data, offset, byteorder) & ~((0x7F << 25) | (0x1F << 7))
+    instr |= (((imm >> 12) & 0x1) << 31 | ((imm >> 5) & 0x3F) << 25 |
+              ((imm >> 1) & 0xF) << 8 | ((imm >> 11) & 0x1) << 7)
+    write_u32(data, offset, instr, byteorder)
+
+
+def patch_riscv_j_type(data: bytearray, offset: int, imm: int, byteorder: ByteOrder) -> None:
+    instr = read_u32(data, offset, byteorder) & 0xFFF
+    instr |= (((imm >> 20) & 0x1) << 31 | ((imm >> 1) & 0x3FF) << 21 |
+              ((imm >> 11) & 0x1) << 20 | ((imm >> 12) & 0xFF) << 12)
+    write_u32(data, offset, instr, byteorder)
+
+
+def patch_riscv_cb_type(data: bytearray, offset: int, imm: int, byteorder: ByteOrder) -> None:
+    instr = int.from_bytes(data[offset:offset+2], byteorder) & ~((0x7 << 10) | (0x1F << 2))
+    instr |= (((imm >> 8) & 0x1) << 12 | ((imm >> 3) & 0x3) << 10 |
+              ((imm >> 6) & 0x3) << 5 | ((imm >> 1) & 0x3) << 3 | ((imm >> 5) & 0x1) << 2)
+    data[offset:offset+2] = (instr & 0xFFFF).to_bytes(2, byteorder)
+
+
+def patch_riscv_cj_type(data: bytearray, offset: int, imm: int, byteorder: ByteOrder) -> None:
+    instr = int.from_bytes(data[offset:offset+2], byteorder) & ~(0x7FF << 2)
+    instr |= (((imm >> 11) & 0x1) << 12 | ((imm >> 4) & 0x1) << 11 |
+              ((imm >> 8) & 0x3) << 9 | ((imm >> 10) & 0x1) << 8 |
+              ((imm >> 6) & 0x1) << 7 | ((imm >> 7) & 0x1) << 6 |
+              ((imm >> 1) & 0x7) << 3 | ((imm >> 5) & 0x1) << 2)
+    data[offset:offset+2] = (instr & 0xFFFF).to_bytes(2, byteorder)
+
+
 def apply_patch(data: bytearray, offs: int, value: int, mask: int, encoding: PatchEncoding,
                 shift: int, flags: PatchFlag, data_section_offset: int, byteorder: ByteOrder) -> int:
     """Same calculation as apply_patch in runmem.c with the code memory located at address 0"""
@@ -84,6 +120,16 @@ def apply_patch(data: bytearray, offs: int, value: int, mask: int, encoding: Pat
         patch_thumb_movw_movt(data, offs, result & 0xFFFF, byteorder)
     elif encoding == PatchEncoding.THUMB_BRANCH:
         patch_thumb_branch(data, offs, result, byteorder)
+    elif encoding == PatchEncoding.RISCV_S_TYPE:
+        patch_riscv_s_type(data, offs, result, byteorder)
+    elif encoding == PatchEncoding.RISCV_B_TYPE:
+        patch_riscv_b_type(data, offs, result, byteorder)
+    elif encoding == PatchEncoding.RISCV_J_TYPE:
+        patch_riscv_j_type(data, offs, result, byteorder)
+    elif encoding == PatchEncoding.RISCV_CB_TYPE:
+        patch_riscv_cb_type(data, offs, result, byteorder)
+    elif encoding == PatchEncoding.RISCV_CJ_TYPE:
+        patch_riscv_cj_type(data, offs, result, byteorder)
     return result
 
 

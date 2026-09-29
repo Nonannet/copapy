@@ -12,15 +12,26 @@
 #include "runmem.h"
 #include "mem_man.h"
 
+/* 32 bit instruction access; memcpy since instructions might be only
+   2 byte aligned (e.g. RISC-V with compressed instructions) */
+static uint32_t read_u32(const uint8_t *addr) {
+    uint32_t value;
+    memcpy(&value, addr, sizeof(value));
+    return value;
+}
+
+static void write_u32(uint8_t *addr, uint32_t value) {
+    memcpy(addr, &value, sizeof(value));
+}
+
 void patch_bitfield(uint8_t *patch_addr, uint32_t patch_mask, int32_t value) {
-    uint32_t *val_ptr = (uint32_t*)patch_addr;
-    uint32_t original = *val_ptr;
+    uint32_t original = read_u32(patch_addr);
 
     uint32_t shift_factor = patch_mask & -patch_mask;
 
     uint32_t new_value = (original & ~patch_mask) | (((uint32_t)value * shift_factor) & patch_mask);
 
-    *val_ptr = new_value;
+    write_u32(patch_addr, new_value);
 }
 
 void patch_hi21(uint8_t *patch_addr, int32_t page_offset) {
@@ -117,6 +128,62 @@ void patch_thumb_branch(uint8_t *patch_addr, int32_t offset)
     instr16[1] = second_half;
 }
 
+void patch_riscv_s_type(uint8_t *patch_addr, int32_t offset)
+{
+    // imm[11:5] -> bits[31:25], imm[4:0] -> bits[11:7]
+    uint32_t imm = (uint32_t)offset;
+    uint32_t instr = read_u32(patch_addr) & ~((0x7Fu << 25) | (0x1Fu << 7));
+    instr |= ((imm >> 5) & 0x7F) << 25 | (imm & 0x1F) << 7;
+    write_u32(patch_addr, instr);
+}
+
+void patch_riscv_b_type(uint8_t *patch_addr, int32_t offset)
+{
+    // imm[12] -> bit[31], imm[10:5] -> bits[30:25], imm[4:1] -> bits[11:8], imm[11] -> bit[7]
+    uint32_t imm = (uint32_t)offset;
+    uint32_t instr = read_u32(patch_addr) & ~((0x7Fu << 25) | (0x1Fu << 7));
+    instr |= ((imm >> 12) & 0x1) << 31 | ((imm >> 5) & 0x3F) << 25 |
+             ((imm >> 1) & 0xF) << 8 | ((imm >> 11) & 0x1) << 7;
+    write_u32(patch_addr, instr);
+}
+
+void patch_riscv_j_type(uint8_t *patch_addr, int32_t offset)
+{
+    // imm[20] -> bit[31], imm[10:1] -> bits[30:21], imm[11] -> bit[20], imm[19:12] -> bits[19:12]
+    uint32_t imm = (uint32_t)offset;
+    uint32_t instr = read_u32(patch_addr) & 0xFFFu;
+    instr |= ((imm >> 20) & 0x1) << 31 | ((imm >> 1) & 0x3FF) << 21 |
+             ((imm >> 11) & 0x1) << 20 | ((imm >> 12) & 0xFF) << 12;
+    write_u32(patch_addr, instr);
+}
+
+void patch_riscv_cb_type(uint8_t *patch_addr, int32_t offset)
+{
+    // 16 bit instruction: imm[8] -> bit[12], imm[4:3] -> bits[11:10],
+    // imm[7:6] -> bits[6:5], imm[2:1] -> bits[4:3], imm[5] -> bit[2]
+    uint32_t imm = (uint32_t)offset;
+    uint16_t instr;
+    memcpy(&instr, patch_addr, sizeof(instr));
+    instr = (uint16_t)((instr & ~((0x7u << 10) | (0x1Fu << 2))) |
+                       ((imm >> 8) & 0x1) << 12 | ((imm >> 3) & 0x3) << 10 |
+                       ((imm >> 6) & 0x3) << 5 | ((imm >> 1) & 0x3) << 3 | ((imm >> 5) & 0x1) << 2);
+    memcpy(patch_addr, &instr, sizeof(instr));
+}
+
+void patch_riscv_cj_type(uint8_t *patch_addr, int32_t offset)
+{
+    // 16 bit instruction: imm[11|4|9:8|10|6|7|3:1|5] -> bits[12:2]
+    uint32_t imm = (uint32_t)offset;
+    uint16_t instr;
+    memcpy(&instr, patch_addr, sizeof(instr));
+    instr = (uint16_t)((instr & ~(0x7FFu << 2)) |
+                       ((imm >> 11) & 0x1) << 12 | ((imm >> 4) & 0x1) << 11 |
+                       ((imm >> 8) & 0x3) << 9 | ((imm >> 10) & 0x1) << 8 |
+                       ((imm >> 6) & 0x1) << 7 | ((imm >> 7) & 0x1) << 6 |
+                       ((imm >> 1) & 0x7) << 3 | ((imm >> 5) & 0x1) << 2);
+    memcpy(patch_addr, &instr, sizeof(instr));
+}
+
 void free_memory(runmem_t *context) {
     deallocate_memory(context->executable_memory, context->executable_memory_len);
     deallocate_memory(context->data_memory, context->data_memory_len);
@@ -173,6 +240,21 @@ int apply_patch(runmem_t *context, uint32_t offs, int32_t value, uint32_t patch_
             break;
         case PATCH_ENC_THUMB_BRANCH:
             patch_thumb_branch(patch_addr, (int32_t)result);
+            break;
+        case PATCH_ENC_RISCV_S_TYPE:
+            patch_riscv_s_type(patch_addr, (int32_t)result);
+            break;
+        case PATCH_ENC_RISCV_B_TYPE:
+            patch_riscv_b_type(patch_addr, (int32_t)result);
+            break;
+        case PATCH_ENC_RISCV_J_TYPE:
+            patch_riscv_j_type(patch_addr, (int32_t)result);
+            break;
+        case PATCH_ENC_RISCV_CB_TYPE:
+            patch_riscv_cb_type(patch_addr, (int32_t)result);
+            break;
+        case PATCH_ENC_RISCV_CJ_TYPE:
+            patch_riscv_cj_type(patch_addr, (int32_t)result);
             break;
         default:
             LOG("Unknown patch encoding\n");

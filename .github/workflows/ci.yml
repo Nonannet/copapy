@@ -10,7 +10,7 @@ jobs:
   build_stencils:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/nonannet/cross_compiler_unix:2
+      image: ghcr.io/nonannet/cross_compiler_unix:3
     steps:
       - uses: actions/checkout@v7
 
@@ -323,6 +323,78 @@ jobs:
         name: runner-linux-armv7mthumb
         path: build/runner/*
 
+  build-riscv64:
+    needs: [build_stencils]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+    - uses: actions/checkout@v7
+    - uses: actions/download-artifact@v8
+      with:
+        name: stencil-object-files
+        path: src/copapy/obj
+    - name: Set up QEMU for RISC-V 64
+      uses: docker/setup-qemu-action@v4
+      with:
+        platforms: linux/riscv64
+    - name: Use RISC-V 64 container
+      run: |
+        docker run --rm -v $PWD:/app -w /app --platform linux/riscv64 ghcr.io/nonannet/riscv64_test:1 \
+        bash -lc "set -x && \
+                  pip install .[mindev] && \
+                  mkdir -p build/runner && \
+                  gcc -static \
+                  -Wall -Wextra -Wconversion -Wsign-conversion \
+                  -Wshadow -Wstrict-overflow -O3 \
+                  -DENABLE_LOGGING \
+                  -o build/runner/coparun src/coparun/runmem.c \
+                  src/coparun/coparun.c src/coparun/mem_man.c && \
+                  pytest && \
+                  bash tools/create_asm.sh"
+
+    - uses: actions/upload-artifact@v7
+      with:
+        name: runner-linux-riscv64
+        path: build/runner/*
+
+  build-riscv32:
+    # No Linux distribution with Python exists for RISC-V 32 bit, therefore
+    # only the runner is tested with qemu-user instead of the full test suite
+    needs: [build_stencils]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+    - uses: actions/checkout@v7
+    - uses: actions/download-artifact@v8
+      with:
+        name: stencil-object-files
+        path: src/copapy/obj
+    - name: Build RISC-V 32 runner
+      run: |
+        docker run --rm -v $PWD:/app -w /app ghcr.io/nonannet/cross_compiler_unix:3 \
+        bash -lc "set -x && \
+                  mkdir -p build/runner && \
+                  riscv32-unknown-linux-musl-gcc -static \
+                  -Wall -Wextra -Wconversion -Wsign-conversion \
+                  -Wshadow -Wstrict-overflow -O3 \
+                  -DENABLE_LOGGING \
+                  -o build/runner/coparun-riscv32 src/coparun/runmem.c \
+                  src/coparun/coparun.c src/coparun/mem_man.c"
+    - name: Install qemu-user
+      run: sudo apt-get update && sudo apt-get install -y qemu-user
+    - uses: actions/setup-python@v7
+      with:
+        python-version: "3.12"
+    - name: Install Python dependencies
+      run: python -m pip install .[mindev]
+    - name: Run RISC-V 32 test with qemu-user
+      run: pytest tests/test_ops_riscv32.py -W error::UserWarning
+
+    - uses: actions/upload-artifact@v7
+      with:
+        name: runner-linux-riscv32
+        path: build/runner/*
+
   build-windows:
     needs: [build_stencils]
     runs-on: windows-2022
@@ -371,7 +443,7 @@ jobs:
         path: build/runner/*
 
   release-stencils:
-    needs: [build_stencils, build-ubuntu, build-ubuntu32, build-windows, build-arm64, build-armv6, build-armv7, build-armv7thumb, build-armv7mthumb]
+    needs: [build_stencils, build-ubuntu, build-ubuntu32, build-windows, build-arm64, build-armv6, build-armv7, build-armv7thumb, build-armv7mthumb, build-riscv64, build-riscv32]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
@@ -405,6 +477,8 @@ jobs:
           cp tmp/runner-linux-arm64/coparun release/coparun-aarch64
           cp tmp/runner-linux-armv6/coparun release/coparun-armv6
           cp tmp/runner-linux-armv7/coparun release/coparun-armv7
+          cp tmp/runner-linux-riscv64/coparun release/coparun-riscv64
+          cp tmp/runner-linux-riscv32/coparun-riscv32 release/
           cp tmp/runner-win/coparun*.exe release/
 
           TAG="${{ steps.version.outputs.version }}"

@@ -403,32 +403,37 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
         #print(f"* {node.name} ({offset}) " + ' '.join(f'{d:02X}' for d in data))
 
         for reloc in sdb.get_relocations(node.name, stencil=True):
-            if reloc.target_symbol_info in ('STT_OBJECT', 'STT_NOTYPE', 'STT_SECTION'):
+            if reloc.target_in_code:
+                # Branch to a label inside the stencil
+                label_addr = offset + reloc.target_symbol_offset - reloc.function_offset - reloc.start
+                patches = sdb.get_patch(reloc, label_addr, offset, binw.PatchFlag.CODE)
+
+            elif reloc.target_symbol_info in ('STT_OBJECT', 'STT_NOTYPE', 'STT_SECTION'):
                 #print('-- ' + reloc.target_symbol_name + ' // ' + node.name)
                 if reloc.target_symbol_name.startswith('dummy_'):
                     # Patch for write and read addresses to/from heap variables
                     assert associated_net, f"Relocation found but no net defined for operation {node.name}"
                     #print(f"Patch for write and read addresses to/from heap variables: {node.name} {patch.target_symbol_info} {patch.target_symbol_name}")
                     obj_addr = object_addr_lookup[associated_net]
-                    patch = sdb.get_patch(reloc, obj_addr, offset, binw.PatchFlag.DATA)
+                    patches = sdb.get_patch(reloc, obj_addr, offset, binw.PatchFlag.DATA)
                 elif reloc.target_symbol_name.startswith('result_'):
                     # Set return jump address to address of following stencil
-                    patch = sdb.get_patch(reloc, offset + len(data), offset, binw.PatchFlag.CODE)
+                    patches = sdb.get_patch(reloc, offset + len(data), offset, binw.PatchFlag.CODE)
                 else:
                     # Patch constants addresses on heap
                     assert reloc.target_section_index in section_addr_lookup, f"- Function or object in {node.name} missing: {reloc.pelfy_reloc.symbol.name}"
                     obj_addr = reloc.target_symbol_offset + section_addr_lookup[reloc.target_section_index]
-                    patch = sdb.get_patch(reloc, obj_addr, offset, binw.PatchFlag.DATA)
+                    patches = sdb.get_patch(reloc, obj_addr, offset, binw.PatchFlag.DATA)
                     #print('* constants stancils', patch.type, patch.patch_address, binw.Command.PATCH_OBJECT, node.name)
 
             elif reloc.target_symbol_info == 'STT_FUNC':
                 func_addr = func_addr_lookup[reloc.target_symbol_name]
-                patch = sdb.get_patch(reloc, func_addr, offset, binw.PatchFlag.CODE)
+                patches = sdb.get_patch(reloc, func_addr, offset, binw.PatchFlag.CODE)
                 #print(patch.type, patch.addr, binw.Command.PATCH_FUNC, node.name, '->', patch.target_symbol_name)
             else:
                 raise ValueError(f"Unsupported: {node.name} {reloc.target_symbol_info} {reloc.target_symbol_name}")
 
-            patch_list.append(patch)
+            patch_list.extend(patches)
 
         offset += len(data)
 
@@ -455,20 +460,23 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
             if not reloc.target_section_index:
                 assert reloc.pelfy_reloc.type == 'R_ARM_V4BX', (reloc.pelfy_reloc.type, name, reloc.pelfy_reloc.symbol.name)
 
+            elif reloc.target_in_code:
+                # Branch to a label inside the function
+                label_addr = start + reloc.target_symbol_offset - reloc.function_offset
+                patch_list.extend(sdb.get_patch(reloc, label_addr, start, binw.PatchFlag.CODE))
+
             elif reloc.target_symbol_info in {'STT_OBJECT', 'STT_NOTYPE', 'STT_SECTION'}:
                 # Patch constants/variable addresses on heap
                 #print('--> DATA ', name, reloc.pelfy_reloc.symbol, reloc.pelfy_reloc.symbol.info, reloc.pelfy_reloc.symbol.section.name)
                 assert reloc.target_section_index in section_addr_lookup, f"- Function or object in {name} missing: {reloc.pelfy_reloc.symbol.name}"
                 obj_addr = reloc.target_symbol_offset + section_addr_lookup[reloc.target_section_index]
-                patch = sdb.get_patch(reloc, obj_addr, start, binw.PatchFlag.DATA)
-                patch_list.append(patch)
+                patch_list.extend(sdb.get_patch(reloc, obj_addr, start, binw.PatchFlag.DATA))
 
             elif reloc.target_symbol_info == 'STT_FUNC':
                 #print('--> FUNC', name, reloc.pelfy_reloc.symbol.name, reloc.pelfy_reloc.symbol.info, reloc.pelfy_reloc.symbol.section.name)
                 func_addr = func_addr_lookup[reloc.target_symbol_name]
-                patch = sdb.get_patch(reloc, func_addr, start, binw.PatchFlag.CODE)
-                #print(f'    FUNC {func_addr=}     {start=}    {patch.address=}')
-                patch_list.append(patch)
+                #print(f'    FUNC {func_addr=}     {start=}')
+                patch_list.extend(sdb.get_patch(reloc, func_addr, start, binw.PatchFlag.CODE))
 
             else:
                 raise ValueError(f"Unsupported: {name=} {reloc.target_symbol_info=} {reloc.target_symbol_name=} {reloc.target_section_index}")

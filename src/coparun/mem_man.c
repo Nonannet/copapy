@@ -94,6 +94,10 @@ int mark_mem_executable(uint8_t *memory, uint32_t memory_len) {
         perror("mprotect failed");
         return 0;
     }
+#if defined(__GNUC__)
+    /* Required on architectures without coherent instruction cache (e.g. ARM, RISC-V) */
+    __builtin___clear_cache((char*)memory, (char*)memory + memory_len);
+#endif
     return 1;
 }
 

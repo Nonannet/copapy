@@ -169,7 +169,7 @@ def test_timing_compiler():
             else:
                 raise ValueError(f"Unsupported: {node.name} {reloc.target_symbol_info} {reloc.target_symbol_name}")
 
-            patch_list.append(patch)
+            patch_list.extend(patch)
 
         offset += len(data)
     t1 = time.time()
@@ -199,7 +199,7 @@ def test_timing_compiler():
             else:
                 raise ValueError(f"Unsupported: {name=} {reloc.target_symbol_info=} {reloc.target_symbol_name=} {reloc.target_section_index}")
 
-            patch_list.append(patch)
+            patch_list.extend(patch)
     t1 = time.time()
     print(f"time: {t1-t0:.6f}s")
 

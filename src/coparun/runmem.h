@@ -56,6 +56,11 @@
 #define PATCH_ENC_ARM_MOVW_MOVT   2  /* ARM MOVW/MOVT (A1) imm4:imm12 (16 bit) */
 #define PATCH_ENC_THUMB_MOVW_MOVT 3  /* Thumb MOVW/MOVT (T3/T1) imm4:i:imm3:imm8 (16 bit) */
 #define PATCH_ENC_THUMB_BRANCH    4  /* Thumb B.W/BL (T4/T1) S:J1:J2:imm10:imm11 (24 bit) */
+#define PATCH_ENC_RISCV_S_TYPE    5  /* RISC-V store imm[11:5|4:0] (12 bit) */
+#define PATCH_ENC_RISCV_B_TYPE    6  /* RISC-V branch imm[12|10:5|4:1|11] (13 bit) */
+#define PATCH_ENC_RISCV_J_TYPE    7  /* RISC-V jal imm[20|10:1|11|19:12] (21 bit) */
+#define PATCH_ENC_RISCV_CB_TYPE   8  /* RISC-V compressed branch imm[8|4:3|7:6|2:1|5] (16 bit instr.) */
+#define PATCH_ENC_RISCV_CJ_TYPE   9  /* RISC-V compressed jump imm[11|4|9:8|10|6|7|3:1|5] (16 bit instr.) */
 
 /* Patch flags: how the result is calculated */
 #define PATCH_FLAG_DATA   0x01  /* value is relative to data memory (else code memory) */

@@ -23,6 +23,10 @@ elif [ "$cparch" = 'armv6' ]; then
 	cparch="arm"
 elif [ "$cparch" = 'armv7' ]; then
 	cparch="arm"
+elif [ "$cparch" = 'riscv64' ]; then
+	cparch="riscv:rv64"
+elif [ "$cparch" = 'riscv32' ]; then
+	cparch="riscv:rv32"
 fi
 
 echo "Archtitecture: '$cparch'"
