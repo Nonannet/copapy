@@ -4,10 +4,10 @@ set -eu
 ARCH=${1:-x86_64}
 
 case "$ARCH" in
-    (x86_64|x86|arm64|arm-v6|arm-v7|arm-v7-thumb|arm-v7m-thumb|arm-v7m-thumb-fpv5|arm-v81m-thumb|all)
+    (x86_64|x86|arm64|arm-v6|arm-v7|arm-v7-thumb|arm-v7m-thumb|arm-v7m-thumb-fpv5|arm-v81m-thumb|tricore|all)
         ;;
     (*)
-        echo "Usage: $0 [x86_64|x86|arm64|arm-v6|arm-v7|arm-v7-thumb|arm-v7m-thumb|arm-v7m-thumb-fpv5|arm-v81m-thumb|all]"
+        echo "Usage: $0 [x86_64|x86|arm64|arm-v6|arm-v7|arm-v7-thumb|arm-v7m-thumb|arm-v7m-thumb-fpv5|arm-v81m-thumb|tricore|all]"
         exit 1
         ;;
 esac
@@ -308,4 +308,12 @@ if [[ "$ARCH" == "arm-v81m-thumb" || "$ARCH" == "all" ]]; then
     arm-none-eabi-objdump -d -x \
         $DEST/stencils_armv81mthumb_O3.o \
         > build/stencils/stencils_armv81mthumb_O3.asm
+fi
+
+#######################################
+# TriCore
+#######################################
+if [[ "$ARCH" == "tricore" || "$ARCH" == "all" ]]; then
+    # Stencils and bare metal runner for qemu-system-tricore
+    bash tools/tricore/build.sh all
 fi

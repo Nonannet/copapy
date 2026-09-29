@@ -367,6 +367,33 @@ jobs:
         name: runner-linux-armv81mthumb
         path: build/runner/*
 
+  build-tricore:
+    # No qemu-user exists for TriCore: the bare metal runner is tested in
+    # qemu-system-tricore, controlled by tricore-elf-gdb (both in the image)
+    needs: [build_stencils]
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/nonannet/cross_compiler_unix:4
+    steps:
+    - uses: actions/checkout@v7
+    - uses: actions/download-artifact@v8
+      with:
+        name: stencil-object-files
+        path: src/copapy/obj
+    - name: Build TriCore runner
+      run: bash tools/tricore/build.sh runner
+    - name: Install Python dependencies
+      run: |
+        python3 -m venv /tmp/venv
+        /tmp/venv/bin/python -m pip install .[mindev]
+    - name: Run TriCore tests with qemu-system-tricore
+      run: /tmp/venv/bin/python -m pytest tests/test_ops_tricore.py -W error::UserWarning
+
+    - uses: actions/upload-artifact@v7
+      with:
+        name: runner-tricore
+        path: build/runner/*
+
   build-windows:
     needs: [build_stencils]
     runs-on: windows-2022
@@ -415,7 +442,7 @@ jobs:
         path: build/runner/*
 
   release-stencils:
-    needs: [build_stencils, build-ubuntu, build-ubuntu32, build-windows, build-arm64, build-arm32, build-armv81m, build-riscv64, build-riscv32]
+    needs: [build_stencils, build-ubuntu, build-ubuntu32, build-windows, build-arm64, build-arm32, build-armv81m, build-riscv64, build-riscv32, build-tricore]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:

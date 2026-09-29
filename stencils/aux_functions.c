@@ -223,3 +223,13 @@ KERNEL float aux_arr_bsearch_float(const float *restrict xp, float x, int n) {
 KERNEL void aux_arr_bsearch_floatarr(const float *restrict xp, const float *restrict x, float *restrict o, int n, int m) {
     for (int j = 0; j < m; j++) o[j] = search_index(xp, x[j], n);
 }
+
+#if defined(__tricore__)
+/* Math functions of newlib (used for TriCore) set errno, it is
+   initialized to be placed in .data, since .bss is not allocated */
+static int errno_placeholder = 1;
+
+NOINLINE int *__errno(void) {
+    return &errno_placeholder;
+}
+#endif
