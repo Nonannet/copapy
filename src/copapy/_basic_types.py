@@ -1,3 +1,4 @@
+import functools
 import pkgutil
 from typing import Any, Sequence, TypeVar, overload, TypeAlias, Generic, Callable
 from ._stencils import stencil_database, detect_process_arch
@@ -12,6 +13,21 @@ TCPNum = TypeVar("TCPNum", bound='value[Any]')
 TVarNumb: TypeAlias = 'value[Any] | int | float'
 
 stencil_cache: dict[tuple[str, str], stencil_database] = {}
+
+
+TFunc = TypeVar("TFunc", bound=Callable[..., Any])
+
+
+def scalar_op(func: TFunc) -> TFunc:
+    """Decorator for binary operators of value: returns NotImplemented for
+    non-scalar operands, so Python falls back to the reflected operator
+    of the other operand (e.g. vector.__rsub__ for value - vector)."""
+    @functools.wraps(func)
+    def wrapper(self: Any, other: Any) -> Any:
+        if not isinstance(other, (value, int, float)):
+            return NotImplemented
+        return func(self, other)
+    return wrapper  # type: ignore[return-value]
 
 
 def get_var_name(var: Any, scope: dict[str, Any] = globals()) -> list[str]:
@@ -135,6 +151,7 @@ class value(Generic[TNum]):
     def __add__(self: 'value[float]', other: NumLike) -> 'value[float]': ...
     @overload
     def __add__(self, other: TVarNumb) -> 'value[float] | value[int]': ...
+    @scalar_op
     def __add__(self, other: TVarNumb) -> Any:
         if not isinstance(other, value) and other == 0:
             return self
@@ -146,6 +163,7 @@ class value(Generic[TNum]):
     def __radd__(self: 'value[int]', other: int) -> 'value[int]': ...
     @overload
     def __radd__(self, other: float) -> 'value[float]': ...
+    @scalar_op
     def __radd__(self, other: NumLike) -> Any:
         return self + other
 
@@ -159,6 +177,7 @@ class value(Generic[TNum]):
     def __sub__(self: 'value[float]', other: NumLike) -> 'value[float]': ...
     @overload
     def __sub__(self, other: TVarNumb) -> 'value[float] | value[int]': ...
+    @scalar_op
     def __sub__(self, other: TVarNumb) -> Any:
         if isinstance(other, int | float) and other == 0:
             return self
@@ -170,6 +189,7 @@ class value(Generic[TNum]):
     def __rsub__(self: 'value[int]', other: int) -> 'value[int]': ...
     @overload
     def __rsub__(self, other: float) -> 'value[float]': ...
+    @scalar_op
     def __rsub__(self, other: NumLike) -> Any:
         return add_op('sub', [other, self])
 
@@ -183,6 +203,7 @@ class value(Generic[TNum]):
     def __mul__(self: 'value[float]', other: NumLike) -> 'value[float]': ...
     @overload
     def __mul__(self, other: TVarNumb) -> 'value[float] | value[int]': ...
+    @scalar_op
     def __mul__(self, other: TVarNumb) -> Any:
         if self.dtype == 'float' and isinstance(other, int):
             other = float(other)  # Prevent runtime conversion of consts; TODO: add this for other operations
@@ -201,12 +222,15 @@ class value(Generic[TNum]):
     def __rmul__(self: 'value[int]', other: int) -> 'value[int]': ...
     @overload
     def __rmul__(self, other: float) -> 'value[float]': ...
+    @scalar_op
     def __rmul__(self, other: NumLike) -> Any:
         return self * other
 
+    @scalar_op
     def __truediv__(self, other: NumLike) -> 'value[float]':
         return add_op('div', [self, other])
 
+    @scalar_op
     def __rtruediv__(self, other: NumLike) -> 'value[float]':
         return add_op('div', [other, self])
 
@@ -220,6 +244,7 @@ class value(Generic[TNum]):
     def __floordiv__(self: 'value[float]', other: NumLike) -> 'value[float]': ...
     @overload
     def __floordiv__(self, other: TVarNumb) -> 'value[float] | value[int]': ...
+    @scalar_op
     def __floordiv__(self, other: TVarNumb) -> Any:
         return add_op('floordiv', [self, other])
 
@@ -229,6 +254,7 @@ class value(Generic[TNum]):
     def __rfloordiv__(self: 'value[int]', other: int) -> 'value[int]': ...
     @overload
     def __rfloordiv__(self, other: float) -> 'value[float]': ...
+    @scalar_op
     def __rfloordiv__(self, other: NumLike) -> Any:
         return add_op('floordiv', [other, self])
 
@@ -238,21 +264,27 @@ class value(Generic[TNum]):
     def __neg__(self: 'value[TNum]') -> 'value[TNum]':
         return add_op('neg', [self])
 
+    @scalar_op
     def __gt__(self, other: TVarNumb) -> 'value[int]':
         return add_op('gt', [self, other], dtype='bool')
 
+    @scalar_op
     def __lt__(self, other: TVarNumb) -> 'value[int]':
         return add_op('gt', [other, self], dtype='bool')
 
+    @scalar_op
     def __ge__(self, other: TVarNumb) -> 'value[int]':
         return add_op('ge', [self, other], dtype='bool')
 
+    @scalar_op
     def __le__(self, other: TVarNumb) -> 'value[int]':
         return add_op('ge', [other, self], dtype='bool')
 
+    @scalar_op
     def __eq__(self, other: TVarNumb) -> 'value[int]':  # type: ignore
         return add_op('eq', [self, other], True, dtype='bool')
 
+    @scalar_op
     def __ne__(self, other: TVarNumb) -> 'value[int]':  # type: ignore
         return add_op('ne', [self, other], True, dtype='bool')
 
@@ -266,6 +298,7 @@ class value(Generic[TNum]):
     def __mod__(self: 'value[float]', other: NumLike) -> 'value[float]': ...
     @overload
     def __mod__(self, other: TVarNumb) -> 'value[float] | value[int]': ...
+    @scalar_op
     def __mod__(self, other: TVarNumb) -> Any:
         return add_op('mod', [self, other])
 
@@ -275,6 +308,7 @@ class value(Generic[TNum]):
     def __rmod__(self: 'value[int]', other: int) -> 'value[int]': ...
     @overload
     def __rmod__(self, other: float) -> 'value[float]': ...
+    @scalar_op
     def __rmod__(self, other: NumLike) -> Any:
         return add_op('mod', [other, self])
 
@@ -304,33 +338,43 @@ class value(Generic[TNum]):
         return id(self)
 
     # Bitwise and shift operations for cp[int]
+    @scalar_op
     def __lshift__(self, other: uniint) -> 'value[int]':
         return add_op('lshift', [self, other])
 
+    @scalar_op
     def __rlshift__(self, other: uniint) -> 'value[int]':
         return add_op('lshift', [other, self])
 
+    @scalar_op
     def __rshift__(self, other: uniint) -> 'value[int]':
         return add_op('rshift', [self, other])
 
+    @scalar_op
     def __rrshift__(self, other: uniint) -> 'value[int]':
         return add_op('rshift', [other, self])
 
+    @scalar_op
     def __and__(self, other: uniint) -> 'value[int]':
         return add_op('bwand', [self, other], True)
 
+    @scalar_op
     def __rand__(self, other: uniint) -> 'value[int]':
         return add_op('bwand', [other, self], True)
 
+    @scalar_op
     def __or__(self, other: uniint) -> 'value[int]':
         return add_op('bwor', [self, other], True)
 
+    @scalar_op
     def __ror__(self, other: uniint) -> 'value[int]':
         return add_op('bwor', [other, self], True)
 
+    @scalar_op
     def __xor__(self, other: uniint) -> 'value[int]':
         return add_op('bwxor', [self, other], True)
 
+    @scalar_op
     def __rxor__(self, other: uniint) -> 'value[int]':
         return add_op('bwxor', [other, self], True)
 
@@ -439,6 +483,10 @@ class ArrayType(Generic[TNum]):
 
     def map(self, func: Callable[[TNum | value[TNum]], Any]) -> 'ArrayType[Any]':
         return self
+
+    def __bool__(self) -> bool:
+        raise TypeError(f"The truth value of a {type(self).__name__} is ambiguous, "
+                        "compare the .values or the elements instead")
 
 
 def value_from_number(val: Any) -> value[Any]:
