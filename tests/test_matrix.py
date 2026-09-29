@@ -1,265 +1,237 @@
-import copapy as cp
+"""Linear algebra on 2D tensors (matrices). Element-wise operations, indexing,
+reshaping and reductions of general tensors are covered in test_tensor_basic.py."""
+import math
+from typing import Any
+
 import pytest
 
-
-def test_matrix_init():
-    """Test basic matrix initialization"""
-    m1 = cp.tensor([[1, 2, 3], [4, 5, 6]])
-    assert m1.shape == (2, 3)
-    assert m1[0] == (1, 2, 3)
-    assert m1[1] == (4, 5, 6)
+import copapy as cp
 
 
-def test_matrix_with_variables():
-    """Test matrix initialization with variables"""
-    m1 = cp.tensor([[cp.value(1), 2], [3, cp.value(4)]])
-    assert m1.shape == (2, 2)
-    assert isinstance(m1[0][0], cp.tensor)
-    assert isinstance(m1[1][1], cp.tensor)
+def evaluate(*exprs: Any) -> list[Any]:
+    """Compile and run the expressions, return their results."""
+    tg = cp.Target()
+    tg.compile(*exprs)
+    tg.run()
+    return [tg.read_value(e) for e in exprs]
 
 
-def test_matrix_addition():
-    """Test matrix addition"""
-    m1 = cp.tensor([[1, 2], [3, 4]])
-    m2 = cp.tensor([[5, 6], [7, 8]])
-    m3 = m1 + m2
-
-    assert m3[0] == (6, 8)
-    assert m3[1] == (10, 12)
+def variables(data: list[list[float]]) -> cp.tensor[Any]:
+    return cp.tensor([[cp.value(x) for x in row] for row in data])
 
 
-def test_matrix_scalar_addition():
-    """Test matrix addition with scalar"""
-    m1 = cp.tensor([[1, 2], [3, 4]])
-    m2 = m1 + 5
-
-    assert m2[0] == (6, 7)
-    assert m2[1] == (8, 9)
+def matmul_ref(a: list[list[float]], b: list[list[float]]) -> list[list[float]]:
+    return [[sum(a[i][k] * b[k][j] for k in range(len(b))) for j in range(len(b[0]))] for i in range(len(a))]
 
 
-def test_matrix_subtraction():
-    """Test matrix subtraction"""
-    m1 = cp.tensor([[5, 6], [7, 8]])
-    m2 = cp.tensor([[1, 2], [3, 4]])
-    m3 = m1 - m2
-
-    assert m3[0] == (4, 4)
-    assert m3[1] == (4, 4)
+def flat(data: list[list[float]]) -> list[float]:
+    return [x for row in data for x in row]
 
 
-def test_matrix_scalar_subtraction():
-    """Test matrix subtraction with scalar"""
-    m1 = cp.tensor([[5, 6], [7, 8]])
-    m2 = m1 - 2
-
-    assert m2[0] == (3, 4)
-    assert m2[1] == (5, 6)
+def test_matrix_alias():
+    m = cp.matrix([[1, 2, 3], [4, 5, 6]])
+    assert isinstance(m, cp.tensor)
+    assert m.shape == (2, 3)
+    assert m.values == (1, 2, 3, 4, 5, 6)
 
 
-def test_matrix_negation():
-    """Test matrix negation"""
-    m1 = cp.tensor([[1, 2], [3, 4]])
-    m2 = -m1
-
-    assert m1[0] == (1, 2)
-    assert m1[1] == (3, 4)
-    assert m2[0] == (-1, -2)
-    assert m2[1] == (-3, -4)
+MATMUL_CASES = [
+    ([[1, 2], [3, 4]], [[5, 6], [7, 8]]),
+    ([[1, 2, 3], [4, 5, 6]], [[7, 8], [9, 10], [11, 12]]),
+    ([[1, 2], [3, 4], [5, 6]], [[1, 2, 3], [4, 5, 6]]),
+    ([[1.5, -2.0, 0.5]], [[2.0], [1.0], [-4.0]]),
+    ([[2.0], [3.0]], [[4.0, 5.0]]),
+]
 
 
-def test_matrix_element_wise_multiplication():
-    """Test element-wise matrix multiplication"""
-    m1 = cp.tensor([[1, 2], [3, 4]])
-    m2 = cp.tensor([[5, 6], [7, 8]])
-    m3 = m1 * m2
+@pytest.mark.parametrize(("a", "b"), MATMUL_CASES)
+def test_matrix_matrix_multiplication(a: list[list[float]], b: list[list[float]]):
+    ref = matmul_ref(a, b)
 
-    assert m3[0] == (5, 12)
-    assert m3[1] == (21, 32)
+    res = cp.tensor(a) @ cp.tensor(b)
+    assert isinstance(res, cp.tensor)
+    assert res.shape == (len(a), len(b[0]))
+    assert res.values == pytest.approx(flat(ref))  # pyright: ignore[reportUnknownMemberType]
+    assert cp.tensor(a).matmul(cp.tensor(b)).values == pytest.approx(flat(ref))  # pyright: ignore[reportUnknownMemberType]
 
-
-def test_matrix_scalar_multiplication():
-    """Test matrix multiplication with scalar"""
-    m1 = cp.tensor([[1, 2], [3, 4]])
-    m2 = m1 * 3
-
-    assert m2[0] == (3, 6)
-    assert m2[1] == (9, 12)
-
-
-def test_matrix_element_wise_division():
-    """Test element-wise matrix division"""
-    m1 = cp.tensor([[6.0, 8.0], [12.0, 16.0]])
-    m2 = cp.tensor([[2.0, 2.0], [3.0, 4.0]])
-    m3 = m1 / m2
-
-    assert m3[0][0] == pytest.approx(3.0)  # pyright: ignore[reportUnknownMemberType]
-    assert m3[0][1] == pytest.approx(4.0)  # pyright: ignore[reportUnknownMemberType]
-    assert m3[1][0] == pytest.approx(4.0)  # pyright: ignore[reportUnknownMemberType]
-    assert m3[1][1] == pytest.approx(4.0)  # pyright: ignore[reportUnknownMemberType]
-
-
-def test_matrix_scalar_division():
-    """Test matrix division by scalar"""
-    m1 = cp.tensor([[6.0, 8.0], [12.0, 16.0]])
-    m2 = m1 / 2.0
-
-    assert list(m2[0]) == pytest.approx((3.0, 4.0))  # pyright: ignore[reportUnknownMemberType]
-    assert list(m2[1]) == pytest.approx((6.0, 8.0))  # pyright: ignore[reportUnknownMemberType]
+    res, = evaluate(variables(a) @ cp.tensor(b))
+    assert res.shape == (len(a), len(b[0]))
+    assert res.values == pytest.approx(flat(ref), rel=1e-5)  # pyright: ignore[reportUnknownMemberType]
 
 
 def test_matrix_vector_multiplication():
-    """Test matrix-vector multiplication using @ operator"""
+    m = [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]
+    v = [7.0, -8.0, 9.5]
+    ref = [sum(x * y for x, y in zip(row, v)) for row in m]
+    ref_left = [sum(v2 * m[i][j] for i, v2 in enumerate([2.0, -1.0])) for j in range(3)]
+
+    vv = cp.vector([cp.value(x) for x in v])
+    exprs = (cp.tensor(m) @ cp.vector(v),  # matrix @ vector
+             cp.tensor(m) @ cp.tensor(v),  # matrix @ 1D tensor
+             variables(m) @ cp.vector(v),
+             cp.tensor(m) @ vv,
+             cp.tensor([2.0, -1.0]) @ variables(m))  # 1D tensor @ matrix
+    results = evaluate(*exprs)
+
+    for expr, res in zip(exprs[:4], results[:4]):
+        assert expr.shape == (2,)
+        assert res.values == pytest.approx(ref, rel=1e-5)  # pyright: ignore[reportUnknownMemberType]
+
+    assert exprs[4].shape == (3,)
+    assert results[4].values == pytest.approx(ref_left, rel=1e-5)  # pyright: ignore[reportUnknownMemberType]
+
+
+def test_vector_dot_as_1d_matmul():
+    assert cp.tensor([1, 2, 3]) @ cp.tensor([4, 5, 6]) == 32
+
+
+@pytest.mark.parametrize(("a", "b"), [([[1, 2], [3, 4]], [[1, 2, 3]]), ([[1, 2, 3]], [[1, 2, 3]]), ([[1, 2], [3, 4]], [1, 2, 3])])
+def test_matmul_shape_mismatch(a: Any, b: Any):
+    with pytest.raises(ValueError):
+        cp.tensor(a) @ cp.tensor(b)
+
+
+def test_matmul_properties():
+    a = [[1.0, 2.0], [3.0, -4.0]]
+    b = [[0.5, -1.0], [2.0, 1.5]]
+    c = [[-2.0, 1.0], [0.0, 3.0]]
+    ta, tb, tc = cp.tensor(a), cp.tensor(b), cp.tensor(c)
+
+    # Associativity
+    assert ((ta @ tb) @ tc).values == pytest.approx((ta @ (tb @ tc)).values)  # pyright: ignore[reportUnknownMemberType]
+    # Distributivity
+    assert (ta @ (tb + tc)).values == pytest.approx((ta @ tb + ta @ tc).values)  # pyright: ignore[reportUnknownMemberType]
+    # (AB)^T = B^T A^T
+    assert (ta @ tb).T.values == pytest.approx((tb.T @ ta.T).values)  # pyright: ignore[reportUnknownMemberType]
+    # Not commutative
+    assert (ta @ tb).values != pytest.approx((tb @ ta).values)  # pyright: ignore[reportUnknownMemberType]
+
+
+def test_identity_is_neutral_element():
+    a = [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]
+    va = variables(a)
+    left, right = evaluate(cp.identity(2) @ va, va @ cp.eye(3))
+    assert left.values == pytest.approx(flat(a))  # pyright: ignore[reportUnknownMemberType]
+    assert right.values == pytest.approx(flat(a))  # pyright: ignore[reportUnknownMemberType]
+
+
+@pytest.mark.parametrize(("args", "expected"), [((1,), [[1]]), ((3,), [[1, 0, 0], [0, 1, 0], [0, 0, 1]]),
+                                                ((2, 3), [[1, 0, 0], [0, 1, 0]]), ((3, 2), [[1, 0], [0, 1], [0, 0]])])
+def test_eye(args: tuple[int, ...], expected: list[list[int]]):
+    m = cp.eye(*args)
+    assert m.shape == (len(expected), len(expected[0]))
+    assert m.values == tuple(flat(expected))
+
+
+def test_identity():
+    m = cp.identity(3)
+    assert m.shape == (3, 3)
+    assert m.values == (1, 0, 0, 0, 1, 0, 0, 0, 1)
+
+
+def test_constant_matrices_are_not_variables():
+    """Constant zeros and ones allow eliminating operations at trace time"""
+    v = cp.vector([cp.value(1.0), cp.value(2.0)])
+    for m in (cp.eye(2), cp.identity(2), cp.diagonal(cp.vector([2.0, 3.0]))):
+        assert not any(isinstance(x, cp.value) for x in m.values)
+
+    # Multiplications by 0 and 1 are removed, only the values of v remain
+    res = cp.identity(2) @ v
+    assert res.values[0] is v.values[0]
+    assert res.values[1] is v.values[1]
+
+    # Constant matrix @ constant vector is evaluated at trace time
+    assert (cp.tensor([[1, 2], [3, 4]]) @ cp.vector([1, 1])).values == (3, 7)
+
+
+@pytest.mark.parametrize("container", [cp.vector, cp.tensor])
+@pytest.mark.parametrize("diag", [[1, 2, 3], [2.5], [-1.0, 0.0]])
+def test_diagonal(container: Any, diag: list[float]):
+    n = len(diag)
+    expected = [diag[i] if i == j else 0 for i in range(n) for j in range(n)]
+
+    m = cp.diagonal(container(diag))
+    assert m.shape == (n, n)
+    assert m.values == tuple(expected)
+
+    res, = evaluate(cp.diagonal(container([cp.value(x) for x in diag])))
+    assert res.values == pytest.approx(expected)  # pyright: ignore[reportUnknownMemberType]
+
+
+def test_diagonal_requires_1d():
+    with pytest.raises(ValueError):
+        cp.diagonal(cp.tensor([[1, 2], [3, 4]]))
+
+
+def test_transpose():
     m = cp.tensor([[1, 2, 3], [4, 5, 6]])
-    v = cp.vector([7, 8, 9])
-    result = m @ v
-
-    assert isinstance(result, cp.tensor)
-    assert len(result.values) == 2
-    assert result[0] == 1*7 + 2*8 + 3*9
-    assert result[1] == 4*7 + 5*8 + 6*9
+    for mt in (m.transpose(), m.T):
+        assert mt.shape == (3, 2)
+        assert mt.values == (1, 4, 2, 5, 3, 6)
+        assert mt[0].values == (1, 4)
+        assert mt[:, 1].values == (4, 5, 6)
 
 
-def test_matrix_matrix_multiplication():
-    """Test matrix-matrix multiplication using @ operator"""
-    m1 = cp.tensor([[1, 2], [3, 4]])
-    m2 = cp.tensor([[5, 6], [7, 8]])
-    result = m1 @ m2
+@pytest.mark.parametrize(("data", "expected"), [([[1, 2, 3], [4, 5, 6], [7, 8, 9]], 15), ([[2.5]], 2.5),
+                                                ([[1, -2], [3, -4]], -3)])
+def test_trace(data: list[list[float]], expected: float):
+    m = cp.tensor(data)
+    assert m.trace() == expected
+    assert m.T.trace() == expected
 
-    assert isinstance(result, cp.tensor)
-    assert result.shape == (2, 2)
-    assert result[0][0] == 1*5 + 2*7
-    assert result[0][1] == 1*6 + 2*8
-    assert result[1][0] == 3*5 + 4*7
-    assert result[1][1] == 3*6 + 4*8
+    res, = evaluate(variables(data).trace())
+    assert res == pytest.approx(expected)  # pyright: ignore[reportUnknownMemberType]
 
 
-def test_matrix_transpose():
-    """Test matrix transpose"""
-    m = cp.tensor([[1, 2, 3], [4, 5, 6]])
-    mt = m.transpose()
-
-    assert mt.shape == (3, 2)
-    assert mt[0] == (1, 4)
-    assert mt[1] == (2, 5)
-    assert mt[2] == (3, 6)
+def test_trace_requires_square_matrix():
+    with pytest.raises((AssertionError, ValueError)):
+        cp.tensor([[1, 2, 3], [4, 5, 6]]).trace()
 
 
-def test_matrix_transpose_property():
-    """Test matrix transpose using .T property"""
-    m = cp.tensor([[1, 2, 3], [4, 5, 6]])
-    mt = m.T
-
-    assert mt.shape == (3, 2)
-    assert mt[0] == (1, 4)
-
-
-def test_matrix_row_access():
-    """Test getting a row as a vector"""
-    m = cp.tensor([[1, 2, 3], [4, 5, 6]])
-    row0 = m[0]
-
-    assert isinstance(row0, cp.tensor)
-    assert row0.values == (1, 2, 3)
-
-
-def test_matrix_col_access():
-    """Test getting a column as a vector"""
-    m = cp.tensor([[1, 2, 3], [4, 5, 6]])
-    col1 = m[:, 1]
-
-    assert isinstance(col1, cp.tensor)
-    assert col1 == (2, 5)
-
-
-def test_matrix_trace():
-    """Test matrix trace (sum of diagonal elements)"""
-    m = cp.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
-    trace = m.trace()
-
-    assert trace == 1 + 5 + 9
-
-
-def test_matrix_sum():
-    """Test sum of all matrix elements"""
-    m = cp.tensor([[1, 2, 3], [4, 5, 6]])
-    total = m.sum()
-
-    assert total == 1 + 2 + 3 + 4 + 5 + 6
-
-
-def test_matrix_map():
-    """Test mapping a function over matrix elements"""
-    m = cp.tensor([[1, 2], [3, 4]])
-    m_doubled = m.map(lambda x: x * 2)
-
-    assert m_doubled[0] == (2, 4)
-    assert m_doubled[1] == (6, 8)
-
-
-def test_matrix_homogenize():
-    """Test homogenizing matrix (converting to all variables)"""
-    m = cp.tensor([[1, cp.value(2)], [3, 4]])
+def test_homogenize():
+    m = cp.tensor([[1, cp.value(2)], [3.5, 4]])
     m_homo = m.homogenize()
 
+    assert m_homo.shape == (2, 2)
+    assert all(isinstance(v, cp.value) for v in m_homo.values)
     for row in m_homo:
         for elem in row:
             assert isinstance(elem, cp.tensor) and elem.ndim == 0
 
-
-def test_identity_matrix():
-    """Test identity matrix creation"""
-    m = cp.identity(3)
-
-    assert m.shape == (3, 3)
-    assert m[0] == (1, 0, 0)
-    assert m[1] == (0, 1, 0)
-    assert m[2] == (0, 0, 1)
+    res, = evaluate(m_homo)
+    assert res.values == pytest.approx((1, 2, 3.5, 4))  # pyright: ignore[reportUnknownMemberType]
 
 
-def test_zeros_matrix():
-    """Test zeros matrix creation"""
-    m = cp.zeros([2, 3])
+def test_rotation_matrix():
+    """2D rotation matrices: R(a) @ R(b) = R(a + b), R^T = R^-1"""
+    def rot(a: Any) -> cp.tensor[Any]:
+        return cp.tensor([[cp.cos(a), -cp.sin(a)], [cp.sin(a), cp.cos(a)]])
 
-    assert m.shape == (2, 3)
-    assert m[0] == (0, 0, 0)
-    assert m[1] == (0, 0, 0)
+    a = cp.value(0.3)
+    b = cp.value(1.1)
+    p = cp.vector([1.0, 0.0])
 
+    combined, direct, ortho, rotated = evaluate(rot(a) @ rot(b), rot(a + b), rot(a).T @ rot(a), rot(a + b) @ p)
 
-def test_ones_matrix():
-    """Test ones matrix creation"""
-    m = cp.ones([2, 3])
-
-    assert m.shape == (2, 3)
-    assert m[0] == (1, 1, 1)
-    assert m[1] == (1, 1, 1)
+    assert combined.values == pytest.approx(direct.values, abs=1e-6)  # pyright: ignore[reportUnknownMemberType]
+    assert ortho.values == pytest.approx((1, 0, 0, 1), abs=1e-6)  # pyright: ignore[reportUnknownMemberType]
+    assert rotated.values == pytest.approx((math.cos(1.4), math.sin(1.4)), abs=1e-6)  # pyright: ignore[reportUnknownMemberType]
 
 
-def test_diagonal_matrix():
-    """Test diagonal matrix creation from vector"""
-    v = cp.vector([1, 2, 3])
-    m = cp.diagonal(v)
-
-    assert m.shape == (3, 3)
-    assert m[0] == (1, 0, 0)
-    assert m[1] == (0, 2, 0)
-    assert m[2] == (0, 0, 3)
-
-
-def test_matrix_with_variables_compiled():
-    """Test matrix operations with variables in compilation"""
+def test_compiled_matrix_expression():
+    """Mixed constant and variable entries in a longer expression"""
     m = cp.tensor([[cp.value(1), 2], [3, cp.value(4)]])
     v = cp.vector([cp.value(5), 6])
-    result = m @ v
 
-    # result[0] = 1*5 + 2*6 = 17
-    # result[1] = 3*5 + 4*6 = 39
+    result = (m @ m.T + cp.identity(2) * 2) @ v - m.sum()
 
-    tg = cp.Target()
-    tg.compile(result)
-    tg.run()
+    mm = [[1, 2], [3, 4]]
+    mmt = matmul_ref(mm, [[1, 3], [2, 4]])
+    inner = [[mmt[i][j] + (2 if i == j else 0) for j in range(2)] for i in range(2)]
+    ref = [sum(inner[i][j] * [5, 6][j] for j in range(2)) - 10 for i in range(2)]
 
-    assert tg.read_value(result.values[0]) == pytest.approx(17)  # pyright: ignore[reportUnknownMemberType]
-    assert tg.read_value(result.values[1]) == pytest.approx(39)  # pyright: ignore[reportUnknownMemberType]
+    res, = evaluate(result)
+    assert res.values == pytest.approx(ref)  # pyright: ignore[reportUnknownMemberType]
 
 
 if __name__ == "__main__":
