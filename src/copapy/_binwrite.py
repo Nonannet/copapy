@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import Enum, IntEnum, IntFlag
 from typing import Literal
 import struct
 
@@ -6,18 +6,29 @@ ByteOrder = Literal['little', 'big']
 
 Command = Enum('Command', [('ALLOCATE_DATA', 1), ('COPY_DATA', 2),
                            ('ALLOCATE_CODE', 3), ('COPY_CODE', 4),
-                           ('PATCH_FUNC', 0x1000),
-                           ('PATCH_FUNC_ARM32_THM', 0x1005),
-                           ('PATCH_OBJECT', 0x2000),
-                           ('PATCH_OBJECT_HI21', 0x2001),
-                           ('PATCH_OBJECT_ABS', 0x2002),
-                           ('PATCH_OBJECT_REL', 0x2003),
-                           ('PATCH_OBJECT_ARM32_ABS', 0x2004),
-                           ('PATCH_OBJECT_ARM32_ABS_THM', 0x2006),
+                           ('PATCH', 0x1000),
                            ('ENTRY_POINT', 7),
                            ('RUN_PROG', 64), ('READ_DATA', 65),
                            ('END_COM', 256), ('FREE_MEMORY', 257), ('DUMP_CODE', 258)])
 COMMAND_SIZE = 4
+
+
+class PatchEncoding(IntEnum):
+    """How the calculated patch value is inserted into the instruction
+    (must match PATCH_ENC_* in runmem.h)"""
+    BITFIELD = 0         # 32 bit word, value placed at the lowest set bit of mask
+    AARCH64_ADRP = 1     # AArch64 ADRP immhi:immlo (21 bit)
+    ARM_MOVW_MOVT = 2    # ARM MOVW/MOVT (A1) imm4:imm12 (16 bit)
+    THUMB_MOVW_MOVT = 3  # Thumb MOVW/MOVT (T3/T1) imm4:i:imm3:imm8 (16 bit)
+    THUMB_BRANCH = 4     # Thumb B.W/BL (T4/T1) S:J1:J2:imm10:imm11 (24 bit)
+
+
+class PatchFlag(IntFlag):
+    """How the patch value is calculated (must match PATCH_FLAG_* in runmem.h)"""
+    CODE = 0    # Value is relative to the start of the code memory
+    DATA = 1    # Value is relative to the start of the data memory
+    PC_REL = 2  # Subtract the address of the patched instruction
+    PAGE = 4    # Round target and instruction address down to 4 KiB pages
 
 
 class data_writer():
