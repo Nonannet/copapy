@@ -116,7 +116,7 @@ if __name__ == "__main__":
             if section_name in asm_code[arch]:
                 arch_asm_code += f"""
 ### {arch}
-```nasm
+```objdump
 {asm_code[arch][section_name]}
 ```
 """
