@@ -26,20 +26,46 @@
 #define COPY_DATA         2
 #define ALLOCATE_CODE     3
 #define COPY_CODE         4
-#define PATCH_FUNC        0x1000
-#define PATCH_FUNC_ARM32_THM   0x1005
-#define PATCH_OBJECT      0x2000
-#define PATCH_OBJECT_HI21 0x2001
-#define PATCH_OBJECT_ABS  0x2002
-#define PATCH_OBJECT_REL  0x2003
-#define PATCH_OBJECT_ARM32_ABS 0x2004
-#define PATCH_OBJECT_ARM32_ABS_THM 0x2006
+#define PATCH             0x1000
 #define ENTRY_POINT       7
 #define RUN_PROG         64
 #define READ_DATA        65
 #define END_COM         256
 #define FREE_MEMORY     257
 #define DUMP_CODE       258
+
+/* PATCH command arguments:
+ *   uint32 offs      address of the patched instruction relative to code memory
+ *   int32  value     target address (S + A) relative to code or data memory
+ *   uint32 mask      bit mask of the instruction field (PATCH_ENC_BITFIELD only)
+ *   uint8  encoding  PATCH_ENC_*
+ *   uint8  shift     right shift applied to the calculated value
+ *   uint8  flags     PATCH_FLAG_*
+ *   uint8  reserved
+ *
+ * The runner calculates the value to insert as:
+ *   S = (flags & DATA ? data_memory : executable_memory) + value
+ *   P = executable_memory + offs
+ *   with PAGE: S and P rounded down to 4 KiB pages
+ *   result = ((flags & PC_REL) ? S - P : S) >> shift
+ */
+
+/* Patch encodings: how the result is inserted into the instruction */
+#define PATCH_ENC_BITFIELD        0  /* 32 bit word, result placed at the lowest set bit of mask */
+#define PATCH_ENC_AARCH64_ADRP    1  /* AArch64 ADRP immhi:immlo (21 bit) */
+#define PATCH_ENC_ARM_MOVW_MOVT   2  /* ARM MOVW/MOVT (A1) imm4:imm12 (16 bit) */
+#define PATCH_ENC_THUMB_MOVW_MOVT 3  /* Thumb MOVW/MOVT (T3/T1) imm4:i:imm3:imm8 (16 bit) */
+#define PATCH_ENC_THUMB_BRANCH    4  /* Thumb B.W/BL (T4/T1) S:J1:J2:imm10:imm11 (24 bit) */
+#define PATCH_ENC_RISCV_S_TYPE    5  /* RISC-V store imm[11:5|4:0] (12 bit) */
+#define PATCH_ENC_RISCV_B_TYPE    6  /* RISC-V branch imm[12|10:5|4:1|11] (13 bit) */
+#define PATCH_ENC_RISCV_J_TYPE    7  /* RISC-V jal imm[20|10:1|11|19:12] (21 bit) */
+#define PATCH_ENC_RISCV_CB_TYPE   8  /* RISC-V compressed branch imm[8|4:3|7:6|2:1|5] (16 bit instr.) */
+#define PATCH_ENC_RISCV_CJ_TYPE   9  /* RISC-V compressed jump imm[11|4|9:8|10|6|7|3:1|5] (16 bit instr.) */
+
+/* Patch flags: how the result is calculated */
+#define PATCH_FLAG_DATA   0x01  /* value is relative to data memory (else code memory) */
+#define PATCH_FLAG_PC_REL 0x02  /* subtract address of the patched instruction */
+#define PATCH_FLAG_PAGE   0x04  /* round target and instruction address down to 4 KiB pages */
 
 /* Entry point type */
 typedef int (*entry_point_t)(void);

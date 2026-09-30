@@ -1,47 +1,136 @@
-from copapy._binwrite import data_reader, Command, ByteOrder
+from copapy._binwrite import data_reader, Command, ByteOrder, PatchEncoding, PatchFlag
 import argparse
-from typing import Literal
 
 
-def patch(data: bytearray, offset: int, patch_mask: int, value: int, byteorder: Literal['little', 'big']) -> None:
-    # Read 4 bytes at the offset as a little-endian uint32
-    original = int.from_bytes(data[offset:offset+4], byteorder)
+def read_u32(data: bytearray, offset: int, byteorder: ByteOrder) -> int:
+    return int.from_bytes(data[offset:offset+4], byteorder)
 
+
+def write_u32(data: bytearray, offset: int, value: int, byteorder: ByteOrder) -> None:
+    data[offset:offset+4] = (value & 0xFFFFFFFF).to_bytes(4, byteorder)
+
+
+def patch_bitfield(data: bytearray, offset: int, patch_mask: int, value: int, byteorder: ByteOrder) -> None:
+    original = read_u32(data, offset, byteorder)
     shift_factor = patch_mask & -patch_mask
-
-    # Apply the patch
-    new_value = (original & ~patch_mask) | ((value * shift_factor) & patch_mask)
-
-    # Write the new value back to the bytearray
-    data[offset:offset+4] = new_value.to_bytes(4, byteorder)
+    write_u32(data, offset, (original & ~patch_mask) | ((value * shift_factor) & patch_mask), byteorder)
 
 
-def patch_hi21(data: bytearray, offset: int, page_offset: int, byteorder: Literal['little', 'big']) -> None:
+def patch_hi21(data: bytearray, offset: int, page_offset: int, byteorder: ByteOrder) -> None:
     # ADRP immediate is signed 21 bits: valid range [-2^20, 2^20 - 1]
     if not (-(1 << 20) <= page_offset < (1 << 20)):
         raise ValueError(f"page_offset {page_offset} out of 21-bit range")
 
-    # Load current 32-bit instruction from data
-    instr_bytes = data[offset:offset+4]
-    instr = int.from_bytes(instr_bytes, byteorder)
+    instr = read_u32(data, offset, byteorder)
 
-    # Split the page offset into immhi and immlo
-    immlo = page_offset & 0x3          # bits[1:0]
-    immhi = (page_offset >> 2) & 0x7FFFF  # bits[20:2] (19 bits)
+    # Split the page offset into immhi (bits[20:2]) and immlo (bits[1:0])
+    immlo = page_offset & 0x3
+    immhi = (page_offset >> 2) & 0x7FFFF
 
-    # Clear previous immhi and immlo bits (bits 23:5 and 30:29)
+    # Clear and insert immhi (bits 23:5) and immlo (bits 30:29)
     instr &= ~((0x7FFFF << 5) | (0x3 << 29))
-
-    # Insert new immhi and immlo fields
     instr |= (immhi << 5) | (immlo << 29)
 
-    #instr ^= (1 << 23)
+    write_u32(data, offset, instr, byteorder)
 
-    print(f"->>> page_offset=0x{page_offset:x}, immhi=0x{immhi:x}, immlo=0x{immlo:x}, instr=0x{instr:x}")
-    print(f"     page_offset=0x{page_offset:x}, immhi=0x{immhi:b}, immlo=0x{immlo:b}, instr=0x{instr:b}")
 
-    # Store the patched instruction back into the bytearray
-    data[offset:offset+4] = instr.to_bytes(4, byteorder)
+def patch_arm_movw_movt(data: bytearray, offset: int, imm16: int, byteorder: ByteOrder) -> None:
+    instr = read_u32(data, offset, byteorder)
+    instr &= ~((0xF << 16) | 0xFFF)
+    instr |= (((imm16 >> 12) & 0xF) << 16) | (imm16 & 0xFFF)
+    write_u32(data, offset, instr, byteorder)
+
+
+def patch_thumb_movw_movt(data: bytearray, offset: int, imm16: int, byteorder: ByteOrder) -> None:
+    first = int.from_bytes(data[offset:offset+2], byteorder)
+    second = int.from_bytes(data[offset+2:offset+4], byteorder)
+    first &= ~(0x000F | (1 << 10))
+    second &= ~(0x00FF | (0x7 << 12))
+    first |= ((imm16 >> 12) & 0xF) | (((imm16 >> 11) & 0x1) << 10)
+    second |= (imm16 & 0xFF) | (((imm16 >> 8) & 0x7) << 12)
+    data[offset:offset+2] = (first & 0xFFFF).to_bytes(2, byteorder)
+    data[offset+2:offset+4] = (second & 0xFFFF).to_bytes(2, byteorder)
+
+
+def patch_thumb_branch(data: bytearray, offset: int, value: int, byteorder: ByteOrder) -> None:
+    first = int.from_bytes(data[offset:offset+2], byteorder)
+    second = int.from_bytes(data[offset+2:offset+4], byteorder)
+    s = (value >> 23) & 0x1
+    j1 = (~(((value >> 22) & 0x1) ^ s)) & 0x1
+    j2 = (~(((value >> 21) & 0x1) ^ s)) & 0x1
+    first = (first & 0xF800) | (s << 10) | ((value >> 11) & 0x3FF)
+    second = (second & 0xD000) | (j1 << 13) | (j2 << 11) | (value & 0x7FF)
+    data[offset:offset+2] = first.to_bytes(2, byteorder)
+    data[offset+2:offset+4] = second.to_bytes(2, byteorder)
+
+
+def patch_riscv_s_type(data: bytearray, offset: int, imm: int, byteorder: ByteOrder) -> None:
+    instr = read_u32(data, offset, byteorder) & ~((0x7F << 25) | (0x1F << 7))
+    instr |= ((imm >> 5) & 0x7F) << 25 | (imm & 0x1F) << 7
+    write_u32(data, offset, instr, byteorder)
+
+
+def patch_riscv_b_type(data: bytearray, offset: int, imm: int, byteorder: ByteOrder) -> None:
+    instr = read_u32(data, offset, byteorder) & ~((0x7F << 25) | (0x1F << 7))
+    instr |= (((imm >> 12) & 0x1) << 31 | ((imm >> 5) & 0x3F) << 25 |
+              ((imm >> 1) & 0xF) << 8 | ((imm >> 11) & 0x1) << 7)
+    write_u32(data, offset, instr, byteorder)
+
+
+def patch_riscv_j_type(data: bytearray, offset: int, imm: int, byteorder: ByteOrder) -> None:
+    instr = read_u32(data, offset, byteorder) & 0xFFF
+    instr |= (((imm >> 20) & 0x1) << 31 | ((imm >> 1) & 0x3FF) << 21 |
+              ((imm >> 11) & 0x1) << 20 | ((imm >> 12) & 0xFF) << 12)
+    write_u32(data, offset, instr, byteorder)
+
+
+def patch_riscv_cb_type(data: bytearray, offset: int, imm: int, byteorder: ByteOrder) -> None:
+    instr = int.from_bytes(data[offset:offset+2], byteorder) & ~((0x7 << 10) | (0x1F << 2))
+    instr |= (((imm >> 8) & 0x1) << 12 | ((imm >> 3) & 0x3) << 10 |
+              ((imm >> 6) & 0x3) << 5 | ((imm >> 1) & 0x3) << 3 | ((imm >> 5) & 0x1) << 2)
+    data[offset:offset+2] = (instr & 0xFFFF).to_bytes(2, byteorder)
+
+
+def patch_riscv_cj_type(data: bytearray, offset: int, imm: int, byteorder: ByteOrder) -> None:
+    instr = int.from_bytes(data[offset:offset+2], byteorder) & ~(0x7FF << 2)
+    instr |= (((imm >> 11) & 0x1) << 12 | ((imm >> 4) & 0x1) << 11 |
+              ((imm >> 8) & 0x3) << 9 | ((imm >> 10) & 0x1) << 8 |
+              ((imm >> 6) & 0x1) << 7 | ((imm >> 7) & 0x1) << 6 |
+              ((imm >> 1) & 0x7) << 3 | ((imm >> 5) & 0x1) << 2)
+    data[offset:offset+2] = (instr & 0xFFFF).to_bytes(2, byteorder)
+
+
+def apply_patch(data: bytearray, offs: int, value: int, mask: int, encoding: PatchEncoding,
+                shift: int, flags: PatchFlag, data_section_offset: int, byteorder: ByteOrder) -> int:
+    """Same calculation as apply_patch in runmem.c with the code memory located at address 0"""
+    target = value + (data_section_offset if flags & PatchFlag.DATA else 0)  # S + A
+    pc = offs  # P
+    if flags & PatchFlag.PAGE:
+        target &= ~0xFFF
+        pc &= ~0xFFF
+    result = (target - pc if flags & PatchFlag.PC_REL else target) >> shift
+
+    if encoding == PatchEncoding.BITFIELD:
+        patch_bitfield(data, offs, mask, result, byteorder)
+    elif encoding == PatchEncoding.AARCH64_ADRP:
+        patch_hi21(data, offs, result, byteorder)
+    elif encoding == PatchEncoding.ARM_MOVW_MOVT:
+        patch_arm_movw_movt(data, offs, result & 0xFFFF, byteorder)
+    elif encoding == PatchEncoding.THUMB_MOVW_MOVT:
+        patch_thumb_movw_movt(data, offs, result & 0xFFFF, byteorder)
+    elif encoding == PatchEncoding.THUMB_BRANCH:
+        patch_thumb_branch(data, offs, result, byteorder)
+    elif encoding == PatchEncoding.RISCV_S_TYPE:
+        patch_riscv_s_type(data, offs, result, byteorder)
+    elif encoding == PatchEncoding.RISCV_B_TYPE:
+        patch_riscv_b_type(data, offs, result, byteorder)
+    elif encoding == PatchEncoding.RISCV_J_TYPE:
+        patch_riscv_j_type(data, offs, result, byteorder)
+    elif encoding == PatchEncoding.RISCV_CB_TYPE:
+        patch_riscv_cb_type(data, offs, result, byteorder)
+    elif encoding == PatchEncoding.RISCV_CJ_TYPE:
+        patch_riscv_cj_type(data, offs, result, byteorder)
+    return result
 
 
 if __name__ == "__main__":
@@ -85,29 +174,17 @@ if __name__ == "__main__":
             datab = dr.read_bytes(size)
             program_data[offs:offs + size] = datab
             print(f"COPY_CODE offs=0x{offs:x} size={size} data={' '.join(hex(d) for d in datab[:5])}...")
-        elif com == Command.PATCH_FUNC:
+        elif com == Command.PATCH:
             offs = dr.read_int()
-            mask = dr.read_int()
-            scale = dr.read_int()
             value = dr.read_int(signed=True)
-            patch(program_data, offs, mask, value // scale, byteorder)
-            print(f"PATCH_FUNC patch_offs=0x{offs:x} mask=0x{mask:x} scale=0x{scale:x} value=0x{value:x}")
-        elif com == Command.PATCH_OBJECT:
-            offs = dr.read_int()
             mask = dr.read_int()
-            scale = dr.read_int()
-            value = dr.read_int(signed=True)
-            patch(program_data, offs, mask, value // scale + data_section_offset // scale, byteorder)
-            print(f"PATCH_OBJECT patch_offs=0x{offs:x} mask=0x{mask:x} scale=0x{scale:x} value=0x{value + data_section_offset:x}")
-            print(f" | calculated value: 0x{(value // scale + data_section_offset // scale):x}")
-        elif com == Command.PATCH_OBJECT_HI21:
-            offs = dr.read_int()
-            mask = dr.read_int()
-            scale = dr.read_int()
-            value = dr.read_int(signed=True)
-            patch_hi21(program_data, offs, value // scale + data_section_offset // scale, byteorder)
-            print(f"PATCH_OBJECT_HI31 patch_offs=0x{offs:x} mask=0x{mask:x} scale=0x{scale:x} value=0x{value + data_section_offset:x}")
-            print(f" | calculated value: 0x{(value // scale + data_section_offset // scale):x}")
+            encoding = PatchEncoding(dr.read_byte())
+            shift = dr.read_byte()
+            flags = PatchFlag(dr.read_byte())
+            dr.read_byte()  # reserved
+            result = apply_patch(program_data, offs, value, mask, encoding, shift, flags, data_section_offset, byteorder)
+            print(f"PATCH patch_offs=0x{offs:x} value=0x{value:x} mask=0x{mask:x} encoding={encoding.name} shift={shift} flags={flags!r}")
+            print(f" | calculated value: 0x{result & 0xFFFFFFFF:x}")
         elif com == Command.ENTRY_POINT:
             rel_entr_point = dr.read_int()
             print(f"ENTRY_POINT rel_entr_point=0x{rel_entr_point:x}")

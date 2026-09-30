@@ -372,8 +372,10 @@ def clamp(x: U | value[U], min_value: U | value[U], max_value: value[U]) -> valu
 @overload
 def clamp(x: U, min_value: U, max_value: U) -> U: ...
 @overload
-def clamp(x: vector[U], min_value: 'U | value[U]', max_value: 'U | value[U]') -> vector[U]: ...
-def clamp(x: U | value[U] | vector[U], min_value: U | value[U], max_value:  U | value[U]) -> Any:
+def clamp(x: vector[U], min_value: U | value[U], max_value: U | value[U]) -> vector[U]: ...
+@overload
+def clamp(x: tensor[U], min_value: U | value[U], max_value: U | value[U]) -> tensor[U]: ...
+def clamp(x: U | value[U] | vector[U] | tensor[U], min_value: U | value[U], max_value: U | value[U]) -> Any:
     """Clamp function to limit a value between a minimum and maximum.
 
     Arguments:
@@ -386,6 +388,8 @@ def clamp(x: U | value[U] | vector[U], min_value: U | value[U], max_value:  U | 
     """
     if isinstance(x, vector):
         return vector(clamp(comp, min_value, max_value) for comp in x.values)
+    if isinstance(x, tensor):
+        return tensor((clamp(comp, min_value, max_value) for comp in x.values), x.shape)
 
     return (x < min_value) * min_value + \
           (x > max_value) * max_value + \
@@ -459,30 +463,37 @@ def maximum(x: U | value[U] | vector[U] | tensor[U], y: U | value[U] | vector[U]
 
 
 @overload
-def lerp(v1: value[U], v2: U | value[U], t: unifloat) -> value[U]: ...
+def lerp(v1: value[U], v2: U | value[U], t: unifloat) -> value[float]: ...
 @overload
-def lerp(v1: U | value[U], v2: value[U], t: unifloat) -> value[U]: ...
+def lerp(v1: U | value[U], v2: value[U], t: unifloat) -> value[float]: ...
 @overload
-def lerp(v1: U | value[U], v2: U | value[U], t: value[float]) -> value[U]: ...
+def lerp(v1: U | value[U], v2: U | value[U], t: value[float]) -> value[float]: ...
 @overload
-def lerp(v1: U, v2: U, t: float) -> U: ...
+def lerp(v1: U, v2: U, t: float) -> float: ...
 @overload
 def lerp(v1: vector[U], v2: vector[U], t: unifloat) -> vector[U]: ...
-def lerp(v1: U | value[U] | vector[U], v2: U | value[U] | vector[U], t:  unifloat) -> Any:
+@overload
+def lerp(v1: tensor[U], v2: tensor[U], t: unifloat) -> tensor[U]: ...
+def lerp(v1: TensorNumLike, v2: TensorNumLike, t:  unifloat) -> Any:
     """Linearly interpolate between two values or vectors v1 and v2 by a factor t.
 
     Arguments:
-        v1: First value or vector
-        v2: Second value or vector
+        v1: First value, vector or tensor
+        v2: Second value, vector or tensor
         t: Interpolation factor (0.0 to 1.0)
 
     Returns:
         Interpolated value or vector
     """
-    if isinstance(v1, vector) or isinstance(v2, vector):
-        assert isinstance(v1, vector) and isinstance(v2, vector), "None or both v1 and v2 must be vectors."
-        assert len(v1.values) == len(v2.values), "Vectors must be of the same length."
+    if isinstance(v1, vector):
+        assert isinstance(v2, vector), "v1 and v2 must both be vectors."
+        assert v1.shape == v2.shape, "v1 and v2 must have the same shape."
         return vector(lerp(vv1, vv2, t) for vv1, vv2 in zip(v1.values, v2.values))
+    if isinstance(v1, tensor):
+        assert isinstance(v2, tensor), "v1 and v2 must both be tensors."
+        assert v1.shape == v2.shape, "v1 and v2 must have the same shape."
+        return tensor([lerp(vv1, vv2, t) for vv1, vv2 in zip(v1.values, v2.values)], v1.shape)
+    assert isinstance(v2, (int, float, value)), "v1 and v2 must be of the same type."
     return v1 * (1 - t) + v2 * t
 
 

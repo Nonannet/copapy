@@ -278,6 +278,22 @@ class quaternion(ArrayType[float]):
         z = self.w * other.z + self.x * other.y - self.y * other.x + self.z * other.w
         return quaternion(w, x, y, z)
 
+    def __eq__(self, other: 'quaternion | Iterable[NumLike]') -> vector[int]:  # type: ignore
+        """Element-wise equality of the (w, x, y, z) components."""
+        if not isinstance(other, Iterable):
+            return NotImplemented
+        other_values = tuple(other)
+        assert len(other_values) == 4, "Quaternion can only be compared with 4 components"
+        return vector(a == b for a, b in zip(self.values, other_values))
+
+    def __ne__(self, other: 'quaternion | Iterable[NumLike]') -> vector[int]:  # type: ignore
+        """Element-wise inequality of the (w, x, y, z) components."""
+        if not isinstance(other, Iterable):
+            return NotImplemented
+        other_values = tuple(other)
+        assert len(other_values) == 4, "Quaternion can only be compared with 4 components"
+        return vector(a != b for a, b in zip(self.values, other_values))
+
     def __truediv__(self, other: NumLike) -> 'quaternion':
         if isinstance(other, value):
             return quaternion(v / other for v in self.values)

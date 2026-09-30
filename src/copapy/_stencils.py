@@ -3,6 +3,7 @@ from typing import Generator, Literal, Iterable, TYPE_CHECKING
 import struct
 import platform
 import os
+from ._binwrite import PatchEncoding, PatchFlag
 
 if TYPE_CHECKING:
     import pelfy
@@ -20,6 +21,12 @@ ByteOrder = Literal['little', 'big']
 class relocation_entry:
     """
     A dataclass for representing a relocation entry
+
+    Attributes:
+        target_in_code: The target is a label in the code section of the
+            function itself (e.g. a branch target)
+        hi_reloc: For RISC-V PCREL_LO12 relocations the paired PCREL_HI20
+            relocation, which defines the actual target symbol
     """
     target_symbol_name: str
     target_symbol_info: str
@@ -28,25 +35,42 @@ class relocation_entry:
     function_offset: int
     start: int
     pelfy_reloc: pelfy.elf_relocation
+    target_in_code: bool = False
+    hi_reloc: pelfy.elf_relocation | None = None
+
+
+# Relocations that are only hints for linker relaxation and require no patching
+HINT_RELOCATIONS = ('R_RISCV_RELAX', 'R_RISCV_ALIGN')
+
+# Relocations for a call spanning two instructions (RISC-V auipc + jalr)
+DOUBLE_CALL_RELOCATIONS = ('R_RISCV_CALL', 'R_RISCV_CALL_PLT')
+
+SHF_EXECINSTR = 0x4
 
 
 @dataclass
 class patch_entry:
     """
-    A dataclass for representing a patch entry
+    A dataclass for representing a patch entry. The runner calculates
+    the patch value by: ((base + value) - (code + address if PC_REL)) >> shift
+    with base being the start address of the code or data memory, depending
+    on the DATA flag. The result is inserted into the instruction as
+    specified by encoding.
 
     Attributes:
-        mask (int): Bit-mask to apply to the patched value
-        address (int): Address where to patch
-        value (int): The value to write at the patch address
-        scale (int): The scale factor for the patch value
-        patch_type (int): The type of patch
+        address (int): Address of the patched instruction relative to the start of the code memory
+        value (int): Target address (S + A) relative to the start of the code or data memory
+        mask (int): Bit-mask of the patched instruction field (only used for BITFIELD encoding)
+        shift (int): Number of bits the calculated value is shifted right before encoding
+        encoding (PatchEncoding): How the value is inserted into the instruction
+        flags (PatchFlag): How the value is calculated
     """
-    mask: int
     address: int
     value: int
-    scale: int
-    patch_type: int
+    mask: int
+    shift: int
+    encoding: PatchEncoding
+    flags: PatchFlag
 
 
 def detect_process_arch() -> str:
@@ -74,7 +98,7 @@ def detect_process_arch() -> str:
     elif 'mips' in arch:
         arch_family = 'mips64' if bits == 64 else 'mips'
     elif 'riscv' in arch:
-        arch_family = 'riscv64' if bits == 64 else 'riscv'
+        arch_family = 'riscv64' if bits == 64 else 'riscv32'
     else:
         raise NotImplementedError(f"Platform {arch} with {bits} bits is not supported.")
 
@@ -112,10 +136,15 @@ def get_stencil_position(func: pelfy.elf_symbol) -> tuple[int, int]:
     return start_index, end_index
 
 
+def get_last_relocation(func: pelfy.elf_symbol) -> pelfy.elf_relocation:
+    relocations = [r for r in func.relocations if r.type not in HINT_RELOCATIONS]
+    assert relocations, f'No call function in stencil function {func.name}.'
+    return relocations[-1]
+
+
 def get_last_call_in_function(func: pelfy.elf_symbol) -> int:
     # Find last relocation in function
-    assert func.relocations, f'No call function in stencil function {func.name}.'
-    reloc = func.relocations[-1]
+    reloc = get_last_relocation(func)
     if reloc.symbol.name.startswith('dummy_'):
         return -0xFFFF  # Last relocation is not a jump
     else:
@@ -129,10 +158,10 @@ def get_last_call_in_function(func: pelfy.elf_symbol) -> int:
 
 def get_op_after_last_call_in_function(func: pelfy.elf_symbol) -> int:
     # Find last relocation in function
-    assert func.relocations, f'No call function in stencil function {func.name}.'
-    reloc = func.relocations[-1]
+    reloc = get_last_relocation(func)
     assert reloc.bits <= 32, "Relocation segment might be larger then 32 bit"
-    return reloc.fields['r_offset'] - func.offset_in_section + 4
+    call_length = 8 if reloc.type in DOUBLE_CALL_RELOCATIONS else 4
+    return reloc.fields['r_offset'] - func.offset_in_section + call_length
 
 
 def add_sign_int32(value: int) -> int:
@@ -192,6 +221,7 @@ class stencil_database():
             for reloc in self.elf.symbols[name].relocations:
                 sym = reloc.symbol
                 if sym.section and sym.section.type == 'SHT_PROGBITS' and \
+                   not sym.section.fields['sh_flags'] & SHF_EXECINSTR and \
                    sym.info != 'STT_FUNC' and not sym.name.startswith('dummy_'):
                     ret.add(sym.section.index)
         return list(ret)
@@ -216,129 +246,136 @@ class stencil_database():
             end_index = symbol.fields['st_size']
 
         for reloc in symbol.relocations:
+            if reloc.type in HINT_RELOCATIONS:
+                continue
 
             # address to fist byte to patch relative to the start of the symbol
             patch_offset = reloc.fields['r_offset'] - symbol.offset_in_section - start_index
 
             if patch_offset < end_index - start_index:  # Exclude the call to the result_* function
-                reloc_entry = relocation_entry(reloc.symbol.name,
-                                       reloc.symbol.info,
-                                       reloc.symbol.fields['st_value'],  # LSB on ARM indicates thumb mode
-                                       reloc.symbol.fields['st_shndx'],
+                hi_reloc = None
+                target = reloc.symbol
+                if reloc.type.startswith('R_RISCV_PCREL_LO12'):
+                    # The symbol of a PCREL_LO12 relocation is the label of the auipc
+                    # instruction, the actual target is defined by its PCREL_HI20 relocation
+                    hi_reloc = next(r for r in symbol.relocations
+                                    if r.fields['r_offset'] == target.fields['st_value'] and r.type not in HINT_RELOCATIONS)
+                    if hi_reloc.type != 'R_RISCV_PCREL_HI20':
+                        raise NotImplementedError(f"{reloc.type} paired with {hi_reloc.type} in {symbol_name} not implemented")
+                    target = hi_reloc.symbol
+
+                target_in_code = target.info != 'STT_FUNC' and target.fields['st_shndx'] == symbol.fields['st_shndx']
+
+                reloc_entry = relocation_entry(target.name,
+                                       target.info,
+                                       target.fields['st_value'],  # LSB on ARM indicates thumb mode
+                                       target.fields['st_shndx'],
                                        symbol.offset_in_section,
                                        start_index,
-                                       reloc)
+                                       reloc,
+                                       target_in_code,
+                                       hi_reloc)
                 cache.append(reloc_entry)
                 yield reloc_entry
 
 
-    def get_patch(self, relocation: relocation_entry, symbol_address: int, function_offset: int, symbol_type: int) -> patch_entry:
-        """Return patch positions for a provided symbol (function or object)
+    def get_patch(self, relocation: relocation_entry, symbol_address: int, function_offset: int, base: PatchFlag) -> list[patch_entry]:
+        """Return the patch instructions for a provided relocation
 
         Arguments:
             relocation: relocation entry
-            symbol_address: absolute address of the target symbol
-            function_offset: absolute address of the first byte of the
-                function the patch is applied to
+            symbol_address: address of the target symbol relative to the
+                start of the code or data memory (selected by base)
+            function_offset: address of the first byte of the function
+                the patch is applied to, relative to the start of the code memory
+            base: PatchFlag.CODE if the target symbol is located in the
+                code memory, PatchFlag.DATA if it is located in the data memory
 
-        Yields:
-            patch_entry: every relocation for the symbol
+        Returns:
+            patch_entry list: patch instructions for the runner (a relocation
+                can span more than one instruction)
         """
         pr = relocation.pelfy_reloc
 
-        # calculate absolut address to the first byte to patch
-        # relative to the start of the (stripped stencil) function:
+        # calculate address of the first byte to patch relative
+        # to the start of the code memory:
         patch_offset = pr.fields['r_offset'] - relocation.function_offset - relocation.start + function_offset
         #print(f"xx {pr.fields['r_offset'] - relocation.function_offset} {relocation.target_symbol_name=} {pr.fields['r_offset']=} {relocation.function_offset=} {relocation.start=} {function_offset=}")
-        scale = 1
+
+        # S + A, the runner adds the start address of the code or data memory
+        value = symbol_address + add_sign_int32(pr.fields['r_addend'])
         mask = 0xFFFFFFFF  # 32 bit
+        shift = 0
+        encoding = PatchEncoding.BITFIELD
+        flags = base
+
+        if relocation.hi_reloc:
+            # RISC-V PCREL_LO12: S + A - P with S + A and P from the paired
+            # PCREL_HI20 relocation (auipc), P is moved to the auipc address
+            # by adding the distance between the two instructions to value
+            hi = relocation.hi_reloc
+            value = symbol_address + add_sign_int32(hi.fields['r_addend']) + pr.fields['r_offset'] - hi.fields['r_offset']
+            flags |= PatchFlag.PC_REL
 
         #print("------- reloc ", pr.type, pr.target_section.name, pr.symbol.name)
 
-        if pr.type.endswith('64_PC32') or pr.type.endswith('64_PLT32'):
+        if pr.type.endswith('64_PC32') or pr.type.endswith('64_PLT32') or pr.type == 'R_386_PC32':
+            # R_X86_64_PC32, R_X86_64_PLT32 & R_386_PC32
             # S + A - P
-            addend = add_sign_int32(pr.fields['r_addend'])
-            patch_value = symbol_address + addend - patch_offset
-            #print(f" *> {pr.type} {patch_value=} {symbol_address=} {pr.fields['r_addend']=} {pr.bits=}, {function_offset=} {patch_offset=}")
-
-        elif pr.type == 'R_386_PC32':
-            # S + A - P
-            addend = add_sign_int32(pr.fields['r_addend'])
-            patch_value = symbol_address + addend - patch_offset
-            #print(f" *> {pr.type}     {pr.symbol.name} {patch_value=} {symbol_address=} {pr.fields['r_addend']=} {bin(pr.fields['r_addend'])} {pr.bits=}, {function_offset=} {patch_offset=}")
+            flags |= PatchFlag.PC_REL
 
         elif pr.type == 'R_386_32':
-            # R_386_32
             # S + A
-            patch_value = symbol_address + pr.fields['r_addend']
-            symbol_type = symbol_type + 0x03  # Relative to data section
-            #print(f" *> {pr.type} {patch_value=} {symbol_address=} {pr.fields['r_addend']=} {pr.bits=}, {function_offset=} {patch_offset=}")
+            pass
 
         elif pr.type.endswith('_ARM_JUMP24') or pr.type.endswith('_ARM_CALL'):
             # R_ARM_JUMP24 & R_ARM_CALL
             # ((S + A) - P) >> 2
             mask = 0xffffff  # 24 bit
-            patch_value = symbol_address + pr.fields['r_addend'] - patch_offset
-            scale = 4
+            shift = 2
+            flags |= PatchFlag.PC_REL
 
         elif pr.type.endswith('_CALL26') or pr.type.endswith('_JUMP26'):
-            # R_AARCH64_CALL26
+            # R_AARCH64_CALL26 & R_AARCH64_JUMP26
             # ((S + A) - P) >> 2
             assert pr.file.byteorder == 'little', "Big endian not supported for ARM64"
             mask = 0x3ffffff  # 26 bit (1<<26)-1
-            patch_value = symbol_address + pr.fields['r_addend'] - patch_offset
-            scale = 4
+            shift = 2
+            flags |= PatchFlag.PC_REL
 
         elif pr.type.endswith('_ADR_PREL_PG_HI21'):
             # R_AARCH64_ADR_PREL_PG_HI21
+            # (Page(S + A) - Page(P)) >> 12
             assert pr.file.byteorder == 'little', "Big endian not supported for ARM64"
-            mask = 0  # Handled by runner
-            patch_value = symbol_address + pr.fields['r_addend']
-            scale = 4096
-            symbol_type = symbol_type + 0x01  # HI21
-            #print(f" *> {patch_value=} {symbol_address=} {pr.fields['r_addend']=}, {function_offset=}")
+            encoding = PatchEncoding.AARCH64_ADRP
+            shift = 12
+            flags |= PatchFlag.PC_REL | PatchFlag.PAGE
 
         elif pr.type.endswith('_LDST32_ABS_LO12_NC'):
             # R_AARCH64_LDST32_ABS_LO12_NC
-            # (S + A) & 0xFFF
+            # ((S + A) & 0xFFF) >> 2
             mask = 0b00_1111_1111_1100_0000_0000
-            patch_value = symbol_address + pr.fields['r_addend']
-            symbol_type = symbol_type + 0x02  # Absolut value
-            scale = 4
-            #print(f" *> {patch_value=} {symbol_address=} {pr.fields['r_addend']=}, {function_offset=}")
+            shift = 2
 
         elif pr.type.endswith('_ADD_ABS_LO12_NC'):
             # R_AARCH64_ADD_ABS_LO12_NC
             # (S + A) & 0xFFF
             mask = 0b11_1111_1111_1100_0000_0000
-            patch_value = symbol_address + pr.fields['r_addend']
-            symbol_type = symbol_type + 0x02  # Absolut value
-            scale = 1
-            #print(f" *> {patch_value=} {symbol_address=} {pr.fields['r_addend']=}, {function_offset=}")
 
         elif pr.type.endswith('_LDST64_ABS_LO12_NC'):
             # R_AARCH64_LDST64_ABS_LO12_NC
-            # (S + A) & 0xFFF
+            # ((S + A) & 0xFFF) >> 3
             mask = 0b00_0111_1111_1100_0000_0000
-            patch_value = symbol_address + pr.fields['r_addend']
-            symbol_type = symbol_type + 0x02  # Absolut value
-            scale = 8
-            #print(f" *> {patch_value=} {symbol_address=} {pr.fields['r_addend']=}, {function_offset=}")
+            shift = 3
 
         elif pr.type == 'R_ARM_MOVW_ABS_NC':
             # (S + A) & 0xFFFF
-            mask = 0xFFFF
-            patch_value = symbol_address + pr.fields['r_addend']
-            symbol_type = symbol_type + 0x04  # Absolut value
-            #print(f" *> {pr.type} {patch_value=} {symbol_address=}, {function_offset=}")
+            encoding = PatchEncoding.ARM_MOVW_MOVT
 
-        elif pr.type =='R_ARM_MOVT_ABS':
-            # (S + A) & 0xFFFF0000
-            mask = 0xFFFF0000
-            patch_value = symbol_address + pr.fields['r_addend']
-            symbol_type = symbol_type + 0x04  # Absolut value
-            scale = 0x10000
-            #print(f" *> {pr.type} {patch_value=} {symbol_address=}, {function_offset=}, {pr.fields['r_addend']=}")
+        elif pr.type == 'R_ARM_MOVT_ABS':
+            # ((S + A) >> 16) & 0xFFFF
+            encoding = PatchEncoding.ARM_MOVW_MOVT
+            shift = 16
 
         elif pr.type.endswith('_ABS32'):
             # R_ARM_ABS32
@@ -346,35 +383,70 @@ class stencil_database():
             assert not patch_offset % 4, 'R_ARM_ABS32 patched data like literals needs to be 4 Byte aligned'
             # This might be caused by the call in entry_function_shell if not aligned
 
-            patch_value = symbol_address + pr.fields['r_addend']
-            symbol_type = symbol_type + 0x03  # Relative to data section
-
         elif pr.type.endswith('_THM_JUMP24') or pr.type.endswith('_THM_CALL'):
-            # R_ARM_THM_JUMP24
-            # S + A - P
-            patch_value = symbol_address - patch_offset  + pr.fields['r_addend']
-            symbol_type = symbol_type + 0x05  # PATCH_FUNC_ARM32_THM
-            #print(f" *> {pr.type} {patch_value=} {symbol_address=} {pr.fields['r_addend']=} {pr.bits=}, {function_offset=} {patch_offset=}")
+            # R_ARM_THM_JUMP24 & R_ARM_THM_CALL
+            # ((S + A) - P) >> 1
+            encoding = PatchEncoding.THUMB_BRANCH
+            shift = 1
+            flags |= PatchFlag.PC_REL
 
         elif pr.type == 'R_ARM_THM_MOVW_ABS_NC':
             # (S + A) & 0xFFFF
-            mask = 0xFFFF
-            patch_value = symbol_address + pr.fields['r_addend']
-            symbol_type = symbol_type + 0x06  # PATCH_OBJECT_ARM32_ABS_THM
-            #print(f" *> {pr.type} {patch_value=} {symbol_address=}, {function_offset=}, {pr.fields['r_addend']=}")
+            encoding = PatchEncoding.THUMB_MOVW_MOVT
 
         elif pr.type == 'R_ARM_THM_MOVT_ABS':
-            # (S + A) & 0xFFFF0000
-            mask = 0xFFFF0000
-            patch_value = symbol_address + pr.fields['r_addend']
-            symbol_type = symbol_type + 0x06  # PATCH_OBJECT_ARM32_ABS_THM
-            scale = 0x10000
-            #print(f" *> {pr.type} {patch_value=} {symbol_address=}, {function_offset=}, {pr.fields['r_addend']=}")
+            # ((S + A) >> 16) & 0xFFFF
+            encoding = PatchEncoding.THUMB_MOVW_MOVT
+            shift = 16
+
+        elif pr.type in ('R_RISCV_HI20', 'R_RISCV_PCREL_HI20'):
+            # lui/auipc: ((S + A [- P]) + 0x800) >> 12
+            # (+0x800 compensates the sign extension of the following 12 bit immediate)
+            mask = 0xFFFFF000
+            shift = 12
+            value += 0x800
+            if pr.type == 'R_RISCV_PCREL_HI20':
+                flags |= PatchFlag.PC_REL
+
+        elif pr.type in ('R_RISCV_LO12_I', 'R_RISCV_PCREL_LO12_I'):
+            # I-type: (S + A [- P]) & 0xFFF
+            mask = 0xFFF00000
+
+        elif pr.type in ('R_RISCV_LO12_S', 'R_RISCV_PCREL_LO12_S'):
+            # S-type: (S + A [- P]) & 0xFFF
+            encoding = PatchEncoding.RISCV_S_TYPE
+
+        elif pr.type in DOUBLE_CALL_RELOCATIONS:
+            # auipc + jalr: S + A - P, split like PCREL_HI20 and PCREL_LO12_I
+            # with P of the jalr instruction moved to the auipc address
+            flags |= PatchFlag.PC_REL
+            return [patch_entry(patch_offset, value + 0x800, 0xFFFFF000, 12, PatchEncoding.BITFIELD, flags),
+                    patch_entry(patch_offset + 4, value + 4, 0xFFF00000, 0, PatchEncoding.BITFIELD, flags)]
+
+        elif pr.type == 'R_RISCV_BRANCH':
+            # S + A - P
+            encoding = PatchEncoding.RISCV_B_TYPE
+            flags |= PatchFlag.PC_REL
+
+        elif pr.type == 'R_RISCV_JAL':
+            # S + A - P
+            encoding = PatchEncoding.RISCV_J_TYPE
+            flags |= PatchFlag.PC_REL
+
+        elif pr.type == 'R_RISCV_RVC_BRANCH':
+            # S + A - P
+            encoding = PatchEncoding.RISCV_CB_TYPE
+            flags |= PatchFlag.PC_REL
+
+        elif pr.type == 'R_RISCV_RVC_JUMP':
+            # S + A - P
+            encoding = PatchEncoding.RISCV_CJ_TYPE
+            flags |= PatchFlag.PC_REL
 
         else:
             raise NotImplementedError(f"Relocation type {pr.type} in {relocation.pelfy_reloc.target_section.name} pointing to {relocation.pelfy_reloc.symbol.name} not implemented")
 
-        return patch_entry(mask, patch_offset, patch_value, scale, symbol_type)
+        return [patch_entry(patch_offset, value, mask, shift, encoding, flags)]
 
     def get_stencil_code(self, name: str) -> bytes:
         """Return the striped function code for a provided function name

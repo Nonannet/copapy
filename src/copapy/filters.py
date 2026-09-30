@@ -12,7 +12,7 @@ def _homogenize_values(input_values: Iterable[TNum | value[TNum]]) -> Iterable[T
 
     Arguments:
         input_values: An iterable of numerical constants or copapy variables.
-    
+
     Returns:
         An iterable of homogenized values, either all constants or all copapy variables.
     """

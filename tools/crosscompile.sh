@@ -63,8 +63,14 @@ arm-none-eabi-ld -r $STMP /object_files/musl_objects_armv7mthumb.o $LIBGCC -o $D
 # Mips (Little Endian)
 #mipsel-linux-gnu-gcc-13 $FLAGS -$OPT -c $SRC -o $DEST/stencils_mipsel_$OPT.o
 
-# RISCV 32 Bit
-# riscv64-linux-gnu-gcc-13 $FLAGS -$OPT -march=rv32imac -mabi=ilp32 -c $SRC -o $DEST/stencils_riscv_$OPT.o
+# RISC-V: -mcmodel=medany for PC relative addressing (code can be located anywhere
+# in the address space), -mno-relax to avoid linker relaxation relocations
+RISCV_FLAGS="-mcmodel=medany -mno-relax"
 
-# RISCV 64 Bit
-#riscv64-linux-gnu-gcc-13 $FLAGS -$OPT -c $SRC -o $DEST/stencils_riscv64_$OPT.o
+# RISC-V 32 Bit
+riscv32-unknown-linux-musl-gcc $FLAGS $RISCV_FLAGS -$OPT -c $SRC -o $STMP
+riscv32-unknown-linux-musl-ld -r $STMP /object_files/musl_objects_riscv32.o -o $DEST/stencils_riscv32_$OPT.o
+
+# RISC-V 64 Bit
+riscv64-linux-gnu-gcc-13 $FLAGS $RISCV_FLAGS -$OPT -c $SRC -o $STMP
+riscv64-linux-gnu-ld -r $STMP /object_files/musl_objects_riscv64.o -o $DEST/stencils_riscv64_$OPT.o

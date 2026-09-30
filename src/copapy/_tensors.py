@@ -2,7 +2,7 @@ from copapy._basic_types import NumLike, ArrayType
 from . import value
 from ._vectors import vector, VecFloatLike, VecIntLike, VecNumLike
 from ._mixed import mixed_sum
-from typing import TypeVar, Any, overload, TypeAlias, Callable, Iterator, Sequence
+from typing import TypeVar, Any, overload, TypeAlias, Callable, Iterator, Sequence, Iterable
 from ._helper_types import TNum
 
 TensorNumLike: TypeAlias = 'tensor[Any] | vector[Any] | value[Any] | int | float | bool'
@@ -19,21 +19,31 @@ class tensor(ArrayType[TNum]):
     reshaping, transposition, and various reduction operations.
     """
 
-    def __init__(self, values: 'TNum | value[TNum] | vector[TNum] | tensor[TNum] | TensorSequence[TNum]', shape: Sequence[int] | None = None):
+    def __init__(self, values: 'TNum | value[TNum] | vector[TNum] | tensor[TNum] | TensorSequence[TNum] | Iterable[TNum | value[TNum]]', shape: Sequence[int] | None = None):
         """Create a tensor with given values.
 
         Arguments:
-            values: Nested iterables of constant values or copapy values.
-                    Can be a scalar, 1D iterable (vector),
-                    or n-dimensional nested structure.
+            values: Nested sequence of constant values or copapy values or
+                    a flat 1D iterable if shape is provided.
             shape: Optional shape of the tensor. If not provided, inferred from values.
         """
         if shape:
             self.shape: tuple[int, ...] = tuple(shape)
-            assert (isinstance(values, Sequence) and
-                    any(isinstance(v, (value, int, float)) for v in values)), \
-                    "Values must be a sequence of scalars if shape is provided"
-            self.values: tuple[TNum | value[TNum], ...] = tuple(v for v in values if not isinstance(v, Sequence))
+            flat_list: list[Any] = []
+            assert isinstance(values, Iterable), "Values must be a sequence of scalars if shape is provided"
+            for v in values:
+                if isinstance(v, tensor) and v.ndim == 0:
+                    v = v.values[0]  # 0-d tensors are unwrapped to their scalar value
+                if not isinstance(v, (value, int, float)):
+                    raise ValueError("Values must be a sequence of scalars if shape is provided")
+                flat_list.append(v)
+            flat_values: tuple[TNum | value[TNum], ...] = tuple(flat_list)
+            size = 1
+            for dim in self.shape:
+                size *= dim
+            if len(flat_values) != size:
+                raise ValueError(f"Number of values ({len(flat_values)}) does not match shape {self.shape}")
+            self.values: tuple[TNum | value[TNum], ...] = flat_values
             self.ndim: int = len(shape)
         elif isinstance(values, (int, float)):
             # Scalar case: 0-dimensional tensor
@@ -57,6 +67,7 @@ class tensor(ArrayType[TNum]):
             self.ndim = values.ndim
         else:
             # General n-dimensional case
+            assert isinstance(values, Sequence), "Values must be a sequence if shape is not provided"
             self.values, self.shape = self._infer_shape_and_flatten(values)
             self.ndim = len(self.shape)
 
@@ -298,7 +309,7 @@ class tensor(ArrayType[TNum]):
     def __sub__(self, other: TensorNumLike) -> 'tensor[Any]': ...
     def __sub__(self, other: TensorNumLike) -> Any:
         """Element-wise subtraction."""
-        return self._binary_op(other, lambda a, b: a - b, commutative=False)
+        return self._binary_op(other, lambda a, b: a - b)
 
     @overload
     def __rsub__(self: 'tensor[int]', other: VecFloatLike) -> 'tensor[float]': ...
@@ -309,7 +320,7 @@ class tensor(ArrayType[TNum]):
     @overload
     def __rsub__(self, other: VecNumLike) -> 'tensor[Any]': ...
     def __rsub__(self, other: TensorNumLike) -> Any:
-        return self._binary_op(other, lambda a, b: b - a, commutative=False, reversed=True)
+        return self._binary_op(other, lambda a, b: b - a)
 
     @overload
     def __mul__(self: 'tensor[int]', other: TensorFloatLike) -> 'tensor[float]': ...
@@ -336,11 +347,11 @@ class tensor(ArrayType[TNum]):
 
     def __truediv__(self, other: TensorNumLike) -> 'tensor[float]':
         """Element-wise division."""
-        return self._binary_op(other, lambda a, b: a / b, commutative=False)
+        return self._binary_op(other, lambda a, b: a / b)
 
     def __rtruediv__(self, other: TensorNumLike) -> 'tensor[float]':
         """Element-wise right division."""
-        return self._binary_op(other, lambda a, b: b / a, commutative=False, reversed=True)
+        return self._binary_op(other, lambda a, b: b / a)
 
     @overload
     def __pow__(self: 'tensor[int]', other: TensorFloatLike) -> 'tensor[float]': ...
@@ -352,7 +363,7 @@ class tensor(ArrayType[TNum]):
     def __pow__(self, other: TensorNumLike) -> 'tensor[Any]': ...
     def __pow__(self, other: TensorNumLike) -> Any:
         """Element-wise power."""
-        return self._binary_op(other, lambda a, b: a ** b, commutative=False)
+        return self._binary_op(other, lambda a, b: a ** b)
 
     @overload
     def __rpow__(self: 'tensor[int]', other: VecFloatLike) -> 'tensor[float]': ...
@@ -363,23 +374,23 @@ class tensor(ArrayType[TNum]):
     @overload
     def __rpow__(self, other: VecNumLike) -> 'tensor[Any]': ...
     def __rpow__(self, other: TensorNumLike) -> Any:
-        return self._binary_op(other, lambda a, b: b ** a, commutative=False, reversed=True)
+        return self._binary_op(other, lambda a, b: b ** a)
 
     def __gt__(self, other: TensorNumLike) -> 'tensor[int]':
         """Element-wise greater than."""
-        return self._binary_op(other, lambda a, b: a > b, commutative=False)
+        return self._binary_op(other, lambda a, b: a > b)
 
     def __lt__(self, other: TensorNumLike) -> 'tensor[int]':
         """Element-wise less than."""
-        return self._binary_op(other, lambda a, b: a < b, commutative=False)
+        return self._binary_op(other, lambda a, b: a < b)
 
     def __ge__(self, other: TensorNumLike) -> 'tensor[int]':
         """Element-wise greater than or equal."""
-        return self._binary_op(other, lambda a, b: a >= b, commutative=False)
+        return self._binary_op(other, lambda a, b: a >= b)
 
     def __le__(self, other: TensorNumLike) -> 'tensor[int]':
         """Element-wise less than or equal."""
-        return self._binary_op(other, lambda a, b: a <= b, commutative=False)
+        return self._binary_op(other, lambda a, b: a <= b)
 
     def __eq__(self, other: TensorNumLike) -> 'tensor[int]':  # type: ignore
         """Element-wise equality."""
@@ -389,29 +400,32 @@ class tensor(ArrayType[TNum]):
         """Element-wise inequality."""
         return self._binary_op(other, lambda a, b: a != b)
 
-    def _binary_op(self, other: TensorNumLike, op: Callable[[Any, Any], 'tensor[TNum]'],
-                   commutative: bool = True, reversed: bool = False) -> 'tensor[Any]':
+    def _binary_op(self, other: TensorNumLike, op: Callable[[Any, Any], Any]) -> 'tensor[Any]':
         """Perform binary operation with broadcasting support.
+
+        Arguments:
+            other: Second operand.
+            op: Element-wise operation, called with an element of self as
+                first and an element of other as second argument.
         """
-        seen_consts: dict[NumLike, NumLike] = {}
+        # Keyed by type as well, since 1 == 1.0 == True share the same hash
+        seen_consts: dict[tuple[type, NumLike], NumLike] = {}
 
         def call_op(a: TNum | value[TNum], b: NumLike) -> Any:
             if isinstance(b, value) or not isinstance(a, value):
                 b_trans = b
             else:
-                if b in seen_consts:
-                    b_trans = seen_consts[b]
+                key = (type(b), b)
+                if key in seen_consts:
+                    b_trans = seen_consts[key]
                 else:
                     b_trans = value(b)
-                    seen_consts[b] = b_trans
-            if reversed:
-                return op(b_trans, a)
-            else:
-                return op(a, b_trans)
+                    seen_consts[key] = b_trans
+            return op(a, b_trans)
 
         if isinstance(other, Sequence | vector):
             other_tensor: tensor[Any] = tensor(other)
-            return self._binary_op(other_tensor, op, commutative, reversed)
+            return self._binary_op(other_tensor, op)
 
         elif isinstance(other, tensor):
             self_shape = self.shape
@@ -688,20 +702,8 @@ class tensor(ArrayType[TNum]):
             if self.shape[1] != other.shape[0]:
                 raise ValueError(f"Shape mismatch: {self.shape} @ ({other.shape[0]},)")
 
-            result_values = []
-
-            if isinstance(other, vector):
-                for i in range(self.shape[0]):
-                    dot_sum = value(0)
-                    for k in range(self.shape[1]):
-                        dot_sum = dot_sum + self.get_scalar(i, k) * other.get_scalar(k)
-                    result_values.append(dot_sum)
-            else:
-                for i in range(self.shape[0]):
-                    dot_sum = value(0)
-                    for k in range(self.shape[1]):
-                        dot_sum = dot_sum + self.get_scalar(i, k) * other.get_scalar(k)
-                    result_values.append(dot_sum)
+            result_values = [mixed_sum(self.get_scalar(i, k) * other.get_scalar(k) for k in range(self.shape[1]))
+                             for i in range(self.shape[0])]
 
             return tensor(tuple(result_values), (self.shape[0],))
 
@@ -744,8 +746,10 @@ class tensor(ArrayType[TNum]):
         # Validate and normalize axes
         normalized_axes: list[int] = []
         for ax in axes:
-            if not (0 <= ax < self.ndim):
+            if not (-self.ndim <= ax < self.ndim):
                 raise ValueError(f"Axis {ax} is out of bounds for tensor of rank {self.ndim}")
+            if ax < 0:
+                ax += self.ndim
             if ax not in normalized_axes:
                 normalized_axes.append(ax)
 
@@ -758,7 +762,9 @@ class tensor(ArrayType[TNum]):
             new_shape.pop(ax)
 
         if not new_shape:
-            # All axes summed - return scalar
+            # All axes summed
+            if keepdims:
+                return tensor([mixed_sum(self.values)], (1,) * self.ndim)
             return mixed_sum(self.values)
 
         new_size = 1
@@ -815,12 +821,7 @@ class tensor(ArrayType[TNum]):
             return total_sum / self.size()
 
         sum_result: Any = self.sum(axis)
-        axis_size = self.shape[axis]
-
-        if isinstance(sum_result, tensor):
-            return sum_result / axis_size
-        else:
-            return sum_result / axis_size
+        return sum_result / self.shape[axis]
 
     def map(self, func: Callable[[Any], value[U] | U]) -> 'tensor[U]':
         """Apply a function to each element.
@@ -853,7 +854,7 @@ class tensor(ArrayType[TNum]):
 
 def zeros(shape: Sequence[int] | int) -> tensor[int]:
     """Create a zero tensor of given shape.
-    
+
     Arguments:
         shape: shape of the tensor to create.
 
@@ -871,7 +872,7 @@ def zeros(shape: Sequence[int] | int) -> tensor[int]:
 
 def ones(shape: Sequence[int] | int) -> tensor[int]:
     """Create a tensor of ones with given shape.
-    
+
     Arguments:
         shape: shape of the tensor to create.
 
@@ -989,15 +990,15 @@ def arange(start: int | float, stop: int | float | None = None,
         start = 0
 
     # Determine type
-    values_list: list[value[Any]] = []
+    values_list: list[int | float] = []
     current = start
     if step > 0:
         while current < stop:
-            values_list.append(value(current))
+            values_list.append(current)
             current += step
     elif step < 0:
         while current > stop:
-            values_list.append(value(current))
+            values_list.append(current)
             current += step
     else:
         raise ValueError("step cannot be zero")
@@ -1018,14 +1019,11 @@ def eye(rows: int, cols: int | None = None) -> tensor[int]:
     if cols is None:
         cols = rows
 
-    values_list: list[value[int]] = []
+    values_list: list[int] = []
 
     for i in range(rows):
         for j in range(cols):
-            if i == j:
-                values_list.append(value(1))
-            else:
-                values_list.append(value(0))
+            values_list.append(1 if i == j else 0)
 
     return tensor(tuple(values_list), (rows, cols))
 
@@ -1064,8 +1062,8 @@ def diagonal(vec: tensor[Any] | vector[Any]) -> tensor[Any]:
     for i in range(size):
         for j in range(size):
             if i == j:
-                values_list.append(vec[i])
+                values_list.append(vec.values[i])
             else:
-                values_list.append(value(0))
+                values_list.append(0)
 
     return tensor(tuple(values_list), (size, size))

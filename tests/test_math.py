@@ -1,190 +1,159 @@
-from copapy import value, Target
-import pytest
-import copapy as cp
-import math as ma
-import warnings
+"""Scalar math functions: compiled results and direct Python evaluation."""
+import math
+from typing import Any, Callable
 
-def test_fine():
+import pytest
+
+import copapy as cp
+from copapy import value
+
+
+def evaluate(*exprs: Any) -> list[Any]:
+    """Compile and run the expressions, return their results."""
+    tg = cp.Target()
+    tg.compile(*exprs)
+    tg.run()
+    return [tg.read_value(e) for e in exprs]
+
+
+def sign_ref(x: float) -> int:
+    return (x > 0) - (x < 0)
+
+
+TRIG_VALS = [0.0, 0.0001, 0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.28318530718, 100.0, 1000.0, 100000.0,
+             -0.0001, -0.1, -0.5, -1.0, -1.5, -2.0, -2.5, -3.0, -3.5, -4.0, -4.5, -5.0, -5.5, -6.0, -6.28318530718, -100.0, -1000.0, -100000.0]
+
+ARC_VALS = [-1.0, -0.95, -0.9, -0.7, -0.5, -0.1, -0.01, 0.0, 0.01, 0.1, 0.5, 0.7, 0.9, 0.95, 1.0]
+
+UNARY_CASES: list[tuple[Callable[..., Any], Callable[..., Any], list[float]]] = [
+    (cp.sqrt, math.sqrt, [0.0, 0.0001, 0.1, 0.5, 1.0, 2.0, 2.5, 6.25, 100.0, 1000.0, 100000.0]),
+    (cp.exp, math.exp, [-10.0, -2.5, -1.0, -0.1, 0.0, 0.1, 0.5, 1.0, 2.5, 10.0]),
+    (cp.log, math.log, [0.0001, 0.1, 0.5, 0.9, 0.999, 1.0, 2.5, math.e, 1000.0, 100000.0]),
+    (cp.sin, math.sin, TRIG_VALS),
+    (cp.cos, math.cos, TRIG_VALS),
+    (cp.tan, math.tan, TRIG_VALS),
+    (cp.asin, math.asin, ARC_VALS),
+    (cp.acos, math.acos, ARC_VALS),
+    (cp.atan, math.atan, ARC_VALS + [-1000.0, -10.0, -2.0, 2.0, 10.0, 1000.0]),
+    (cp.abs, abs, [-1000.5, -2.5, -0.0, 0.0, 2.5, 1000.5]),
+    (cp.sign, sign_ref, [-1000.5, -2.5, 0.0, 2.5, 1000.5]),
+    (cp.relu, lambda x: max(x, 0.0), [-1000.5, -2.5, 0.0, 2.5, 1000.5]),
+    (cp.sigmoid, lambda x: 1.0 / (1.0 + math.exp(-x)), [-20.0, -2.5, -1.0, 0.0, 1.0, 2.5, 20.0]),
+]
+
+
+@pytest.mark.parametrize(("cp_func", "ref_func", "args"), UNARY_CASES, ids=[c[0].__name__ for c in UNARY_CASES])
+def test_unary_function(cp_func: Callable[..., Any], ref_func: Callable[..., Any], args: list[float]):
+    refs = [ref_func(a) for a in args]
+
+    # Called with Python numbers the function is evaluated directly
+    for a, ref in zip(args, refs):
+        res = cp_func(a)
+        assert not isinstance(res, value)
+        assert res == pytest.approx(ref, rel=1e-9, abs=1e-12), f"{cp_func.__name__}({a})"  # pyright: ignore[reportUnknownMemberType]
+
+    # Called with a cp.value the function is compiled (float32 precision)
+    ret = [cp_func(value(a)) for a in args]
+    for a, res, ref in zip(args, evaluate(*ret), refs):
+        assert res == pytest.approx(ref, rel=1e-5, abs=1e-5), f"compiled {cp_func.__name__}({a})"  # pyright: ignore[reportUnknownMemberType]
+
+
+BINARY_CASES: list[tuple[Callable[..., Any], Callable[..., Any], list[tuple[float, float]]]] = [
+    (cp.atan2, math.atan2, [(1.0, 3.0), (1.0, -3.0), (-1.0, -3.0), (-1.0, 3.0), (1.0, 0.0), (-1.0, 0.0),
+                            (0.0, 3.0), (0.0, -3.0), (0.95, 0.01), (-100.0, 0.5)]),
+    (cp.pow, math.pow, [(2.0, 3.0), (2.5, 2.0), (2.5, 0.5), (9.0, -1.0), (2.5, 2.111), (0.5, -2.0), (10.0, 0.0), (0.0, 2.0)]),
+    (cp.minimum, min, [(1.0, 2.0), (2.0, 1.0), (-1.5, -1.5), (-3.0, 5.0), (0.0, -0.5)]),
+    (cp.maximum, max, [(1.0, 2.0), (2.0, 1.0), (-1.5, -1.5), (-3.0, 5.0), (0.0, -0.5)]),
+]
+
+
+@pytest.mark.parametrize(("cp_func", "ref_func", "args"), BINARY_CASES, ids=[c[0].__name__ for c in BINARY_CASES])
+def test_binary_function(cp_func: Callable[..., Any], ref_func: Callable[..., Any], args: list[tuple[float, float]]):
+    refs = [ref_func(a, b) for a, b in args]
+
+    for (a, b), ref in zip(args, refs):
+        res = cp_func(a, b)
+        assert not isinstance(res, value)
+        assert res == pytest.approx(ref, rel=1e-9, abs=1e-12), f"{cp_func.__name__}({a}, {b})"  # pyright: ignore[reportUnknownMemberType]
+
+    # Both arguments variable, only the first or only the second one
+    ret = [r for a, b in args for r in (cp_func(value(a), value(b)), cp_func(value(a), b), cp_func(a, value(b)))]
+    results = evaluate(*ret)
+    for i, res in enumerate(results):
+        a, b = args[i // 3]
+        assert res == pytest.approx(refs[i // 3], rel=1e-5, abs=1e-5), f"compiled {cp_func.__name__}({a}, {b}), variant {i % 3}"  # pyright: ignore[reportUnknownMemberType]
+
+
+@pytest.mark.parametrize(("x", "lo", "hi"), [(-2.5, 0.0, 1.0), (0.3, 0.0, 1.0), (2.5, 0.0, 1.0), (0.0, 0.0, 1.0), (1.0, 0.0, 1.0), (-7.0, -5.0, -1.0)])
+def test_clamp(x: float, lo: float, hi: float):
+    ref = min(max(x, lo), hi)
+    assert cp.clamp(x, lo, hi) == pytest.approx(ref)  # pyright: ignore[reportUnknownMemberType]
+
+    res, = evaluate(cp.clamp(value(x), lo, hi))
+    assert res == pytest.approx(ref, rel=1e-6)  # pyright: ignore[reportUnknownMemberType]
+
+
+def test_power_operator():
     a_i = 9
     a_f = 2.5
     c_i = value(a_i)
     c_f = value(a_f)
 
-    ret_test = (c_f ** 2,
-                c_i ** -1,
-                c_i ** 2.111,
-                c_f ** 2.111,
-                cp.sqrt(c_i),
-                cp.sqrt(c_f),
-                cp.sin(c_f),
-                cp.cos(c_f),
-                cp.tan(c_f),
-                cp.abs(-c_i),
-                cp.abs(-c_f),
-                cp.sign(c_i),
-                cp.sign(-c_f),
-                cp.minimum(c_i, 5),
-                cp.maximum(c_f, 5))
+    ret_test = (c_f ** 2, c_i ** 2, c_i ** -1, c_i ** 0.5, c_i ** 2.111, c_f ** 2.111, c_f ** -2, 2 ** c_f)
+    ret_refe = (a_f ** 2, a_i ** 2, a_i ** -1, a_i ** 0.5, a_i ** 2.111, a_f ** 2.111, a_f ** -2, 2 ** a_f)
 
-    re2_test = (a_f ** 2,
-                a_i ** -1,
-                a_i ** 2.111,
-                a_f ** 2.111,
-                cp.sqrt(a_i),
-                cp.sqrt(a_f),
-                cp.sin(a_f),
-                cp.cos(a_f),
-                cp.tan(a_f),
-                cp.abs(-a_i),
-                cp.abs(-a_f),
-                cp.sign(a_i),
-                cp.sign(-a_f),
-                cp.minimum(a_i, 5),
-                cp.maximum(a_f, 5))
+    for test, ref in zip(ret_test, ret_refe):
+        assert isinstance(test, value)
+        assert test.dtype == type(ref).__name__
 
-    ret_refe = (a_f ** 2,
-                a_i ** -1,
-                a_i ** 2.111,
-                a_f ** 2.111,
-                ma.sqrt(a_i),
-                ma.sqrt(a_f),
-                ma.sin(a_f),
-                ma.cos(a_f),
-                ma.tan(a_f),
-                abs(-a_i),
-                abs(-a_f),
-                (a_i > 0) - (a_i < 0),
-                (-a_f > 0) - (-a_f < 0),
-                min(a_i, 5),
-                max(a_f, 5))
-
-    tg = Target()
-    print('* compile and copy ...')
-    tg.compile(ret_test)
-    print('* run and copy ...')
-    tg.run()
-    print('* finished')
-
-    for test, val2, ref, name in zip(ret_test, re2_test, ret_refe, ['^2', '**-1', 'sqrt_int', 'sqrt_float', 'sin', 'cos', 'tan'] + ['other']*10):
-        assert isinstance(test, cp.value)
-        val = tg.read_value(test)
-        print('+', name, val, ref, type(val), test.dtype)
-        #for t in (int, float, bool):
-        #    assert isinstance(val, t) == isinstance(ref, t), f"Result type does not match for {val} and {ref}"
-        assert val == pytest.approx(ref, abs=1e-3), f"Result for {name} does not match: {val} and reference: {ref}"  # pyright: ignore[reportUnknownMemberType]
-        assert val2 == pytest.approx(ref, abs=1e-3), f"Local result for {name} does not match: {val2} and reference: {ref}"  # pyright: ignore[reportUnknownMemberType]
+    for test, res, ref in zip(ret_test, evaluate(*ret_test), ret_refe):
+        assert res == pytest.approx(ref, rel=1e-5), f"{test}: {res} != {ref}"  # pyright: ignore[reportUnknownMemberType]
 
 
-def test_trig_precision():
+def test_result_dtypes():
+    """Integer arguments keep the integer type where Python's math does"""
+    c_i = value(-9)
 
-    test_vals = [0.0, 0.0001, 0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.28318530718, 100.0, 1000.0, 100000.0,
-                 -0.0001, -0.1, -0.5, -1.0, -1.5, -2.0, -2.5, -3.0, -3.5, -4.0, -4.5, -5.0, -5.5, -6.0, -6.28318530718, -100.0, -1000.0, -100000.0]
+    cases = [
+        (cp.abs(c_i), int, 9),
+        (cp.sign(c_i), int, -1),
+        (cp.sign(value(0)), int, 0),
+        (cp.minimum(c_i, 5), int, -9),
+        (cp.maximum(c_i, 5), int, 5),
+        (cp.sqrt(-c_i), float, 3.0),
+        (cp.exp(value(0)), float, 1.0),
+        (cp.sin(value(0)), float, 0.0),
+    ]
 
-    ret_test = [r for v in test_vals for r in (cp.sin(value(v)), cp.cos(value(v)), cp.tan(value(v)))]
-    ret_refe = [r for v in test_vals for r in (ma.sin(v), ma.cos(v), ma.tan(v))]
+    for test, typ, _ in cases:
+        assert isinstance(test, value)
+        assert test.dtype == typ.__name__
 
-    tg = Target()
-    tg.compile(ret_test)
-    tg.run()
-
-    for i, (v, test, ref) in enumerate(zip(test_vals, ret_test, ret_refe)):
-        func_name = ['sin', 'cos', 'tan'][i % 3]
-        assert isinstance(test, cp.value)
-        val = tg.read_value(test)
-        print(f"+ Result of {func_name}: {val}; reference: {ref}")
-        assert val == pytest.approx(ref, abs=1e-3), f"Result of {func_name} for input {test_vals[i // 3]} does not match: {val} and reference: {ref} (value: {v})"  # pyright: ignore[reportUnknownMemberType]
-        #if not val == pytest.approx(ref, abs=1e-5):  # pyright: ignore[reportUnknownMemberType]
-        #    warnings.warn(f"Result of {func_name} for input {test_vals[i // 3]} does not match: {val} and reference: {ref}", UserWarning)
-
-
-def test_arcus_trig_precision():
-
-    test_vals = [0.0, 0.01, 0.1, 0.5, 0.7, 0.9, 0.95,
-                 -0.01, -0.1, -0.5, -0.7, -0.9, 0.95]
-
-    ret_test = [r for v in test_vals for r in (cp.asin(value(v)),
-                                               cp.acos(value(v)),
-                                               cp.atan(value(v)),
-                                               cp.atan2(value(v), value(3)),
-                                               cp.atan2(value(v), value(-3)),)]
-    ret_refe = [r for v in test_vals for r in (ma.asin(v),
-                                               ma.acos(v),
-                                               ma.atan(v),
-                                               ma.atan2(v, 3),
-                                               ma.atan2(v, -3),)]
-
-    tg = Target()
-    tg.compile(ret_test)
-    tg.run()
-
-    for i, (test, ref) in enumerate(zip(ret_test, ret_refe)):
-        func_name = ['asin', 'acos', 'atan', 'atan2[1]', 'atan2[2]'][i % 5]
-        assert isinstance(test, cp.value)
-        val = tg.read_value(test)
-        print(f"+ Result of {func_name}: {val}; reference: {ref}")
-        #assert val == pytest.approx(ref, abs=1e-5), f"Result of {func_name} for input {test_vals[i // 5]} does not match: {val} and reference: {ref}"  # pyright: ignore[reportUnknownMemberType]
-        if not val == pytest.approx(ref, abs=1e-5):  # pyright: ignore[reportUnknownMemberType]
-            warnings.warn(f"Result of {func_name} for input {test_vals[i // 5]} does not match: {val} and reference: {ref}", UserWarning)
-
-    non_compiled_test = [r for v in test_vals for r in (cp.asin(v),
-                                                        cp.acos(v),
-                                                        cp.atan(v),
-                                                        cp.atan2(v, 3),
-                                                        cp.atan2(v, -3),)]
-
-    for i, (test, ref) in enumerate(zip(non_compiled_test, ret_refe)):
-        func_name = ['asin', 'acos', 'atan', 'atan2[1]', 'atan2[2]'][i % 5]
-        assert not isinstance(test, cp.value)
-        print(f"+ Non-compiled result of {func_name}: {test}; reference: {ref}")
-        assert test == pytest.approx(ref, abs=1e-5), f"Non-compiled result of {func_name} for input {test_vals[i // 5]} does not match: {test} and reference: {ref}"  # pyright: ignore[reportUnknownMemberType]
+    for (test, typ, ref), res in zip(cases, evaluate(*(c[0] for c in cases))):
+        assert isinstance(res, typ), f"{test}: result {res!r} is not of type {typ.__name__}"
+        assert res == pytest.approx(ref)  # pyright: ignore[reportUnknownMemberType]
 
 
-def test_sqrt_precision():
-    test_vals = [0.0, 0.0001, 0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.28318530718, 100.0, 1000.0, 100000.0]
+def test_identities():
+    """Combinations of functions that must cancel out"""
+    x = 0.7
+    c = value(x)
 
-    ret_test = [r for v in test_vals for r in (cp.sqrt(value(v)),)]
-    ret_refe = [r for v in test_vals for r in (cp.sqrt(v),)]
+    ret_test = (cp.sin(c) ** 2 + cp.cos(c) ** 2,
+                cp.tan(c) - cp.sin(c) / cp.cos(c),
+                cp.exp(cp.log(c)),
+                cp.log(cp.exp(c)),
+                cp.asin(cp.sin(c)),
+                cp.acos(cp.cos(c)),
+                cp.atan(cp.tan(c)),
+                cp.atan2(cp.sin(c), cp.cos(c)),
+                cp.sqrt(c) ** 2,
+                cp.abs(c) * cp.sign(c))
+    ret_refe = (1.0, 0.0, x, x, x, x, x, x, x, x)
 
-    tg = Target()
-    tg.compile(ret_test)
-    tg.run()
-
-    for i, (test, ref) in enumerate(zip(ret_test, ret_refe)):
-        func_name = 'sqrt'
-        assert isinstance(test, cp.value)
-        val = tg.read_value(test)
-        print(f"+ Result of {func_name}: {val}; reference: {ref}")
-        assert val == pytest.approx(ref, rel=1e-5), f"Result of {func_name} for input {test_vals[i]} does not match: {val} and reference: {ref}"  # pyright: ignore[reportUnknownMemberType]
-        #if not val == pytest.approx(ref, abs=1e-5):  # pyright: ignore[reportUnknownMemberType]
-        #    warnings.warn(f"Result of {func_name} for input {test_vals[i // 2]} does not match: {val} and reference: {ref}", UserWarning)
-
-
-def test_log_exp_precision():
-
-    test_vals = [0.1, 0.5, 0.9, 0.999, 1.0, 2.5,
-                 -0.1, -0.5, -0.9, -0.999, -1.0, 2.5]
-
-    ret_test = [r for v in test_vals for r in (cp.log(value(abs(v))),
-                                               cp.exp(value(v)))]
-    ret_refe = [r for v in test_vals for r in (ma.log(abs(v)),
-                                               ma.exp(v))]
-
-    tg = Target()
-    tg.compile(ret_test)
-    tg.run()
-
-    for i, (test, ref) in enumerate(zip(ret_test, ret_refe)):
-        func_name = ['log', 'exp'][i % 2]
-        assert isinstance(test, cp.value)
-        val = tg.read_value(test)
-        print(f"+ Result of {func_name}: {val}; reference: {ref}")
-        assert val == pytest.approx(ref, abs=1e-5), f"Result of {func_name} for input {test_vals[i // 2]} does not match: {val} and reference: {ref}"  # pyright: ignore[reportUnknownMemberType]
-        #if not val == pytest.approx(ref, abs=1e-5):  # pyright: ignore[reportUnknownMemberType]
-        #    warnings.warn(f"Result of {func_name} for input {test_vals[i // 2]} does not match: {val} and reference: {ref}", UserWarning)
+    for res, ref in zip(evaluate(*ret_test), ret_refe):
+        assert res == pytest.approx(ref, abs=1e-5)  # pyright: ignore[reportUnknownMemberType]
 
 
 if __name__ == "__main__":
-    test_fine()
-    test_sqrt_precision()
-    test_trig_precision()
-    test_log_exp_precision()
+    pytest.main([__file__, "-v"])

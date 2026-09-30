@@ -13,7 +13,16 @@ RUN apt-get update && apt-get install -y \
     gcc-13-aarch64-linux-gnu \
     gcc-13-multilib \
     python3 \
-    git
+    git \
+    wget \
+    xz-utils
+
+# RISC-V 32 bit cross compiler (not available as debian package)
+RUN wget https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2026.04.26/riscv32-musl-ubuntu-22.04-gcc.tar.xz && \
+    tar -xf riscv32-musl-ubuntu-22.04-gcc.tar.xz && \
+    rm riscv32-musl-ubuntu-22.04-gcc.tar.xz
+
+ENV PATH=/home/riscv/bin:$PATH
 
 COPY *.sh ./
 
