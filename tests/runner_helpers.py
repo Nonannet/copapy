@@ -10,7 +10,7 @@ import pytest
 
 import copapy as cp
 import copapy.backend as backend
-from copapy import NumLike, iif, value, _binwrite
+from copapy import NumLike, iif, value, vector, _binwrite
 from copapy._stencils import stencil_database
 from copapy.backend import Store, add_read_value_remote, compile_to_dag
 
@@ -116,7 +116,8 @@ def run_program(runner: str, path: str, qemu: Sequence[str] = ()) -> str | None:
 
 
 def check_results(result: str, ret_test: Sequence[Any], ret_ref: Sequence[Any],
-                  variables: dict[Any, tuple[int, int, str]], sdb: stencil_database, rel: float = 1e-5) -> None:
+                  variables: dict[Any, tuple[int, int, str]], sdb: stencil_database,
+                  rel: float = 1e-5, abs_tol: float | None = None) -> None:
     """Compare the values read back by the runner with reference values"""
     result_data = parse_results(result)
 
@@ -137,18 +138,21 @@ def check_results(result: str, ret_test: Sequence[Any], ret_ref: Sequence[Any],
         print('+', val, ref, test.dtype, f"  addr={address}")
         for t in (int, float, bool):
             assert isinstance(val, t) == isinstance(ref, t), f"Result type does not match for {val} and {ref}"
-        assert val == pytest.approx(ref, rel), f"Result does not match: {val} and reference: {ref}"  # pyright: ignore[reportUnknownMemberType]
+        assert val == pytest.approx(ref, rel, abs_tol), f"Result does not match: {val} and reference: {ref}"  # pyright: ignore[reportUnknownMemberType]
 
 
 def ops_program(c_i: NumLike, c_f: NumLike, c_b: NumLike) -> list[NumLike]:
-    """Common test program for the operations on all architectures. Called with
-    copapy values for the test and with Python numbers for the reference."""
+    """Common test program for the operations. Called with copapy values
+    for the test and with Python numbers for the reference."""
     def arithmetic(c1: NumLike) -> list[NumLike]:
         return [c1 / 4, c1 / -4, c1 // 4, c1 // -4, (c1 * -1) // 4,
                 c1 * 4, c1 * -4,
                 c1 + 4, c1 - 4,
                 c1 > 2, c1 > 100, c1 < 4, c1 < 100,
-                c1 * 4.44, c1 * -4.44]
+                c1 / 4.44, c1 / -4.44, c1 // 4.44, c1 // -4.44, (c1 * -1) // 4.44,
+                c1 * 4.44, c1 * -4.44,
+                c1 + 4.44, c1 - 4.44,
+                c1 > 100.11, c1 < 4.44, c1 < 100.11]
 
     def iiftests(c1: NumLike) -> list[NumLike]:
         return [iif(c1 > 5, 8, 9),
@@ -157,46 +161,118 @@ def ops_program(c_i: NumLike, c_f: NumLike, c_b: NumLike) -> list[NumLike]:
                 iif(1 < 5, c1 * 3.3, 8.8),
                 iif(c1 < 5, c1 * 3.3, 8.8)]
 
-    def mathtests(c1: NumLike) -> list[NumLike]:
-        return [cp.sin(c1), cp.cos(c1), cp.tan(c1 / 10), cp.asin(c1 / 10), cp.atan(c1),
-                cp.atan2(c1, 2.5), cp.exp(c1 / 10), cp.log(c1), cp.sqrt(c1)]
-
     return (arithmetic(c_i) + arithmetic(c_f) +
             [c_i / 4, c_i == 9, c_i == 4, c_i != 9, c_i != 4, c_i % 2] +
             [c_b == True, c_b == False, c_b != True, c_b != False, c_b / 2, c_b + 2] +  # noqa: E712
-            iiftests(c_i) + iiftests(c_f) +
-            mathtests(c_i) + mathtests(c_f))
+            iiftests(c_i) + iiftests(c_f))
 
 
-def run_ops_test(arch: str, runner: str, qemu: Sequence[str] = ()) -> None:
-    """Compile ops_program for arch, run it on the runner and check the results"""
-    ret_test = ops_program(value(9), value(1.111), value(True))
-    ret_ref = ops_program(9, 1.111, True)
+def ops_test_values() -> tuple[list[NumLike], list[NumLike]]:
+    """Returns the ops test program and its reference values"""
+    return ops_program(value(9), value(1.111), value(True)), ops_program(9, 1.111, True)
+
+
+TRIG_VALS = [0.0, 0.0001, 0.5, 1.5, 2.5, 3.5, 6.28318530718, 8.25, 100.0, 100000.0,
+             -0.0001, -0.5, -1.5, -2.5, -3.5, -6.28318530718, -8.25, -100.0, -100000.0]
+ARC_VALS = [-1.0, -0.95, -0.5, -0.01, 0.0, 0.01, 0.5, 0.95, 1.0]
+SIGNED_VALS = [-1000.5, -2.5, 0.0, 2.5, 1000.5]
+BINARY_VALS = [(1.0, 3.0), (-1.0, -3.0), (-1.0, 3.0), (1.0, 0.0), (0.0, 3.0), (0.5, -3.0), (2.5, 2.111)]
+
+
+def math_program(val: Any) -> list[NumLike]:
+    """Program calling all math functions. val converts the inputs: cp.value for
+    the test and a no-op for the Python reference."""
+    ret: list[NumLike] = []
+    for func, args in [(cp.sqrt, [0.0, 0.0001, 0.5, 2.0, 6.25, 100000.0]),
+                       (cp.exp, [-10.0, -1.0, 0.0, 0.5, 2.5, 10.0]),
+                       (cp.log, [0.0001, 0.5, 0.999, 1.0, 2.5, 100000.0]),
+                       (cp.sin, TRIG_VALS),
+                       (cp.cos, TRIG_VALS),
+                       (cp.tan, TRIG_VALS),
+                       (cp.asin, ARC_VALS),
+                       (cp.acos, ARC_VALS),
+                       (cp.atan, ARC_VALS + [-1000.0, -2.0, 10.0]),
+                       (cp.abs, SIGNED_VALS),
+                       (cp.sign, SIGNED_VALS),
+                       (cp.relu, SIGNED_VALS),
+                       (cp.sigmoid, [-20.0, -1.0, 0.0, 2.5, 20.0]),
+                       (cp.get_42, [1.0])]:
+        ret += [func(val(a)) for a in args]
+
+    # Integer arguments
+    ret += [cp.abs(val(-9)), cp.sign(val(-9)), cp.sign(val(0)), cp.sign(val(7)), cp.sqrt(val(9)),
+            cp.minimum(val(-9), 5), cp.maximum(val(-9), 5), cp.clamp(val(-9), -5, 5), cp.relu(val(-9))]
+
+    # Both arguments variable, only the first or only the second one
+    for func2 in (cp.atan2, cp.pow, cp.minimum, cp.maximum):
+        for a, b in BINARY_VALS:
+            ret += [func2(val(a), val(b)), func2(val(a), b), func2(a, val(b))]
+
+    ret += [cp.clamp(val(x), 0.0, 1.0) for x in (-2.5, 0.3, 2.5)]
+    ret += [cp.clamp(val(-7.0), val(-5.0), -1.0), cp.clamp(val(0.5), -1.0, val(0.25))]
+
+    ret += [val(2.5) ** 2, val(9) ** 2, val(9) ** -1, val(9) ** 0.5, val(9) ** 2.111, val(2.5) ** -2, 2 ** val(2.5)]
+    return ret
+
+
+def math_test_values() -> tuple[list[NumLike], list[NumLike]]:
+    """Returns the math test program and its reference values"""
+    return math_program(value), math_program(lambda x: x)
+
+
+def vector_program(v1: vector[Any], v2: vector[Any], vi: vector[Any]) -> list[NumLike]:
+    """Program with vector operations, returns all resulting scalars"""
+    def flat(*items: Any) -> list[NumLike]:
+        return [x for item in items for x in (item.values if isinstance(item, vector) else [item])]
+
+    t1 = cp.vector([10, 11, 12]) + vi
+    t3 = cp.vector([1 / (i + 1) for i in range(3)]) * v1
+
+    return flat(t1, t1.sum(), ((t3 * t1) * 2).sum(), ((t3 * t1) * 2).magnitude(),
+                v1 + v2, v1 - v2, v1 * v2, v1 / v2, v1 ** 2, 2.5 - v1, 2.5 / v1, -v2,
+                v1 > 1.5, v2 < 0.0, v1 == cp.vector([1.0, 5.0, 3.0]),
+                v1.dot(v2), v1 @ v2, v1.cross(v2), v1.sum(), v1.magnitude(), v1.normalize(),
+                v1.map(lambda x: x * x + 1),
+                cp.distance(v1, v2), cp.scalar_projection(v1, v2), cp.vector_projection(v1, v2),
+                cp.angle_between(v1, v2), cp.rotate_vector(v1, cp.vector([0.0, 0.0, 1.0]), 1.234),
+                cp.sqrt(v1), cp.sin(v2), cp.exp(v1), cp.atan2(v1, v2),
+                cp.minimum(v1, v2), cp.maximum(v1, 2.0), cp.clamp(v2, -1.0, 2.0), cp.abs(v2),
+                cp.concat([v1, v2]).sum())
+
+
+def vector_test_values() -> tuple[list[NumLike], list[NumLike]]:
+    """Returns the vector test program and its reference values"""
+    a = [1.0, 2.0, 3.0]
+    b = [4.0, -5.0, 6.5]
+    ret_test = vector_program(cp.vector(value(x) for x in a), cp.vector(value(x) for x in b), cp.vector(value(i) for i in range(3)))
+    ret_ref = vector_program(cp.vector(a), cp.vector(b), cp.vector(range(3)))
+    return ret_test, ret_ref
+
+
+TEST_PROGRAMS = {
+    'ops': ops_test_values,
+    'math': math_test_values,
+    'vector': vector_test_values,
+}
+
+
+def run_runner_test(name: str, arch: str, runner: str, qemu: Sequence[str] = ()) -> None:
+    """Compile the test program name ('ops', 'math' or 'vector') for arch,
+    run it on the runner and compare the results with the Python reference
+
+    Arguments:
+        name: test program
+        arch: stencil architecture, 'native' for the stencils of this machine
+        runner: path of the runner executable
+        qemu: command prefix for running a runner of a foreign architecture
+    """
+    ret_test, ret_ref = TEST_PROGRAMS[name]()
+    assert len(ret_test) == len(ret_ref)
 
     sdb = backend.stencil_db_from_package(arch)
-    path = f'build/runner/test-{arch}.copapy'
+    path = f'build/runner/test-{arch}-{name}.copapy'
     variables = write_program(ret_test, sdb, path)
 
     result = run_program(runner, path, qemu)
     if result is not None:
-        check_results(result, ret_test, ret_ref, variables, sdb)
-
-
-def run_vector_test(arch: str, runner: str, qemu: Sequence[str] = ()) -> None:
-    """Compile a vector program for arch, run it on the runner and compare the
-    results to the x86_64 reference"""
-    t1 = cp.vector([10, 11, 12]) + cp.vector(cp.value(v) for v in range(3))
-    t2 = t1.sum()
-
-    t3 = cp.vector(cp.value(1 / (v + 1)) for v in range(3))
-    t4 = ((t3 * t1) * 2).sum()
-    t5 = ((t3 * t1) * 2).magnitude()
-
-    path = f'build/runner/test-{arch}-vector.copapy'
-    write_program([t2, t4, t5], backend.stencil_db_from_package(arch), path)
-
-    result = run_program(runner, path, qemu)
-    if result is not None:
-        assert " size=4 data=24 00 00 00" in result
-        assert " size=4 data=56 55 25 42" in result
-        assert " size=4 data=B4 F9 C8 41" in result
+        check_results(result, ret_test, ret_ref, variables, sdb, rel=1e-5, abs_tol=1e-5)

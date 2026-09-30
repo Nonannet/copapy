@@ -391,7 +391,7 @@ jobs:
     - name: Install Python dependencies
       run: python -m pip install .[mindev]
     - name: Run RISC-V 32 test with qemu-user
-      run: pytest tests/test_ops_riscv32.py -W error::UserWarning
+      run: pytest tests/test_runner_riscv32.py -W error::UserWarning
     - name: Create assembly listings
       run: bash tools/create_asm.sh
       env:
