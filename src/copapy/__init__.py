@@ -42,6 +42,7 @@ from ._math import sqrt, abs, sign, sin, cos, tan, asin, acos, atan, atan2, log,
 from ._nn import relu, sigmoid
 from ._autograd import grad
 from ._tensors import tensor as matrix
+from ._arrays import array
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -62,6 +63,7 @@ __all__ = [
     "vector",
     "tensor",
     "matrix",
+    "array",
     "identity",
     "zeros",
     "ones",

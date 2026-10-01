@@ -248,6 +248,114 @@ def get_store_code(type1: str, type2: str) -> str:
     """
 
 
+def arr_out_type(op: str, type1: str, type2: str) -> str:
+    return 'float' if op == 'div' or type1 != type2 else type1
+
+
+def arr_operand(type1: str, x: str, type_out: str) -> str:
+    return x if type1 == type_out else f"({type_out}){x}"
+
+
+@norm_indent
+def get_arr_op_code(op: str, type1: str, type2: str) -> str:
+    """Element-wise binary operation for array-array (vv), array-scalar (vs)
+    and scalar-array (sv) operands"""
+    t_out = arr_out_type(op, type1, type2)
+    sign = op_signs[op]
+    kernel = f"aux_arr_{op}_{type1}_{type2}"
+    a = arr_operand(type1, 'a[i]', t_out)
+    b = arr_operand(type2, 'b[i]', t_out)
+    sa = arr_operand(type1, 'a', t_out)
+    sb = arr_operand(type2, 'b', t_out)
+    return f"""
+    KERNEL void {kernel}_vv(const {type1} *restrict a, const {type2} *restrict b, {t_out} *restrict o, int n) {{
+        for (int i = 0; i < n; i++) o[i] = {a} {sign} {b};
+    }}
+
+    KERNEL void {kernel}_vs(const {type1} *restrict a, {type2} b, {t_out} *restrict o, int n) {{
+        for (int i = 0; i < n; i++) o[i] = {a} {sign} {sb};
+    }}
+
+    KERNEL void {kernel}_sv({type1} a, const {type2} *restrict b, {t_out} *restrict o, int n) {{
+        for (int i = 0; i < n; i++) o[i] = {sa} {sign} {b};
+    }}
+
+    STENCIL void {op}_{type1}arr_{type2}arr(void) {{
+        {kernel}_vv(REF(ref_arg0), REF(ref_arg1), REF(ref_out), *(int *)REF(ref_arg2));
+        result_void();
+    }}
+
+    STENCIL void {op}_{type1}arr_{type2}(void) {{
+        {kernel}_vs(REF(ref_arg0), *({type2} *)REF(ref_arg1), REF(ref_out), *(int *)REF(ref_arg2));
+        result_void();
+    }}
+
+    STENCIL void {op}_{type1}_{type2}arr(void) {{
+        {kernel}_sv(*({type1} *)REF(ref_arg0), REF(ref_arg1), REF(ref_out), *(int *)REF(ref_arg2));
+        result_void();
+    }}
+    """
+
+
+def get_reduction_body(type_out: str, term: Callable[[str], str], lanes: int = 8) -> str:
+    """Function body returning the sum of term(i) for i in range(n). Independent
+    partial sums allow vectorization without reassociation of floats. Scalars
+    instead of an accumulator array avoid memset calls for the initialization."""
+    decl = ', '.join(f's{k} = 0' for k in range(lanes))
+    body = ' '.join(f's{k} += {term(f"i + {k}")};' for k in range(lanes))
+    total = ' + '.join(f's{k}' for k in range(lanes))
+    return f"""{type_out} {decl}, r = 0;
+        int i = 0;
+        for (; i + {lanes} <= n; i += {lanes}) {{
+            {body}
+        }}
+        for (; i < n; i++) r += {term('i')};
+        return r + {total};"""
+
+
+@norm_indent
+def get_arr_dot_code(type1: str, type2: str) -> str:
+    """Dot product and matrix-vector product (row-major m x n matrix)"""
+    t_out = arr_out_type('mul', type1, type2)
+    kernel = f"aux_arr_dot_{type1}_{type2}"
+    body = get_reduction_body(t_out, lambda i: f"{arr_operand(type1, f'a[{i}]', t_out)} * {arr_operand(type2, f'b[{i}]', t_out)}")
+    return f"""
+    KERNEL {t_out} {kernel}(const {type1} *restrict a, const {type2} *restrict b, int n) {{
+        {body}
+    }}
+
+    KERNEL void aux_arr_matvec_{type1}_{type2}(const {type1} *restrict a, const {type2} *restrict b, {t_out} *restrict o, int m, int n) {{
+        for (int j = 0; j < m; j++) o[j] = {kernel}(a + j * n, b, n);
+    }}
+
+    STENCIL void dot_{type1}arr_{type2}arr(void) {{
+        *({t_out} *)REF(ref_out) = {kernel}(REF(ref_arg0), REF(ref_arg1), *(int *)REF(ref_arg2));
+        result_void();
+    }}
+
+    STENCIL void matvec_{type1}arr_{type2}arr(void) {{
+        aux_arr_matvec_{type1}_{type2}(REF(ref_arg0), REF(ref_arg1), REF(ref_out), *(int *)REF(ref_arg2), *(int *)REF(ref_arg3));
+        result_void();
+    }}
+    """
+
+
+@norm_indent
+def get_arr_sum_code(type1: str) -> str:
+    kernel = f"aux_arr_sum_{type1}"
+    body = get_reduction_body(type1, lambda i: f"a[{i}]")
+    return f"""
+    KERNEL {type1} {kernel}(const {type1} *restrict a, int n) {{
+        {body}
+    }}
+
+    STENCIL void sum_{type1}arr(void) {{
+        *({type1} *)REF(ref_out) = {kernel}(REF(ref_arg0), *(int *)REF(ref_arg1));
+        result_void();
+    }}
+    """
+
+
 def permutate(*lists: list[str]) -> Generator[list[str], None, None]:
     if len(lists) == 0:
         yield []
@@ -338,6 +446,18 @@ if __name__ == "__main__":
 
     for t1, t2 in permutate(types, types):
         code += get_store_code(t1, t2)
+
+    # Array stencils:
+    code += get_result_stubs1('void').replace('void arg1', 'void')
+
+    for op, t1, t2 in permutate(['add', 'sub', 'mul', 'div'], types, types):
+        code += get_arr_op_code(op, t1, t2)
+
+    for t1, t2 in permutate(types, types):
+        code += get_arr_dot_code(t1, t2)
+
+    for t in types:
+        code += get_arr_sum_code(t)
 
     print(f"Write file {args.path}...")
     with open(args.path, 'w') as f:

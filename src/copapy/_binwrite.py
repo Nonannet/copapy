@@ -4,6 +4,15 @@ import struct
 
 ByteOrder = Literal['little', 'big']
 
+
+def array_format(dtype: str, length: int, byteorder: ByteOrder) -> str:
+    """struct format string for an array of 32 bit int or float values"""
+    return {'little': '<', 'big': '>'}[byteorder] + str(length) + ('f' if dtype == 'float' else 'i')
+
+
+def pack_array(values: 'tuple[int | float, ...] | list[int | float]', dtype: str, byteorder: ByteOrder) -> bytes:
+    return struct.pack(array_format(dtype, len(values), byteorder), *values)
+
 Command = Enum('Command', [('ALLOCATE_DATA', 1), ('COPY_DATA', 2),
                            ('ALLOCATE_CODE', 3), ('COPY_CODE', 4),
                            ('PATCH', 0x1000),

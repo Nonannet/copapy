@@ -21,6 +21,11 @@ def test_vector() -> None:
     run_runner_test('vector', ARCH, NATIVE_RUNNER)
 
 
+@pytest.mark.runner
+def test_array() -> None:
+    run_runner_test('array', ARCH, NATIVE_RUNNER)
+
+
 @pytest.mark.parametrize('name', list(TEST_PROGRAMS))
 def test_target(name: str) -> None:
     """Same test programs executed with the coparun Python module"""
@@ -43,5 +48,6 @@ if __name__ == "__main__":
     test_ops()
     test_math()
     test_vector()
+    test_array()
     for n in TEST_PROGRAMS:
         test_target(n)

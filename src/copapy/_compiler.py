@@ -1,8 +1,9 @@
 from typing import Generator, Iterable, Any
 from . import _binwrite as binw
 from ._stencils import stencil_database, patch_entry
-from collections import defaultdict, deque
-from ._basic_types import Net, Node, Store, CPConstant, Op, transl_type
+from collections import defaultdict
+import heapq
+from ._basic_types import Net, Node, Store, CPConstant, Op, transl_type, ArrayNet, ArrayConst, ArrayOp, ArrayElement
 
 
 def stable_toposort(edges: Iterable[tuple[Node, Node]]) -> list[Node]:
@@ -33,21 +34,19 @@ def stable_toposort(edges: Iterable[tuple[Node, Node]]) -> list[Node]:
         indeg[v] += 1
         indeg.setdefault(u, 0)
 
-    # Initialize queue with nodes of indegree 0, sorted by first appearance
-    queue = deque(sorted([n for n in indeg if indeg[n] == 0], key=lambda x: order[x]))
+    # Min-heap of nodes with indegree 0 by first appearance (order values are unique)
+    queue = [(order[n], n) for n in indeg if indeg[n] == 0]
+    heapq.heapify(queue)
     result: list[Node] = []
 
     while queue:
-        node = queue.popleft()
+        _, node = heapq.heappop(queue)
         result.append(node)
 
         for nei in adj[node]:
             indeg[nei] -= 1
             if indeg[nei] == 0:
-                queue.append(nei)
-
-        # Maintain stability: sort queue by appearance order
-        queue = deque(sorted(queue, key=lambda x: order[x]))
+                heapq.heappush(queue, (order[nei], nei))
 
     # Check if graph had a cycle (not all nodes output)
     if len(result) != len(indeg):
@@ -151,7 +150,11 @@ def add_load_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], No
     net_lookup = {net.source: net for node in node_list for net in node.args}
 
     for node in node_list:
-        if not isinstance(node, CPConstant):
+        if isinstance(node, ArrayOp):
+            # Operands are accessed in memory, register contents are not preserved
+            yield None, node
+            registers = [None, None]
+        elif not isinstance(node, CPConstant | ArrayConst | ArrayElement):
             for i, net in enumerate(node.args):
                 if id(net) != id(registers[i]):  # TODO: consider register swap and commutative ops
                     #if net in registers:
@@ -187,9 +190,17 @@ def add_store_ops(net_node_list: list[tuple[Net | None, Node]], const_nets: list
         net for net, node in net_node_list
         if net and node.name.startswith('load_')}
 
+    # Scalar arguments of array ops are read from memory
+    read_back_nets |= {
+        net for _, node in net_node_list if isinstance(node, ArrayOp)
+        for net in node.args if not isinstance(net, ArrayNet)}
+
     registers: list[Net | None] = [None, None]
 
     for net, node in net_node_list:
+        if isinstance(node, ArrayOp):
+            registers = [None, None]
+
         if isinstance(node, Store):
             assert len(registers) == 2
             type_list = [transl_type(r.dtype) if r else 'int' for r in registers]
@@ -206,7 +217,8 @@ def add_store_ops(net_node_list: list[tuple[Net | None, Node]], const_nets: list
                 registers[1] = node.args[1]
             #print("* reg", node.name, [transl_type(r.dtype) if r else 'int' for r in registers])
 
-            if net in read_back_nets and net not in stored_nets:
+            if net in read_back_nets and net not in stored_nets and \
+               not isinstance(net.source, ArrayOp | ArrayElement):  # these are already in memory
                 type_list = [transl_type(r.dtype) if r else 'int' for r in registers]
                 yield net, Op(f"store_{type_list[0]}_reg0_" + '_'.join(type_list), [])
                 stored_nets.add(net)
@@ -243,7 +255,11 @@ def get_data_layout(variable_list: Iterable[Net], sdb: stencil_database, offset:
 
     for variable in variable_list:
         lengths = sdb.get_type_size(transl_type(variable.dtype))
-        offset = (offset + lengths - 1) // lengths * lengths  # align variables to their own size
+        alignment = lengths  # align variables to their own size
+        if isinstance(variable, ArrayNet):
+            lengths *= variable.length
+            alignment = 16  # align arrays for SIMD access
+        offset = (offset + alignment - 1) // alignment * alignment
         object_list.append((variable, offset, lengths))
         offset += lengths
 
@@ -354,7 +370,16 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
     dw.write_com(binw.Command.FREE_MEMORY)
 
     # Get all nets/variables associated with heap memory
-    variable_list = get_nets([const_net_list], extended_output_ops)
+    variable_list = set(get_nets([const_net_list], extended_output_ops))
+
+    # Arguments and results of array ops are accessed in memory
+    variable_list |= {net for _, node in extended_output_ops if isinstance(node, ArrayOp)
+                      for net in (*node.args, node.result)}
+
+    # Array elements are aliases into the memory of their arrays
+    element_nets = [net for net in variable_list if isinstance(net.source, ArrayElement)]
+    variable_list = {net for net in variable_list if not isinstance(net.source, ArrayElement)}
+    variable_list |= {net.source.args[0] for net in element_nets}
 
     stencil_names = {node.name for _, node in extended_output_ops}
     aux_function_names = sdb.get_sub_functions(stencil_names)
@@ -384,12 +409,25 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
             dw.write_int(lengths)
             dw.write_value(net.source.value, lengths)
             #print(f'+ {net.dtype} {net.source.value}')
+        elif isinstance(net.source, ArrayConst):
+            dw.write_com(binw.Command.COPY_DATA)
+            dw.write_int(start)
+            dw.write_int(lengths)
+            dw.write_bytes(binw.pack_array(net.source.values, net.dtype, sdb.byteorder))
+
+    object_addr_lookup = {net: offs for net, offs, _ in variable_mem_layout}
+
+    for net in element_nets:
+        element = net.source
+        assert isinstance(element, ArrayElement)
+        size = sdb.get_type_size(transl_type(net.dtype))
+        object_addr_lookup[net] = object_addr_lookup[element.args[0]] + element.index * size
+        variables[net] = (object_addr_lookup[net], size, net.dtype)
 
     # prep auxiliary_functions
     code_section_layout, func_addr_lookup, aux_func_len = get_aux_func_layout(aux_function_names, sdb)
 
     # Prepare program code and relocations
-    object_addr_lookup = {net: offs for net, offs, _ in variable_mem_layout}
     section_addr_lookup = {id: offs for id, offs, _ in section_mem_layout}
 
     # assemble stencils to main program and patch stencils
@@ -412,7 +450,13 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
 
             elif reloc.target_symbol_info in ('STT_OBJECT', 'STT_NOTYPE', 'STT_SECTION'):
                 #print('-- ' + reloc.target_symbol_name + ' // ' + node.name)
-                if reloc.target_symbol_name.startswith('dummy_'):
+                if reloc.target_symbol_name.startswith('ref_'):
+                    # Patch addresses of array op arguments (ref_arg<n>) and result (ref_out)
+                    assert isinstance(node, ArrayOp), f"Memory reference in non array op {node.name}"
+                    slot = reloc.target_symbol_name[4:]
+                    ref_net = node.result if slot == 'out' else node.args[int(slot[3:])]
+                    patches = sdb.get_patch(reloc, object_addr_lookup[ref_net], offset, binw.PatchFlag.DATA)
+                elif reloc.target_symbol_name.startswith('dummy_'):
                     # Patch for write and read addresses to/from heap variables
                     assert associated_net, f"Relocation found but no net defined for operation {node.name}"
                     #print(f"Patch for write and read addresses to/from heap variables: {node.name} {patch.target_symbol_info} {patch.target_symbol_name}")
