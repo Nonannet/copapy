@@ -2,7 +2,8 @@ from typing import Iterable, overload, TypeVar, Any, Callable, TypeAlias
 from . import _binwrite as binw
 from coparun_module import coparun, read_data_mem, create_target, clear_target
 import struct
-from ._basic_types import value, Net, Node, Store, NumLike, ArrayType, stencil_db_from_package
+from ._basic_types import value, Net, Node, Store, NumLike, ArrayType, stencil_db_from_package, ArrayOp, ArrayElement, ArrayConst, transl_type
+from ._arrays import array
 from ._compiler import compile_to_dag
 
 T = TypeVar("T", int, float)
@@ -80,17 +81,30 @@ class Target():
             values: Values to compute
         """
         nodes: list[Node] = []
+
+        def add_root(net: Net) -> None:
+            if isinstance(net.source, ArrayElement):
+                # Element is an alias to the array memory
+                net = net.source.args[0]
+            if isinstance(net.source, ArrayOp):
+                # Result is already written to memory by the array op
+                nodes.append(net.source)
+            elif not isinstance(net.source, ArrayConst):
+                nodes.append(Store(net))
+
         for input in values:
-            if isinstance(input, ArrayType):
+            if isinstance(input, array):
+                add_root(input.net)
+            elif isinstance(input, ArrayType):
                 for v in input.values:
                     if isinstance(v, value):
-                        nodes.append(Store(v))
+                        add_root(v.net)
             elif isinstance(input, Iterable):
                 for v in input:
                     if isinstance(v, value):
-                        nodes.append(Store(v))
+                        add_root(v.net)
             elif isinstance(input, value):
-                nodes.append(Store(input))
+                add_root(input.net)
 
         dw, self._values = compile_to_dag(nodes, self.sdb)
         dw.write_com(binw.Command.END_COM)
@@ -112,15 +126,42 @@ class Target():
     def read_value(self, variables: Iterable[T | value[T]]) -> list[T]: ...
     @overload
     def read_value(self, variables: ArrayType[T]) -> ArrayType[T]: ...
-    def read_value(self, variables: NumLike | value[T] | ArrayType[T] | Iterable[T | value[T]]) -> Any:
+    @overload
+    def read_value(self, variables: array[T]) -> list[Any]: ...
+    def read_value(self, variables: NumLike | value[T] | ArrayType[T] | array[T] | Iterable[T | value[T]]) -> Any:
         """Reads the numeric value of a copapy type.
 
         Arguments:
             variables: Variable or multiple variables to read
 
         Returns:
-            Numeric value or values
+            Numeric value or values, arrays are returned as nested lists
         """
+        if isinstance(variables, array):
+            if variables.net in self._values:
+                addr, lengths, _ = self._values[variables.net]
+                data = read_data_mem(self._context, addr, lengths)
+                assert data is not None and len(data) == lengths, f"Failed to read array {variables}"
+                flat = struct.unpack(binw.array_format(variables.dtype, variables.size, self.sdb.byteorder), data)
+            else:
+                source = variables.net.source
+                assert isinstance(source, ArrayConst), f"Array {variables} not found. It might not have been compiled for the target."
+                flat = source.values
+            return variables.get_values(flat)
+
+        if isinstance(variables, value) and variables.net not in self._values and \
+           isinstance(variables.net.source, ArrayElement):
+            # Element not accessed by the compiled program, read it from its array
+            element = variables.net.source
+            array_net = element.args[0]
+            if array_net in self._values:
+                base, _, _ = self._values[array_net]
+                size = self.sdb.get_type_size(transl_type(array_net.dtype))
+                self._values[variables.net] = (base + element.index * size, size, array_net.dtype)
+            else:
+                assert isinstance(array_net.source, ArrayConst), f"Value {variables} not found. It might not have been compiled for the target."
+                return array_net.source.values[element.index]
+
         if isinstance(variables, ArrayType):
             return variables.map(lambda v: self.read_value(v))
 
@@ -158,13 +199,29 @@ class Target():
         else:
             raise ValueError(f"Unsupported value type: {var_type}")
 
-    def write_value(self, variables: value[Any] | Iterable[value[Any]], data: int | float | Iterable[int | float]) -> None:
+    def write_value(self, variables: value[Any] | array[Any] | Iterable[value[Any]], data: int | float | Iterable[Any]) -> None:
         """Write to a copapy value on the target.
 
         Arguments:
-            variables: Singe variable or multiple variables to overwrite
-            value: Singe value or multiple values to write
+            variables: Singe variable, array or multiple variables to overwrite
+            value: Singe value or multiple values to write, (nested) sequences for arrays
         """
+        if isinstance(variables, array):
+            assert isinstance(data, Iterable), "Data for an array must be a sequence"
+            assert variables.net in self._values, f"Array {variables} not found. It might not have been compiled for the target."
+            addr, lengths, _ = self._values[variables.net]
+            flat = array.flatten_data(data)
+            assert len(flat) == variables.size, f"Data size {len(flat)} does not match array size {variables.size}"
+            conv = float if variables.dtype == 'float' else int
+            dw = binw.data_writer(self.sdb.byteorder)
+            dw.write_com(binw.Command.COPY_DATA)
+            dw.write_int(addr)
+            dw.write_int(lengths)
+            dw.write_bytes(binw.pack_array([conv(v) for v in flat], variables.dtype, self.sdb.byteorder))
+            dw.write_com(binw.Command.END_COM)
+            assert coparun(self._context, dw.get_data()) > 0
+            return
+
         if isinstance(variables, Iterable):
             assert isinstance(data, Iterable), "If net is iterable, value must be iterable too"
             for ni, vi in zip(variables, data):

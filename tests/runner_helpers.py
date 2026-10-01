@@ -1,4 +1,5 @@
 """Shared helpers for tests running compiled copapy programs with a coparun runner"""
+import operator
 import os
 import re
 import struct
@@ -249,10 +250,55 @@ def vector_test_values() -> tuple[list[NumLike], list[NumLike]]:
     return ret_test, ret_ref
 
 
+def array_test_values() -> tuple[list[NumLike], list[NumLike]]:
+    """Returns a program with array stencils and its reference values. The array
+    results are checked element-wise by reading the array memory as scalars."""
+    n = 11  # not a multiple of the SIMD width or the unrolling of the reductions
+    fa = [i * 0.75 - 3.2 for i in range(n)]
+    fb = [(i * 5) % 7 + 0.5 for i in range(n)]
+    ia = [i * 3 - 10 for i in range(n)]
+    ib = [(i * 7) % 5 + 1 for i in range(n)]
+    rows = [[(r * 3 + i) % 4 - 1.5 for i in range(n)] for r in range(3)]
+    arrays = {id(fa): cp.array(fa), id(fb): cp.array(fb), id(ia): cp.array(ia), id(ib): cp.array(ib)}
+    fs, i_s = value(1.5), value(3)
+
+    ret_test: list[NumLike] = []
+    ret_ref: list[NumLike] = []
+
+    def add(result: Any, ref: list[NumLike]) -> None:
+        if isinstance(result, cp.array):
+            ret_test.extend(result[i] for i in range(result.size))
+            ret_ref.extend(ref)
+        else:
+            ret_test.append(result)
+            ret_ref.extend(ref)
+
+    for f in (operator.add, operator.sub, operator.mul, operator.truediv):
+        for x, y in [(fa, fb), (fa, ib), (ia, fb), (ia, ib)]:
+            ax, ay = arrays[id(x)], arrays[id(y)]
+            add(f(ax, ay), [f(p, q) for p, q in zip(x, y)])
+            add(f(ax, fs), [f(p, 1.5) for p in x])
+            add(f(i_s, ay), [f(3, q) for q in y])
+
+    for x, y in [(fa, fb), (ia, ib), (ia, fb)]:
+        ax, ay = arrays[id(x)], arrays[id(y)]
+        add(ax.sum(), [sum(x)])
+        add(ax @ ay, [sum(p * q for p, q in zip(x, y))])
+
+    add(cp.array(rows) @ arrays[id(fb)], [sum(p * q for p, q in zip(r, fb)) for r in rows])
+
+    # Scalar operations on array elements and reduction results
+    af = arrays[id(fa)]
+    add((af * fs)[3] * 2 + cp.sqrt(arrays[id(fb)].sum()), [fa[3] * 1.5 * 2 + sum(fb) ** 0.5])
+
+    return ret_test, ret_ref
+
+
 TEST_PROGRAMS = {
     'ops': ops_test_values,
     'math': math_test_values,
     'vector': vector_test_values,
+    'array': array_test_values,
 }
 
 

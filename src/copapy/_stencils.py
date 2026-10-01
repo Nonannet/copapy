@@ -145,7 +145,7 @@ def get_last_relocation(func: pelfy.elf_symbol) -> pelfy.elf_relocation:
 def get_last_call_in_function(func: pelfy.elf_symbol) -> int:
     # Find last relocation in function
     reloc = get_last_relocation(func)
-    if reloc.symbol.name.startswith('dummy_'):
+    if reloc.symbol.name.startswith(('dummy_', 'ref_')):
         return -0xFFFF  # Last relocation is not a jump
     else:
         # Assume the jump/call instruction is 4 bytes long for relocations
@@ -222,7 +222,7 @@ class stencil_database():
                 sym = reloc.symbol
                 if sym.section and sym.section.type == 'SHT_PROGBITS' and \
                    not sym.section.fields['sh_flags'] & SHF_EXECINSTR and \
-                   sym.info != 'STT_FUNC' and not sym.name.startswith('dummy_'):
+                   sym.info != 'STT_FUNC' and not sym.name.startswith(('dummy_', 'ref_')):
                     ret.add(sym.section.index)
         return list(ret)
 

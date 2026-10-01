@@ -34,6 +34,11 @@ def test_vector() -> None:
 
 
 @pytest.mark.runner
+def test_array() -> None:
+    run_runner_test('array', ARCH, RUNNER, QEMU)
+
+
+@pytest.mark.runner
 def test_sinus() -> None:
     a_val = 8.25  # Error on x86 with a Windows ABI runner if a > 2 PI --> Sin result > 1
 
@@ -62,4 +67,5 @@ if __name__ == "__main__":
     test_ops()
     test_math()
     test_vector()
+    test_array()
     test_sinus()

@@ -475,6 +475,60 @@ class Op(Node):
     def __hash__(self) -> int:
         return self.node_hash
 
+class ArrayNet(Net):
+    """A Net representing a contiguous array of scalars in the heap memory.
+
+    Attributes:
+        dtype (str): The element data type.
+        length (int): Number of elements.
+    """
+    def __init__(self, dtype: str, source: Node, length: int):
+        super().__init__(dtype, source)
+        self.length = length
+
+
+class ArrayConst(Node):
+    """Array with values set at compile time or written by the host."""
+    def __init__(self, values: Sequence[int | float], dtype: str):
+        self.values = tuple(values)
+        self.dtype = dtype
+        self.name = 'const_' + dtype + 'arr'
+        self.args = ()
+        self.node_hash = id(self)
+
+
+class ArrayOp(Op):
+    """Operation reading and writing heap memory: the arguments are
+    accessed by the stencil through the ref_arg<n> symbols, the result
+    through ref_out. Array ops do not preserve the register contents.
+
+    Attributes:
+        result: Net the operation writes to (array or scalar)
+    """
+    def __init__(self, typed_op_name: str, args: Sequence[Net], result_dtype: str, length: int | None = None):
+        super().__init__(typed_op_name, args)
+        self.result: Net = ArrayNet(result_dtype, self, length) if length else Net(result_dtype, self)
+
+
+class ArrayElement(Node):
+    """Scalar element of an array at a constant index. It is no stencil
+    but an alias to the memory of the array element."""
+    def __init__(self, array_net: ArrayNet, index: int):
+        assert 0 <= index < array_net.length, f"Index {index} out of bounds for length {array_net.length}"
+        self.name = 'element_' + array_net.dtype
+        self.args = (array_net,)
+        self.index = index
+        self.node_hash = hash((array_net.source.node_hash, index, 'element'))
+
+    def __eq__(self, other: object) -> bool:
+        return self is other or (isinstance(other, ArrayElement) and
+                                 self.index == other.index and
+                                 self.args[0] == other.args[0])
+
+    def __hash__(self) -> int:
+        return self.node_hash
+
+
 class ArrayType(Generic[TNum]):
     """Interface for vector and tensor types."""
     def __init__(self, shape: tuple[int, ...]) -> None:

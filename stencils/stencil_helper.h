@@ -12,3 +12,29 @@
 #define NOINLINE
 #define STENCIL
 #endif
+
+// Array stencils: operands are heap objects referenced by the ref_* symbols,
+// patched by the compiler to the addresses of the node arguments (ref_arg<n>)
+// and the result (ref_out). All heap objects are at least 4 byte aligned.
+#define REF_OBJ(sym) extern char sym[] __attribute__((aligned(4)))
+REF_OBJ(ref_arg0);
+REF_OBJ(ref_arg1);
+REF_OBJ(ref_arg2);
+REF_OBJ(ref_arg3);
+REF_OBJ(ref_out);
+
+// Address of a ref_* symbol. On x86_64 -fno-pic takes addresses of extern
+// objects as 32 bit absolute values (R_X86_64_32), force RIP relative addressing
+#if defined(__x86_64__)
+#define REF(sym) ({ void *p_; __asm__("lea " #sym "(%%rip), %0" : "=r"(p_)); p_; })
+#else
+#define REF(sym) ((void *)(sym))
+#endif
+
+// Array kernels are shared auxiliary functions called as normal function by the
+// array stencils.
+#if defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
+#define KERNEL __attribute__((noinline, force_align_arg_pointer))
+#else
+#define KERNEL NOINLINE
+#endif

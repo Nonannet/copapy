@@ -22,7 +22,13 @@ def test_vector() -> None:
     run_runner_test('vector', ARCH, RUNNER, QEMU)
 
 
+@pytest.mark.runner
+def test_array() -> None:
+    run_runner_test('array', ARCH, RUNNER, QEMU)
+
+
 if __name__ == "__main__":
     test_ops()
     test_math()
     test_vector()
+    test_array()
