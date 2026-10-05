@@ -116,6 +116,9 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
             elif opn == 'tan':
                 add_grad(a, g * (1 / cp.cos(a) ** 2))
 
+            elif opn == 'tanh':
+                add_grad(a, g * (1 - cp.tanh(a) ** 2))
+
             elif opn == 'asin':
                 add_grad(a, g * (1 / cp.sqrt(1 - a**2)))
 

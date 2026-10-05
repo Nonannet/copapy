@@ -478,7 +478,12 @@ class tensor(ArrayType[TNum]):
     def __pow__(self, other: TensorNumLike) -> 'tensor[Any]': ...
     def __pow__(self, other: TensorNumLike) -> Any:
         """Element-wise power."""
-        return self._binary_op(other, lambda a, b: a ** b)
+        if isinstance(other, int) and not isinstance(other, bool) and 1 <= other < 8:
+            ret: tensor[Any] = self
+            for _ in range(other - 1):
+                ret = ret * self
+            return ret
+        return self._binary_op(other, lambda a, b: a ** b, 'pow')
 
     @overload
     def __rpow__(self: 'tensor[int]', other: VecFloatLike) -> 'tensor[float]': ...
@@ -489,7 +494,7 @@ class tensor(ArrayType[TNum]):
     @overload
     def __rpow__(self, other: VecNumLike) -> 'tensor[Any]': ...
     def __rpow__(self, other: TensorNumLike) -> Any:
-        return self._binary_op(other, lambda a, b: b ** a)
+        return self._binary_op(other, lambda a, b: b ** a, 'pow', reverse=True)
 
     def __gt__(self, other: TensorNumLike) -> 'tensor[int]':
         """Element-wise greater than."""
@@ -523,7 +528,7 @@ class tensor(ArrayType[TNum]):
             other: Second operand.
             op: Element-wise operation, called with an element of self as
                 first and an element of other as second argument.
-            array_op: Name of the equivalent array stencil operation (add, sub, mul, div)
+            array_op: Name of the equivalent array stencil operation (add, sub, mul, div, pow)
             reverse: The array operation computes other (op) self
         """
         if array_op:

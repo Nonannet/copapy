@@ -32,6 +32,7 @@ UNARY_CASES: list[tuple[Callable[..., Any], Callable[..., Any], list[float]]] = 
     (cp.sin, math.sin, TRIG_VALS),
     (cp.cos, math.cos, TRIG_VALS),
     (cp.tan, math.tan, TRIG_VALS),
+    (cp.tanh, math.tanh, [-20.0, -2.5, -1.0, -0.26, -0.25, -0.24, -0.1, -0.0001, 0.0, 0.0001, 0.1, 0.24, 0.25, 0.26, 1.0, 2.5, 20.0]),
     (cp.asin, math.asin, ARC_VALS),
     (cp.acos, math.acos, ARC_VALS),
     (cp.atan, math.atan, ARC_VALS + [-1000.0, -10.0, -2.0, 2.0, 10.0, 1000.0]),

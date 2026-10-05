@@ -2,6 +2,7 @@ from . import vector
 from . import tensor
 from ._vectors import VecNumLike
 from ._tensors import TensorNumLike
+from ._arrays import array
 from . import value, NumLike
 from typing import TypeVar, Any, overload, Callable
 from ._basic_types import add_op, unifloat
@@ -19,6 +20,8 @@ def exp(x: value[Any]) -> value[float]: ...
 def exp(x: vector[Any]) -> vector[float]: ...
 @overload
 def exp(x: tensor[Any]) -> tensor[float]: ...
+@overload
+def exp(x: array[Any]) -> array[float]: ...
 def exp(x: Any) -> Any:
     """Exponential function to basis e
 
@@ -30,8 +33,8 @@ def exp(x: Any) -> Any:
     """
     if isinstance(x, value):
         return add_op('exp', [x])
-    if isinstance(x, vector | tensor):
-        return x.map(exp)
+    if isinstance(x, vector | tensor | array):
+        return _map1(x, exp, 'exp')
     return float(math.exp(x))
 
 
@@ -43,6 +46,8 @@ def log(x: value[Any]) -> value[float]: ...
 def log(x: vector[Any]) -> vector[float]: ...
 @overload
 def log(x: tensor[Any]) -> tensor[float]: ...
+@overload
+def log(x: array[Any]) -> array[float]: ...
 def log(x: Any) -> Any:
     """Logarithm to basis e
 
@@ -54,8 +59,8 @@ def log(x: Any) -> Any:
     """
     if isinstance(x, value):
         return add_op('log', [x])
-    if isinstance(x, vector | tensor):
-        return x.map(log)
+    if isinstance(x, vector | tensor | array):
+        return _map1(x, log, 'log')
     return float(math.log(x))
 
 
@@ -73,7 +78,11 @@ def pow(x: Any, y: vector[Any]) -> vector[float]: ...
 def pow(x: tensor[Any], y: Any) -> tensor[float]: ...
 @overload
 def pow(x: Any, y: tensor[Any]) -> tensor[float]: ...
-def pow(x: TensorNumLike, y: TensorNumLike) -> Any:
+@overload
+def pow(x: array[Any], y: Any) -> array[Any]: ...
+@overload
+def pow(x: Any, y: array[Any]) -> array[float]: ...
+def pow(x: Any, y: Any) -> Any:
     """x to the power of y
 
     Arguments:
@@ -82,7 +91,11 @@ def pow(x: TensorNumLike, y: TensorNumLike) -> Any:
     Returns:
         result of x**y
     """
-    if isinstance(x, tensor) or isinstance(y, tensor):
+    if isinstance(x, tensor | array):
+        return x ** y
+    if isinstance(y, array) or (isinstance(y, tensor) and not isinstance(x, vector)):
+        return y.__rpow__(x)
+    if isinstance(y, tensor):
         return _map2_tensor(x, y, pow)
     if isinstance(x, vector) or isinstance(y, vector):
         return _map2_vector(x, y, pow)
@@ -109,6 +122,8 @@ def sqrt(x: value[Any]) -> value[float]: ...
 def sqrt(x: vector[Any]) -> vector[float]: ...
 @overload
 def sqrt(x: tensor[Any]) -> tensor[float]: ...
+@overload
+def sqrt(x: array[Any]) -> array[float]: ...
 def sqrt(x: Any) -> Any:
     """Square root function
 
@@ -120,8 +135,8 @@ def sqrt(x: Any) -> Any:
     """
     if isinstance(x, value):
         return add_op('sqrt', [x])
-    if isinstance(x, vector | tensor):
-        return x.map(sqrt)
+    if isinstance(x, vector | tensor | array):
+        return _map1(x, sqrt, 'sqrt')
     return float(math.sqrt(x))
 
 
@@ -133,6 +148,8 @@ def sin(x: value[Any]) -> value[float]: ...
 def sin(x: vector[Any]) -> vector[float]: ...
 @overload
 def sin(x: tensor[Any]) -> tensor[float]: ...
+@overload
+def sin(x: array[Any]) -> array[float]: ...
 def sin(x: Any) -> Any:
     """Sine function
 
@@ -144,8 +161,8 @@ def sin(x: Any) -> Any:
     """
     if isinstance(x, value):
         return add_op('sin', [x])
-    if isinstance(x, vector | tensor):
-        return x.map(sin)
+    if isinstance(x, vector | tensor | array):
+        return _map1(x, sin, 'sin')
     return math.sin(x)
 
 
@@ -157,6 +174,8 @@ def cos(x: value[Any]) -> value[float]: ...
 def cos(x: vector[Any]) -> vector[float]: ...
 @overload
 def cos(x: tensor[Any]) -> tensor[float]: ...
+@overload
+def cos(x: array[Any]) -> array[float]: ...
 def cos(x: Any) -> Any:
     """Cosine function
 
@@ -168,8 +187,8 @@ def cos(x: Any) -> Any:
     """
     if isinstance(x, value):
         return add_op('cos', [x])
-    if isinstance(x, vector | tensor):
-        return x.map(cos)
+    if isinstance(x, vector | tensor | array):
+        return _map1(x, cos, 'cos')
     return math.cos(x)
 
 
@@ -181,6 +200,8 @@ def tan(x: value[Any]) -> value[float]: ...
 def tan(x: vector[Any]) -> vector[float]: ...
 @overload
 def tan(x: tensor[Any]) -> tensor[float]: ...
+@overload
+def tan(x: array[Any]) -> array[float]: ...
 def tan(x: Any) -> Any:
     """Tangent function
 
@@ -192,8 +213,8 @@ def tan(x: Any) -> Any:
     """
     if isinstance(x, value):
         return add_op('tan', [x])
-    if isinstance(x, vector | tensor):
-        return x.map(tan)
+    if isinstance(x, vector | tensor | array):
+        return _map1(x, tan, 'tan')
     return math.tan(x)
 
 
@@ -205,6 +226,8 @@ def atan(x: value[Any]) -> value[float]: ...
 def atan(x: vector[Any]) -> vector[float]: ...
 @overload
 def atan(x: tensor[Any]) -> tensor[float]: ...
+@overload
+def atan(x: array[Any]) -> array[float]: ...
 def atan(x: Any) -> Any:
     """Inverse tangent function
 
@@ -216,8 +239,8 @@ def atan(x: Any) -> Any:
     """
     if isinstance(x, value):
         return add_op('atan', [x])
-    if isinstance(x, vector | tensor):
-        return x.map(atan)
+    if isinstance(x, vector | tensor | array):
+        return _map1(x, atan, 'atan')
     return math.atan(x)
 
 
@@ -235,7 +258,11 @@ def atan2(x: VecNumLike, y: vector[float]) -> vector[float]: ...
 def atan2(x: tensor[float], y: TensorNumLike) -> tensor[float]: ...
 @overload
 def atan2(x: TensorNumLike, y: tensor[float]) -> tensor[float]: ...
-def atan2(x: TensorNumLike, y: TensorNumLike) -> Any:
+@overload
+def atan2(x: array[Any], y: Any) -> array[float]: ...
+@overload
+def atan2(x: Any, y: array[Any]) -> array[float]: ...
+def atan2(x: Any, y: Any) -> Any:
     """2-argument arctangent
 
     Arguments:
@@ -245,8 +272,12 @@ def atan2(x: TensorNumLike, y: TensorNumLike) -> Any:
     Returns:
         Result in radian
     """
+    if isinstance(x, array):
+        return x._binary_op('atan2', y)
+    if isinstance(y, array):
+        return y._binary_op('atan2', x, reverse=True)
     if isinstance(x, tensor) or isinstance(y, tensor):
-        return _map2_tensor(x, y, atan2)
+        return _map2_tensor(x, y, atan2, 'atan2')
     if isinstance(x, vector) or isinstance(y, vector):
         return _map2_vector(x, y, atan2)
     if isinstance(x, value) or isinstance(y, value):
@@ -262,6 +293,8 @@ def asin(x: value[Any]) -> value[float]: ...
 def asin(x: vector[Any]) -> vector[float]: ...
 @overload
 def asin(x: tensor[Any]) -> tensor[float]: ...
+@overload
+def asin(x: array[Any]) -> array[float]: ...
 def asin(x: Any) -> Any:
     """Inverse sine function
 
@@ -273,8 +306,8 @@ def asin(x: Any) -> Any:
     """
     if isinstance(x, value):
         return add_op('asin', [x])
-    if isinstance(x, vector | tensor):
-        return x.map(asin)
+    if isinstance(x, vector | tensor | array):
+        return _map1(x, asin, 'asin')
     return math.asin(x)
 
 
@@ -286,6 +319,8 @@ def acos(x: value[Any]) -> value[float]: ...
 def acos(x: vector[Any]) -> vector[float]: ...
 @overload
 def acos(x: tensor[Any]) -> tensor[float]: ...
+@overload
+def acos(x: array[Any]) -> array[float]: ...
 def acos(x: Any) -> Any:
     """Inverse cosine function
 
@@ -297,9 +332,35 @@ def acos(x: Any) -> Any:
     """
     if isinstance(x, value):
         return add_op('acos', [x])
-    if isinstance(x, vector | tensor):
-        return x.map(acos)
+    if isinstance(x, vector | tensor | array):
+        return _map1(x, acos, 'acos')
     return math.acos(x)
+
+
+@overload
+def tanh(x: float | int) -> float: ...
+@overload
+def tanh(x: value[Any]) -> value[float]: ...
+@overload
+def tanh(x: vector[Any]) -> vector[float]: ...
+@overload
+def tanh(x: tensor[Any]) -> tensor[float]: ...
+@overload
+def tanh(x: array[Any]) -> array[float]: ...
+def tanh(x: Any) -> Any:
+    """Hyperbolic tangent function
+
+    Arguments:
+        x: Input value
+
+    Returns:
+        Hyperbolic tangent of x
+    """
+    if isinstance(x, value):
+        return add_op('tanh', [x])
+    if isinstance(x, vector | tensor | array):
+        return _map1(x, tanh, 'tanh')
+    return math.tanh(x)
 
 
 # Debug test function
@@ -322,7 +383,9 @@ def abs(x: value[U]) -> value[U]: ...
 def abs(x: vector[U]) -> vector[U]: ...
 @overload
 def abs(x: tensor[U]) -> tensor[U]: ...
-def abs(x: U | value[U] | vector[U] | tensor[U]) -> Any:
+@overload
+def abs(x: array[U]) -> array[U]: ...
+def abs(x: U | value[U] | vector[U] | tensor[U] | array[U]) -> Any:
     """Absolute value function
 
     Arguments:
@@ -333,8 +396,8 @@ def abs(x: U | value[U] | vector[U] | tensor[U]) -> Any:
     """
     if isinstance(x, value):
         return add_op('abs', [x])
-    if isinstance(x, vector | tensor):
-        return x.map(abs)
+    if isinstance(x, vector | tensor | array):
+        return _map1(x, abs, 'abs')
     return (x < 0) * -x + (x >= 0) * x
 
 
@@ -509,12 +572,33 @@ def _map2_vector(self: VecNumLike, other: VecNumLike, func: Callable[[Any, Any],
         return vector([func(self, other)])
 
 
-def _map2_tensor(self: TensorNumLike, other: TensorNumLike, func: Callable[[Any, Any], value[U] | U]) -> tensor[U]:
-    """Applies a function to each element of the vector and a second vector or scalar."""
+def _map1(x: 'vector[Any] | tensor[Any] | array[Any]', func: Callable[[Any], Any], op: str) -> Any:
+    """Applies a function to each element, by an array stencil for arrays and packed tensors."""
+    if isinstance(x, array):
+        return x._unary_op(op)
+    if isinstance(x, tensor):
+        arr = None if x._is_constant() else x._get_array()
+        if arr is not None:
+            return tensor._from_array(arr._unary_op(op))
+    return x.map(func)
+
+
+def _map2_tensor(self: TensorNumLike, other: TensorNumLike, func: Callable[[Any, Any], value[U] | U],
+                 array_op: str | None = None) -> tensor[U]:
+    """Applies a function to each element of the vector and a second vector or scalar,
+    by the array stencil array_op for packed tensors."""
     if isinstance(self, vector):
         self = tensor(self)
     if isinstance(other, vector):
         other = tensor(other)
+    if array_op:
+        ret = None
+        if isinstance(self, tensor):
+            ret = self._array_op(other, array_op)
+        elif isinstance(other, tensor):
+            ret = other._array_op(self, array_op, reverse=True)
+        if ret is not None:
+            return ret
     if isinstance(self, tensor) and isinstance(other, tensor):
         assert self.shape == other.shape, "Tensors must have the same shape"
         return tensor([func(x, y) for x, y in zip(self.values, other.values)], self.shape)

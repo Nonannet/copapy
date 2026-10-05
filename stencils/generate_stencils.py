@@ -249,7 +249,7 @@ def get_store_code(type1: str, type2: str) -> str:
 
 
 def arr_out_type(op: str, type1: str, type2: str) -> str:
-    return 'float' if op == 'div' or type1 != type2 else type1
+    return 'float' if op in ('div', 'pow', 'atan2') or type1 != type2 else type1
 
 
 def arr_operand(type1: str, x: str, type_out: str) -> str:
@@ -257,27 +257,30 @@ def arr_operand(type1: str, x: str, type_out: str) -> str:
 
 
 @norm_indent
-def get_arr_op_code(op: str, type1: str, type2: str) -> str:
-    """Element-wise binary operation for array-array (vv), array-scalar (vs)
-    and scalar-array (sv) operands"""
+def get_arr_op_code(op: str, type1: str, type2: str, func: str = '') -> str:
+    """Element-wise binary operation or function func(a, b) for array-array (vv),
+    array-scalar (vs) and scalar-array (sv) operands"""
     t_out = arr_out_type(op, type1, type2)
-    sign = op_signs[op]
     kernel = f"aux_arr_{op}_{type1}_{type2}"
     a = arr_operand(type1, 'a[i]', t_out)
     b = arr_operand(type2, 'b[i]', t_out)
     sa = arr_operand(type1, 'a', t_out)
     sb = arr_operand(type2, 'b', t_out)
+
+    def expr(x: str, y: str) -> str:
+        return f"{func}({x}, {y})" if func else f"{x} {op_signs[op]} {y}"
+
     return f"""
     KERNEL void {kernel}_vv(const {type1} *restrict a, const {type2} *restrict b, {t_out} *restrict o, int n) {{
-        for (int i = 0; i < n; i++) o[i] = {a} {sign} {b};
+        for (int i = 0; i < n; i++) o[i] = {expr(a, b)};
     }}
 
     KERNEL void {kernel}_vs(const {type1} *restrict a, {type2} b, {t_out} *restrict o, int n) {{
-        for (int i = 0; i < n; i++) o[i] = {a} {sign} {sb};
+        for (int i = 0; i < n; i++) o[i] = {expr(a, sb)};
     }}
 
     KERNEL void {kernel}_sv({type1} a, const {type2} *restrict b, {t_out} *restrict o, int n) {{
-        for (int i = 0; i < n; i++) o[i] = {sa} {sign} {b};
+        for (int i = 0; i < n; i++) o[i] = {expr(sa, b)};
     }}
 
     STENCIL void {op}_{type1}arr_{type2}arr(void) {{
@@ -368,6 +371,22 @@ def get_arr_matmul_code(type1: str, type2: str) -> str:
 
     STENCIL void matmul_{type1}arr_{type2}arr(void) {{
         aux_arr_matmul_{type1}_{type2}(REF(ref_arg0), REF(ref_arg1), REF(ref_out), REF(ref_arg2));
+        result_void();
+    }}
+    """
+
+
+@norm_indent
+def get_arr_func1_code(name: str, func: str, type1: str, type_out: str = 'float') -> str:
+    """Element-wise function of one array"""
+    kernel = f"aux_arr_{name}_{type1}"
+    return f"""
+    KERNEL void {kernel}(const {type1} *restrict a, {type_out} *restrict o, int n) {{
+        for (int i = 0; i < n; i++) o[i] = {func}({arr_operand(type1, 'a[i]', type_out)});
+    }}
+
+    STENCIL void {name}_{type1}arr(void) {{
+        {kernel}(REF(ref_arg0), REF(ref_out), *(int *)REF(ref_arg1));
         result_void();
     }}
     """
@@ -505,7 +524,7 @@ if __name__ == "__main__":
         t_out = 'int' if t1 == 'float' else 'float'
         code += get_cast(t1, t2, t_out)
 
-    fnames = ['get_42']
+    fnames = ['get_42', 'tanh']
     for fn, t1 in permutate(fnames, types):
         code += get_func1(fn, t1)
 
@@ -561,6 +580,19 @@ if __name__ == "__main__":
 
     for op, t1, t2 in permutate(['add', 'sub', 'mul', 'div'], types, types):
         code += get_arr_op_code(op, t1, t2)
+
+    for fn, t1, t2 in permutate(['pow', 'atan2'], types, types):
+        code += get_arr_op_code(fn, t1, t2, fn + 'f')
+
+    fnames = ['sqrt', 'exp', 'log', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan']
+    for fn, t in permutate(fnames, types):
+        code += get_arr_func1_code(fn, fn + 'f', t)
+
+    for t in types:
+        code += get_arr_func1_code('tanh', 'aux_tanh', t)
+
+    code += get_arr_func1_code('abs', 'fabsf', 'float')
+    code += get_arr_func1_code('abs', '__builtin_abs', 'int', 'int')
 
     for t1, t2 in permutate(types, types):
         code += get_arr_dot_code(t1, t2)
