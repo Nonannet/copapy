@@ -341,6 +341,64 @@ def get_arr_dot_code(type1: str, type2: str) -> str:
 
 
 @norm_indent
+def get_arr_matmul_code(type1: str, type2: str) -> str:
+    """Matrix product of a row-major m x k and a k x n matrix, the dimensions
+    are passed as int array [m, k, n]. The i-k-j loop order keeps the inner loop
+    contiguous for vectorization, the first k step initializes the output row."""
+    t_out = arr_out_type('mul', type1, type2)
+    a = arr_operand(type1, 'ar[q]', t_out)
+    a0 = arr_operand(type1, 'ar[0]', t_out)
+    b = arr_operand(type2, 'bq[j]', t_out)
+    b0 = arr_operand(type2, 'b[j]', t_out)
+    return f"""
+    KERNEL void aux_arr_matmul_{type1}_{type2}(const {type1} *restrict a, const {type2} *restrict b, {t_out} *restrict o, const int *restrict p) {{
+        int m = p[0], k = p[1], n = p[2];
+        for (int i = 0; i < m; i++) {{
+            {t_out} *restrict r = o + i * n;
+            const {type1} *ar = a + i * k;
+            {t_out} a0 = {a0};
+            for (int j = 0; j < n; j++) r[j] = a0 * {b0};
+            for (int q = 1; q < k; q++) {{
+                {t_out} aq = {a};
+                const {type2} *bq = b + q * n;
+                for (int j = 0; j < n; j++) r[j] += aq * {b};
+            }}
+        }}
+    }}
+
+    STENCIL void matmul_{type1}arr_{type2}arr(void) {{
+        aux_arr_matmul_{type1}_{type2}(REF(ref_arg0), REF(ref_arg1), REF(ref_out), REF(ref_arg2));
+        result_void();
+    }}
+    """
+
+
+@norm_indent
+def get_arr_copy_code() -> str:
+    """Strided copy of 32 bit elements for transposing, slicing and broadcasting.
+    Parameters as int array: [offset, n0, n1, n2, n3, s0, s1, s2, s3] with the
+    sizes n and the source strides s (in elements) of up to 4 dimensions."""
+    return """
+    KERNEL void aux_arr_copy32(const int *restrict a, int *restrict o, const int *restrict p) {
+        const int *s = a + p[0];
+        int n0 = p[1], n1 = p[2], n2 = p[3], n3 = p[4];
+        int s0 = p[5], s1 = p[6], s2 = p[7], s3 = p[8];
+        for (int i0 = 0; i0 < n0; i0++)
+            for (int i1 = 0; i1 < n1; i1++)
+                for (int i2 = 0; i2 < n2; i2++) {
+                    const int *r = s + i0 * s0 + i1 * s1 + i2 * s2;
+                    for (int i3 = 0; i3 < n3; i3++) *o++ = r[i3 * s3];
+                }
+    }
+
+    STENCIL void copy_arr(void) {
+        aux_arr_copy32(REF(ref_arg0), REF(ref_out), REF(ref_arg1));
+        result_void();
+    }
+    """
+
+
+@norm_indent
 def get_arr_sum_code(type1: str) -> str:
     kernel = f"aux_arr_sum_{type1}"
     body = get_reduction_body(type1, lambda i: f"a[{i}]")
@@ -455,6 +513,9 @@ if __name__ == "__main__":
 
     for t1, t2 in permutate(types, types):
         code += get_arr_dot_code(t1, t2)
+        code += get_arr_matmul_code(t1, t2)
+
+    code += get_arr_copy_code()
 
     for t in types:
         code += get_arr_sum_code(t)

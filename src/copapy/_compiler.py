@@ -3,7 +3,10 @@ from . import _binwrite as binw
 from ._stencils import stencil_database, patch_entry
 from collections import defaultdict
 import heapq
-from ._basic_types import Net, Node, Store, CPConstant, Op, transl_type, ArrayNet, ArrayConst, ArrayOp, ArrayElement
+from ._basic_types import Net, Node, Store, CPConstant, Op, transl_type, ArrayNet, ArrayConst, ArrayOp, ArrayElement, ArrayPack
+
+# Pseudo operation: store register 0 to an array element of an ArrayPack
+PACK_STORE = "pack_store"
 
 
 def stable_toposort(edges: Iterable[tuple[Node, Node]]) -> list[Node]:
@@ -154,6 +157,14 @@ def add_load_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], No
             # Operands are accessed in memory, register contents are not preserved
             yield None, node
             registers = [None, None]
+        elif isinstance(node, ArrayPack):
+            # Store each value from register 0 to the memory of its array element
+            for net, element in zip(node.args, node.elements):
+                if id(net) != id(registers[0]):
+                    type_list = ['int' if r is None else transl_type(r.dtype) for r in registers]
+                    yield net, Op(f"load_{transl_type(net.dtype)}_reg0_" + '_'.join(type_list), [])
+                    registers[0] = net
+                yield element, Op(PACK_STORE, [])
         elif not isinstance(node, CPConstant | ArrayConst | ArrayElement):
             for i, net in enumerate(node.args):
                 if id(net) != id(registers[i]):  # TODO: consider register swap and commutative ops
@@ -200,6 +211,12 @@ def add_store_ops(net_node_list: list[tuple[Net | None, Node]], const_nets: list
     for net, node in net_node_list:
         if isinstance(node, ArrayOp):
             registers = [None, None]
+
+        if node.name == PACK_STORE:
+            # Store register 0 to the array element net
+            type_list = [transl_type(r.dtype) if r else 'int' for r in registers]
+            yield net, Op(f"store_{type_list[0]}_reg0_" + '_'.join(type_list), [])
+            continue
 
         if isinstance(node, Store):
             assert len(registers) == 2

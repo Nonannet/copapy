@@ -157,5 +157,244 @@ def test_errors() -> None:
         a[3]
     with pytest.raises(ValueError):
         cp.array([[1, 2], [3]])
+    with pytest.raises(ValueError):
+        cp.array([cp.value(1), 2.5])  # int value in a float array
+    with pytest.raises(ValueError):
+        cp.array([[1.0, 2.0], [3.0, 4.0]]) @ cp.array([[1.0, 2.0, 3.0]])
+    with pytest.raises(IndexError):
+        a[1, 2]
+
+
+def flat(data: Any) -> list[Any]:
+    return [x for d in data for x in flat(d)] if isinstance(data, list) else [data]
+
+
+def nested(n0: int, n1: int, n2: int, dtype: str = 'float') -> list[Any]:
+    vals = sample_values(n0 * n1 * n2, dtype)
+    return [[vals[(i * n1 + j) * n2:(i * n1 + j + 1) * n2] for j in range(n1)] for i in range(n0)]
+
+
+VIEWS: dict[str, Callable[[Any], Any]] = {
+    'row': lambda x: x[1],
+    'column': lambda x: x[:, 2],
+    'slice_step': lambda x: x[1:, ::2, 3],
+    'reverse': lambda x: x[::-1, 1:3],
+    'neg_index': lambda x: x[-1, -2],
+    'transpose': lambda x: x.T,
+    'transpose_axes': lambda x: x.transpose(1, 0, 2),
+    'transpose_slice': lambda x: x.transpose(2, 0, 1)[1:4, :, ::3],
+    'reshape': lambda x: x.reshape(4, -1),
+    'reshape_transpose': lambda x: x.reshape(6, 10).T,
+}
+
+
+@pytest.mark.parametrize('view', VIEWS)
+@pytest.mark.parametrize('dtype', ['int', 'float'])
+def test_views(view: str, dtype: str) -> None:
+    data = nested(3, 4, 5, dtype)
+    res = VIEWS[view](cp.array(data))
+    ref = VIEWS[view](cp.tensor(data, packed=False))  # computed at trace time
+
+    out, = evaluate(res)
+
+    assert res.shape == ref.shape
+    assert flat(out) == pytest.approx(list(ref.values))
+
+
+@pytest.mark.parametrize('shape1,shape2', [((3, 1), (4,)), ((4,), (3, 4)), ((2, 1, 5), (3, 1)),
+                                           ((1,), (6,)), ((3, 4), (3, 4))])
+@pytest.mark.parametrize('op', OPS)
+def test_broadcasting(shape1: tuple[int, ...], shape2: tuple[int, ...], op: str) -> None:
+    def make(shape: tuple[int, ...], offset: int) -> list[Any]:
+        size = 1
+        for d in shape:
+            size *= d
+        vals: list[Any] = [v if v != 0 else 1.5 for v in sample_values(size, 'float', offset)]
+        for d in reversed(shape[1:]):
+            vals = [vals[i:i + d] for i in range(0, len(vals), d)]
+        return vals
+
+    d1, d2 = make(shape1, 0), make(shape2, 5)
+    res = OPS[op](cp.array(d1), cp.array(d2))
+    ref = OPS[op](cp.tensor(d1, packed=False), cp.tensor(d2, packed=False))
+
+    out, = evaluate(res)
+
+    assert res.shape == ref.shape
+    assert flat(out) == pytest.approx(list(ref.values))
+
+
+@pytest.mark.parametrize('m,k,n', [(1, 1, 1), (2, 3, 4), (5, 8, 3), (16, 17, 9)])
+@pytest.mark.parametrize('t1,t2', [('int', 'int'), ('int', 'float'), ('float', 'int'), ('float', 'float')])
+def test_matmul(m: int, k: int, n: int, t1: str, t2: str) -> None:
+    da = nested(1, m, k, t1)[0]
+    db = nested(1, k, n, t2)[0]
+    va = da[0]  # length k
+
+    res = [cp.array(da) @ cp.array(db), cp.array(va) @ cp.array(db)]
+    ref = [cp.tensor(da, packed=False) @ cp.tensor(db, packed=False),
+           cp.tensor(va, packed=False) @ cp.tensor(db, packed=False)]
+
+    out = evaluate(*res)
+
+    for o, r, x in zip(out, ref, res):
+        assert x.shape == r.shape
+        assert x.dtype == ('int' if t1 == t2 == 'int' else 'float')
+        assert flat(o) == pytest.approx(list(r.values), rel=1e-5)
+
+
+def test_pack_values() -> None:
+    import math
+    x = cp.value(2.0)
+    y = cp.value(3.0)
+    p = cp.array([x, x * y, 1.5, cp.sin(y) + x, y])  # computed values and constants
+    q = cp.array([[cp.value(1), 2], [3, cp.value(4)]])
+    r = (p * 2.0).sum() + p[1]
+
+    tg = cp.Target()
+    qq = q @ q
+    tg.compile(p, r, qq)
+    tg.run()
+    assert tg.read_value(p) == pytest.approx([2.0, 6.0, 1.5, math.sin(3) + 2, 3.0])
+    assert tg.read_value(r) == pytest.approx(2 * (2 + 6 + 1.5 + math.sin(3) + 2 + 3) + 6)
+    assert tg.read_value(qq) == [[7, 10], [15, 22]]
+
+    tg.write_value(x, 1.0)
+    tg.run()
+    assert tg.read_value(p) == pytest.approx([1.0, 3.0, 1.5, math.sin(3) + 1, 3.0])
+
+
+def hybrid_program(t1: Any, t2: Any, w: Any, s: Any) -> list[Any]:
+    """Tensor operations with array implementation and scalar fallbacks"""
+    return [t1 + t2, t1 * s - 1.5, 2.0 / (t2 + 10.0), -t1, w @ t1[:, 0], w @ t1, t2.T @ w.T, t1.sum(),
+            t1.T[1:3], t1.reshape(-1)[::3], (t1 + t2).mean(),
+            t1 > 0.0, t1 ** 2, t1.map(lambda v: v * v + 1), t1.sum(axis=0)]
+
+
+def test_hybrid_tensor() -> None:
+    d1 = nested(1, 8, 12)[0]
+    d2 = nested(1, 8, 12, 'float')[0][::-1]
+    dw = [row[:8] for row in nested(1, 5, 12)[0]]
+
+    def build(packed: bool | None) -> list[Any]:
+        t1 = cp.tensor([[cp.value(v) for v in row] for row in d1], packed=packed)
+        t2 = cp.tensor([[cp.value(v) for v in row] for row in d2], packed=packed)
+        w = cp.tensor(dw, packed=packed)
+        return hybrid_program(t1, t2, w, cp.value(2.5))  # w: 5 x 8
+
+    res_packed = build(None)  # 96 elements: above the threshold
+    res_scalar = build(False)
+
+    out_packed = evaluate(*res_packed)
+    out_scalar = evaluate(*res_scalar)
+
+    assert res_packed[0]._packed_array() is not None  # computed by array stencils
+    assert res_scalar[0]._packed_array() is None
+    for p, s, rp, rs in zip(out_packed, out_scalar, res_packed, res_scalar):
+        assert getattr(rp, 'shape', ()) == getattr(rs, 'shape', ())
+        p_vals = list(p.values) if isinstance(p, cp.tensor) else [p]
+        s_vals = list(s.values) if isinstance(s, cp.tensor) else [s]
+        assert p_vals == pytest.approx(s_vals, rel=1e-5)
+
+
+def test_hybrid_threshold_and_constants() -> None:
+    small = cp.tensor([cp.value(float(i)) for i in range(10)])
+    large = cp.tensor([cp.value(float(i)) for i in range(100)])
+    assert (small * 2.0)._packed_array() is None
+    assert (large * 2.0)._packed_array() is not None
+
+    # Constants are still evaluated at trace time and sparse constants stay unpacked
+    const = cp.tensor([float(i) for i in range(100)])
+    assert (const * 2.0).values[3] == 6.0
+    eye = cp.eye(100)
+    assert eye._get_array() is None
+    res = eye @ large
+    assert res.values[5] is large.values[5]  # multiplications by 0 and 1 eliminated
+
+    threshold = cp.tensor.pack_threshold
+    try:
+        cp.tensor.pack_threshold = None
+        assert (cp.tensor([cp.value(float(i)) for i in range(100)]) * 2.0)._packed_array() is None
+    finally:
+        cp.tensor.pack_threshold = threshold
+
+
+def test_hybrid_code_size() -> None:
+    from copapy.backend import compile_to_dag
+
+    def program_size(n: int) -> int:
+        w = cp.tensor([[((i * 7 + j) % 13 - 6) * 0.01 for j in range(n)] for i in range(n)])
+        x = cp.tensor([cp.value(float(i)) for i in range(n)])
+        y = cp.tensor([cp.value(float(i)) for i in range(n)], packed=False)
+        h = (w @ x + 0.5) * 2.0
+        res = (w @ h - x).sum()
+        dw, _ = compile_to_dag([cp.backend.Store(res)], cp.generic_sdb)
+        dw_scalar, _ = compile_to_dag([cp.backend.Store(((w @ y + 0.5) * 2.0).sum())], cp.generic_sdb)
+        return len(dw.get_data()) - 4 * n * n, len(dw_scalar.get_data())  # without the data of w
+
+    size_64, scalar_64 = program_size(64)
+    size_128, _ = program_size(128)
+    assert size_64 < scalar_64 / 10
+    assert size_128 < size_64 * 2.5  # grows only with the packing of x (linear)
+
+
+def test_autograd_array_error() -> None:
+    x = cp.tensor([cp.value(float(i)) for i in range(100)])
+    y = (x * 2.0).sum()
     with pytest.raises(NotImplementedError):
-        cp.array([cp.value(1.0), 2.0])
+        cp.grad(y, list(x.values))
+
+
+def test_hybrid_values_access_keeps_packed() -> None:
+    """Reading the element values of an array-only tensor must not change its source"""
+    x = cp.tensor([cp.value(float(i)) for i in range(100)])
+    y = x * 2.0
+    assert y._packed_array() is not None
+    refs = y.values  # element references into the array
+    assert y.values is refs  # cached
+    assert y._packed_array() is not None
+    assert y.reshape(10, 10)._packed_array() is not None
+
+    tg = cp.Target()
+    tg.compile(y)
+    tg.run()
+    assert list(tg.read_value(y).values) == [i * 2.0 for i in range(100)]
+
+
+INDEX_CASES_3D: list[Any] = [(0, 1, 0), (1, 1, 1), (-1, 0, -1), 0, 1, -1, (1, 0), (0, slice(None), 1),
+                             slice(1, None), (slice(None), -1)]
+INDEX_CASES_2D: list[Any] = [1, -1, (slice(None), 2), (slice(0, 2), slice(1, 3)), (-1, slice(None)),
+                             (slice(None, None, 2), slice(None, None, 2)), slice(1, None),
+                             (slice(None), slice(-1, None)), (2, 1)]
+
+
+@pytest.mark.parametrize('data,cases', [([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], INDEX_CASES_3D),
+                                        ([[10, 20, 30], [40, 50, 60], [70, 80, 90]], INDEX_CASES_2D)])
+def test_hybrid_indexing(data: Any, cases: list[Any]) -> None:
+    """Indexing and slicing of an array-backed tensor (strided copies for sub-tensors,
+    single elements from the array memory) compared with the scalar path"""
+    def build(packed: bool) -> Any:
+        t = cp.tensor([[[cp.value(v) for v in r] if isinstance(r, list) else cp.value(r) for r in row] for row in data],
+                      packed=packed)
+        return t + 1  # array-backed result for packed=True
+
+    t_packed, t_scalar = build(True), build(False)
+    assert t_packed._packed_array() is not None
+
+    res_packed = [t_packed[k] for k in cases]
+    res_scalar = [t_scalar[k] for k in cases]
+    out_packed = evaluate(*res_packed)
+    out_scalar = evaluate(*res_scalar)
+
+    for k, rp, rs, op, os in zip(cases, res_packed, res_scalar, out_packed, out_scalar):
+        assert rp.shape == rs.shape, k
+        if rp.ndim > 0:
+            assert rp._packed_array() is not None, k  # sub-tensor by strided copy
+        assert list(op.values) == list(os.values), k
+
+    with pytest.raises(IndexError):
+        t_packed[len(data)]
+    with pytest.raises(IndexError):
+        t_packed[(0,) * (t_packed.ndim - 1) + (len(data[0][0]) if t_packed.ndim == 3 else 3,)]
+    with pytest.raises(IndexError):
+        t_packed[(0,) * (t_packed.ndim + 1)]

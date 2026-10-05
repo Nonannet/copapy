@@ -2,7 +2,7 @@ from typing import Iterable, overload, TypeVar, Any, Callable, TypeAlias
 from . import _binwrite as binw
 from coparun_module import coparun, read_data_mem, create_target, clear_target
 import struct
-from ._basic_types import value, Net, Node, Store, NumLike, ArrayType, stencil_db_from_package, ArrayOp, ArrayElement, ArrayConst, transl_type
+from ._basic_types import value, Net, Node, Store, NumLike, ArrayType, stencil_db_from_package, ArrayOp, ArrayElement, ArrayConst, ArrayPack, transl_type
 from ._arrays import array
 from ._compiler import compile_to_dag
 
@@ -86,8 +86,8 @@ class Target():
             if isinstance(net.source, ArrayElement):
                 # Element is an alias to the array memory
                 net = net.source.args[0]
-            if isinstance(net.source, ArrayOp):
-                # Result is already written to memory by the array op
+            if isinstance(net.source, ArrayOp | ArrayPack):
+                # Result is already written to heap by the array op or pack
                 nodes.append(net.source)
             elif not isinstance(net.source, ArrayConst):
                 nodes.append(Store(net))
@@ -96,9 +96,13 @@ class Target():
             if isinstance(input, array):
                 add_root(input.net)
             elif isinstance(input, ArrayType):
-                for v in input.values:
-                    if isinstance(v, value):
-                        add_root(v.net)
+                packed = input._packed_array()
+                if packed is not None:
+                    add_root(packed.net)
+                else:
+                    for v in input.values:
+                        if isinstance(v, value):
+                            add_root(v.net)
             elif isinstance(input, Iterable):
                 for v in input:
                     if isinstance(v, value):
@@ -163,6 +167,10 @@ class Target():
                 return array_net.source.values[element.index]
 
         if isinstance(variables, ArrayType):
+            packed = variables._packed_array()
+            if packed is not None:
+                # Read all elements at once
+                return type(variables)(self.read_value(packed))
             return variables.map(lambda v: self.read_value(v))
 
         if isinstance(variables, Iterable):
