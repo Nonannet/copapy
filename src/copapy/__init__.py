@@ -39,7 +39,7 @@ from ._vectors import vector, distance, scalar_projection, angle_between, rotate
 from ._quaternion import quaternion
 from ._tensors import tensor, zeros, ones, arange, eye, identity, diagonal, concat
 from ._math import sqrt, abs, sign, sin, cos, tan, asin, acos, atan, atan2, log, exp, pow, get_42, clamp, minimum, maximum
-from ._nn import relu, sigmoid
+from ._nn import relu, sigmoid, conv1d, conv2d
 from ._autograd import grad
 from ._tensors import tensor as matrix
 from ._arrays import array
@@ -97,5 +97,7 @@ __all__ = [
     "eye",
     "concat",
     "sigmoid",
+    "conv1d",
+    "conv2d",
     "jit"
 ]

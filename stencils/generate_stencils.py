@@ -399,6 +399,57 @@ def get_arr_copy_code() -> str:
 
 
 @norm_indent
+def get_arr_conv_code() -> str:
+    """2D convolution (cross-correlation) of a float input [n, ci, h, w] with the
+    weights [co, ci, kh, kw] and a bias [co]. Parameters as int array:
+    [n, ci, h, w, co, kh, kw, oh, ow, sh, sw, ph, pw, dh, dw] with the output
+    size o, the strides s, the zero padding p and the dilation d. Each weight is
+    accumulated over the output rows, which keeps the inner loop contiguous for
+    vectorization without reassociation of floats. The loop bounds exclude the
+    padding, the input is not copied."""
+    return """
+    KERNEL void aux_arr_conv2d(const float *restrict x, const float *restrict wt, const float *restrict bias, float *restrict o, const int *restrict p) {
+        int nb = p[0], ci = p[1], h = p[2], w = p[3], co = p[4], kh = p[5], kw = p[6], oh = p[7], ow = p[8];
+        int sh = p[9], sw = p[10], ph = p[11], pw = p[12], dh = p[13], dw = p[14];
+        for (int b = 0; b < nb; b++)
+            for (int c = 0; c < co; c++) {
+                float *restrict oc = o + (b * co + c) * oh * ow;
+                float bv = bias[c];
+                for (int i = 0; i < oh * ow; i++) oc[i] = bv;
+                for (int q = 0; q < ci; q++) {
+                    const float *xq = x + (b * ci + q) * h * w;
+                    const float *wq = wt + (c * ci + q) * kh * kw;
+                    for (int ky = 0; ky < kh; ky++) {
+                        // Input row of output row oy: oy * sh - ty, must be in [0, h)
+                        int ty = ph - ky * dh;
+                        int y0 = ty > 0 ? (ty + sh - 1) / sh : 0;
+                        int y1 = h + ty > 0 ? (h + ty - 1) / sh + 1 : 0;
+                        if (y1 > oh) y1 = oh;
+                        for (int kx = 0; kx < kw; kx++) {
+                            int tx = pw - kx * dw;
+                            int x0 = tx > 0 ? (tx + sw - 1) / sw : 0;
+                            int x1 = w + tx > 0 ? (w + tx - 1) / sw + 1 : 0;
+                            if (x1 > ow) x1 = ow;
+                            float wv = wq[ky * kw + kx];
+                            for (int oy = y0; oy < y1; oy++) {
+                                const float *xr = xq + (oy * sh - ty) * w;
+                                float *restrict r = oc + oy * ow;
+                                for (int ox = x0; ox < x1; ox++) r[ox] += wv * xr[ox * sw - tx];
+                            }
+                        }
+                    }
+                }
+            }
+    }
+
+    STENCIL void conv2d_floatarr_floatarr(void) {
+        aux_arr_conv2d(REF(ref_arg0), REF(ref_arg1), REF(ref_arg2), REF(ref_out), REF(ref_arg3));
+        result_void();
+    }
+    """
+
+
+@norm_indent
 def get_arr_sum_code(type1: str) -> str:
     kernel = f"aux_arr_sum_{type1}"
     body = get_reduction_body(type1, lambda i: f"a[{i}]")
@@ -516,6 +567,7 @@ if __name__ == "__main__":
         code += get_arr_matmul_code(t1, t2)
 
     code += get_arr_copy_code()
+    code += get_arr_conv_code()
 
     for t in types:
         code += get_arr_sum_code(t)
