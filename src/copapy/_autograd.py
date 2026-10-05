@@ -4,7 +4,7 @@ from . import value, vector, tensor
 import copapy.backend as cpb
 from typing import Any, Sequence, overload
 import copapy as cp
-from ._basic_types import Net, unifloat
+from ._basic_types import Net, unifloat, ArrayOp, ArrayPack, ArrayElement
 
 
 @overload
@@ -52,6 +52,9 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
 
     for node in reversed(ordered_ops):
         #print(f"-->   {'x' if node in net_lookup else ' '}", node, f"{net_lookup.get(node)}")
+        if isinstance(node, ArrayOp | ArrayPack | ArrayElement):
+            raise NotImplementedError("Automatic differentiation of array operations is not supported yet, "
+                                      "use tensors with packed=False or set tensor.pack_threshold = None")
         if node.args:
             args: Sequence[Net] = list(node.args)
             g = 1.0 if node is x.net.source else grad_dict[net_lookup[node]]

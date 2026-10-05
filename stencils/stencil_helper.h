@@ -32,9 +32,16 @@ REF_OBJ(ref_out);
 #endif
 
 // Array kernels are shared auxiliary functions called as normal function by the
-// array stencils.
+// array stencils. Loops must not be replaced by memcpy/memset calls (no libc).
+#if defined(__GNUC__) && !defined(__clang__)
+#define NO_LIBCALLS optimize("no-tree-loop-distribute-patterns")
+#else
+#define NO_LIBCALLS
+#endif
 #if defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
-#define KERNEL __attribute__((noinline, force_align_arg_pointer))
+#define KERNEL __attribute__((noinline, force_align_arg_pointer, NO_LIBCALLS))
+#elif defined(__GNUC__)
+#define KERNEL __attribute__((noinline, NO_LIBCALLS))
 #else
 #define KERNEL NOINLINE
 #endif

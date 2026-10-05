@@ -1,5 +1,5 @@
 from typing import Any, Generic, Sequence, Iterable, overload
-from ._basic_types import value, Net, ArrayNet, ArrayConst, ArrayOp, ArrayElement, NumLike, transl_type, value_from_number, generic_sdb
+from ._basic_types import value, Net, ArrayNet, ArrayConst, ArrayOp, ArrayElement, ArrayPack, NumLike, transl_type, value_from_number, generic_sdb
 from ._helper_types import TNum
 
 
@@ -24,6 +24,62 @@ def _nest(values: Sequence[Any], shape: tuple[int, ...]) -> list[Any]:
     return [_nest(values[i * step:(i + 1) * step], shape[1:]) for i in range(shape[0])]
 
 
+def array_dtype(flat: Iterable[Any], strict: bool = False) -> str | None:
+    """Element type of an array holding the values (copapy values or numbers),
+    None if they can not be stored in one array: values of different types,
+    int values together with float numbers, bools or other types. With strict
+    int and float numbers are not mixed either."""
+    value_types: set[str] = set()
+    number_types: set[type] = set()
+    for v in flat:
+        if isinstance(v, value):
+            value_types.add(v.dtype)
+        elif isinstance(v, bool) or not isinstance(v, int | float):
+            return None
+        else:
+            number_types.add(type(v))
+    if len(value_types) > 1 or value_types - {'int', 'float'} or (strict and len(number_types) > 1):
+        return None
+    if value_types == {'int'}:
+        return 'int' if number_types <= {int} else None
+    if value_types == {'float'} or float in number_types:
+        return 'float'
+    return 'int'
+
+
+def _size(shape: Sequence[int]) -> int:
+    size = 1
+    for d in shape:
+        size *= d
+    return size
+
+
+def _contiguous_strides(shape: Sequence[int]) -> tuple[int, ...]:
+    strides: list[int] = []
+    stride = 1
+    for d in reversed(shape):
+        strides.insert(0, stride)
+        stride *= d
+    return tuple(strides)
+
+
+def broadcast_shapes(shape1: tuple[int, ...], shape2: tuple[int, ...]) -> tuple[int, ...]:
+    """Broadcast shape of two shapes following numpy rules"""
+    ndim = max(len(shape1), len(shape2))
+    padded1 = (1,) * (ndim - len(shape1)) + shape1
+    padded2 = (1,) * (ndim - len(shape2)) + shape2
+    result: list[int] = []
+    for d1, d2 in zip(padded1, padded2):
+        if d1 != d2 and d1 != 1 and d2 != 1:
+            raise ValueError(f"Incompatible shapes for broadcasting: {shape1} vs {shape2}")
+        result.append(d2 if d1 == 1 else d1)
+    return tuple(result)
+
+
+# Number of dimensions supported by the strided copy stencil
+COPY_DIMS = 4
+
+
 def _array_out_type(op: str, dtype1: str, dtype2: str) -> str:
     return 'float' if op == 'div' or dtype1 != dtype2 else dtype1
 
@@ -46,26 +102,40 @@ class array(Generic[TNum]):
         net: Underlying array net in the computation graph.
     """
     def __init__(self, values: 'Sequence[TNum] | Sequence[Sequence[TNum]] | Sequence[Any]', dtype: str | None = None):
-        """Create an array from (nested) sequences of numbers. The values can be
-        overwritten on the target with Target.write_value.
+        """Create an array from (nested) sequences of numbers or copapy values.
+        An array of numbers can be overwritten on the target with Target.write_value.
+        An array containing copapy values is filled with the current values on
+        each run (one load and store per element).
 
         Arguments:
-            values: Nested sequences of int or float numbers.
+            values: Nested sequences of int or float numbers or copapy values.
             dtype: Element type ('int' or 'float'), inferred from values if omitted.
         """
         flat, shape = _flatten(values)
         if not shape:
             raise ValueError("Array requires at least one dimension")
-        if any(isinstance(v, value) for v in flat):
-            raise NotImplementedError("Arrays from copapy values are not supported yet")
-        if not all(isinstance(v, int | float) for v in flat):
-            raise ValueError("Array values must be int or float numbers")
+        if not flat:
+            raise ValueError("Empty arrays are not supported")
         if dtype is None:
-            dtype = 'int' if all(isinstance(v, int) for v in flat) else 'float'
+            dtype = array_dtype(flat)
+            if dtype is None:
+                raise ValueError("Array values must be int or float numbers or copapy values of a single type")
         assert dtype in ('int', 'float'), f"Unsupported array type {dtype}"
-        conv = int if dtype == 'int' else float
-        source = ArrayConst([conv(v) for v in flat], dtype)
-        self._init(ArrayNet(dtype, source, len(flat)), shape)
+
+        if any(isinstance(v, value) for v in flat):
+            nets: list[Net] = []
+            for v in flat:
+                if isinstance(v, value):
+                    if transl_type(v.dtype) != dtype:
+                        raise ValueError(f"Value of type {v.dtype} in {dtype} array")
+                    nets.append(v.net)
+                else:
+                    nets.append(value_from_number(int(v) if dtype == 'int' else float(v)).net)
+            self._init(ArrayPack(nets, dtype).result, shape)
+        else:
+            conv = int if dtype == 'int' else float
+            source = ArrayConst([conv(v) for v in flat], dtype)
+            self._init(ArrayNet(dtype, source, len(flat)), shape)
 
     def _init(self, net: ArrayNet, shape: tuple[int, ...]) -> None:
         self.net = net
@@ -106,24 +176,115 @@ class array(Generic[TNum]):
             flat = flat * dim + (i % dim)
         return flat
 
-    def __getitem__(self, key: int | Sequence[int]) -> value[TNum]:
-        """Get a single element by constant indices. No code is generated,
-        the element is read directly from the array memory."""
-        return value(Net(self.dtype, ArrayElement(self.net, self._flat_index(key))))
+    def element(self, flat_index: int) -> value[TNum]:
+        """Element by its flat index. No code is generated, the element
+        is read directly from the array memory."""
+        return value(Net(self.dtype, ArrayElement(self.net, flat_index)))
+
+    def __getitem__(self, key: int | slice | Sequence[int | slice]) -> 'Any':
+        """Get an element (all dimensions indexed by integers) or a sub-array
+        (slices or fewer indices than dimensions). Sub-arrays are copied by
+        a strided copy stencil."""
+        keys = key if isinstance(key, Sequence) else (key,)
+        if len(keys) > self.ndim:
+            raise IndexError(f"Too many indices for array of rank {self.ndim}")
+        if len(keys) == self.ndim and all(isinstance(k, int) for k in keys):
+            return self.element(self._flat_index(keys))  # type: ignore[arg-type]
+
+        strides = _contiguous_strides(self.shape)
+        offset = 0
+        shape: list[int] = []
+        new_strides: list[int] = []
+        for i, k in enumerate(keys):
+            dim = self.shape[i]
+            if isinstance(k, int):
+                if not -dim <= k < dim:
+                    raise IndexError(f"Index {k} out of bounds for dimension of size {dim}")
+                offset += (k % dim) * strides[i]
+            else:
+                assert isinstance(k, slice), f"Indices must be integers or slices, not {type(k)}"
+                start, stop, step = k.indices(dim)
+                offset += start * strides[i]
+                shape.append(len(range(start, stop, step)))
+                new_strides.append(step * strides[i])
+        shape += self.shape[len(keys):]
+        new_strides += strides[len(keys):]
+        return self._strided(offset, tuple(shape), tuple(new_strides))
+
+    def _strided(self, offset: int, shape: tuple[int, ...], strides: tuple[int, ...]) -> 'array[TNum]':
+        """New array with the elements at offset + sum(index * stride)"""
+        size = _size(shape)
+        if size == 0:
+            raise ValueError("Empty arrays are not supported")
+
+        # Remove dimensions of size 1 and merge dimensions that are contiguous to each other
+        dims: list[tuple[int, int]] = []
+        for n, s in zip(shape, strides):
+            if n == 1:
+                continue
+            if dims and dims[-1][1] == s * n:
+                dims[-1] = (dims[-1][0] * n, s)
+            else:
+                dims.append((n, s))
+
+        if offset == 0 and size == self.size and (not dims or dims == [(size, 1)]):
+            return self.reshape(*shape)  # No copy required
+        if len(dims) > COPY_DIMS:
+            raise NotImplementedError(f"Strided copy for more than {COPY_DIMS} non-contiguous dimensions")
+
+        dims = [(1, 0)] * (COPY_DIMS - len(dims)) + dims
+        params = array([offset] + [n for n, _ in dims] + [s for _, s in dims], 'int')
+        node = _add_array_op('copy_arr', [self.net, params.net], self.dtype, size)
+        assert isinstance(node.result, ArrayNet)
+        return array._from_net(node.result, shape)
 
     def reshape(self, *shape: int) -> 'array[TNum]':
-        size = 1
-        for d in shape:
-            size *= d
-        if size != self.size:
+        """Same data with a new shape, a dimension of -1 is inferred."""
+        if len(shape) == 1 and isinstance(shape[0], Sequence):
+            shape = tuple(shape[0])
+        if shape.count(-1) == 1:
+            known = -_size(shape)
+            if known <= 0 or self.size % known:
+                raise ValueError(f"Can not reshape array of size {self.size} into shape {shape}")
+            shape = tuple(self.size // known if d == -1 else d for d in shape)
+        if _size(shape) != self.size:
             raise ValueError(f"Can not reshape array of size {self.size} into shape {shape}")
         return array._from_net(self.net, tuple(shape))
 
+    def flatten(self) -> 'array[TNum]':
+        return self.reshape(self.size)
+
+    def transpose(self, *axes: int) -> 'array[TNum]':
+        """Permute the axes (reverse them if no axes are given)."""
+        if len(axes) == 1 and isinstance(axes[0], Sequence):
+            axes = tuple(axes[0])
+        if not axes:
+            axes = tuple(range(self.ndim - 1, -1, -1))
+        if sorted(axes) != list(range(self.ndim)):
+            raise ValueError(f"Invalid axes {axes} for array of rank {self.ndim}")
+        strides = _contiguous_strides(self.shape)
+        return self._strided(0, tuple(self.shape[a] for a in axes), tuple(strides[a] for a in axes))
+
+    @property
+    def T(self) -> 'array[TNum]':
+        return self.transpose()
+
+    def broadcast_to(self, shape: Sequence[int]) -> 'array[TNum]':
+        """Repeat dimensions of size 1 (numpy broadcasting rules)."""
+        shape = tuple(shape)
+        if broadcast_shapes(self.shape, shape) != shape:
+            raise ValueError(f"Can not broadcast shape {self.shape} to {shape}")
+        padded = (1,) * (len(shape) - self.ndim) + self.shape
+        strides = (0,) * (len(shape) - self.ndim) + _contiguous_strides(self.shape)
+        return self._strided(0, shape, tuple(0 if p == 1 else s for p, s in zip(padded, strides)))
+
     def _binary_op(self, op: str, other: 'array[Any] | NumLike', reverse: bool = False) -> 'array[Any]':
+        if isinstance(other, array) and other.shape != self.shape:
+            shape = broadcast_shapes(self.shape, other.shape)
+            return self.broadcast_to(shape)._binary_op(op, other.broadcast_to(shape), reverse)
+
         n = value_from_number(self.size).net
         if isinstance(other, array):
-            if other.shape != self.shape:
-                raise ValueError(f"Shape mismatch: {self.shape} and {other.shape}")
             a, b = (other, self) if reverse else (self, other)
             typed_op = f"{op}_{a.dtype}arr_{b.dtype}arr"
             out_dtype = _array_out_type(op, a.dtype, b.dtype)
@@ -202,9 +363,26 @@ class array(Generic[TNum]):
         return value(node.result)
 
     def matmul(self, other: 'array[Any]') -> 'value[Any] | array[Any]':
-        """Matrix multiplication for 1D @ 1D (dot product) and 2D @ 1D."""
+        """Matrix multiplication for 1D and 2D operands (numpy semantics)."""
         if self.ndim == 1 and other.ndim == 1:
+            if self.size != other.size:
+                raise ValueError(f"Shape mismatch: {self.shape} @ {other.shape}")
             return self.dot(other)
+        if self.ndim == 1 and other.ndim == 2:
+            ret = self.reshape(1, self.size).matmul(other)
+            assert isinstance(ret, array)
+            return ret.reshape(ret.size)
+        if self.ndim == 2 and other.ndim == 2:
+            m, k = self.shape
+            if k != other.shape[0]:
+                raise ValueError(f"Shape mismatch: {self.shape} @ {other.shape}")
+            n = other.shape[1]
+            out_dtype = _array_out_type('mul', self.dtype, other.dtype)
+            dims = array([m, k, n], 'int')
+            node = _add_array_op(f"matmul_{self.dtype}arr_{other.dtype}arr",
+                                 [self.net, other.net, dims.net], out_dtype, m * n)
+            assert isinstance(node.result, ArrayNet)
+            return array._from_net(node.result, (m, n))
         if self.ndim == 2 and other.ndim == 1:
             m, n = self.shape
             if n != other.shape[0]:

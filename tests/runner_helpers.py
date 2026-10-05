@@ -267,7 +267,7 @@ def array_test_values() -> tuple[list[NumLike], list[NumLike]]:
 
     def add(result: Any, ref: list[NumLike]) -> None:
         if isinstance(result, cp.array):
-            ret_test.extend(result[i] for i in range(result.size))
+            ret_test.extend(result.element(i) for i in range(result.size))
             ret_ref.extend(ref)
         else:
             ret_test.append(result)
@@ -290,6 +290,18 @@ def array_test_values() -> tuple[list[NumLike], list[NumLike]]:
     # Scalar operations on array elements and reduction results
     af = arrays[id(fa)]
     add((af * fs)[3] * 2 + cp.sqrt(arrays[id(fb)].sum()), [fa[3] * 1.5 * 2 + sum(fb) ** 0.5])
+
+    # Matrix products, strided copies (transpose, slices, broadcasting) and packed values
+    ma = [[(r * 5 + c) % 7 - 3.5 for c in range(6)] for r in range(4)]
+    mi = [[(r * 3 + c) % 5 - 2 for c in range(3)] for r in range(6)]
+    am, ai = cp.array(ma), cp.array(mi)
+    add(am @ ai, [sum(ma[r][k] * mi[k][c] for k in range(6)) for r in range(4) for c in range(3)])
+    add(ai.T @ ai, [sum(mi[k][r] * mi[k][c] for k in range(6)) for r in range(3) for c in range(3)])
+    add(am.T, [ma[r][c] for c in range(6) for r in range(4)])
+    add(am[1:, ::2], [ma[r][c] for r in range(1, 4) for c in range(0, 6, 2)])
+    add(am[:, 4] + cp.array([[1.0], [2.0]]), [ma[r][4] + b for b in (1.0, 2.0) for r in range(4)])
+    packed = cp.array([fs, fs * fs, 0.5, fs + 1.0])
+    add(packed * packed[1], [v * 2.25 for v in (1.5, 2.25, 0.5, 2.5)])
 
     return ret_test, ret_ref
 

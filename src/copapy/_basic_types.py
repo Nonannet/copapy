@@ -510,6 +510,23 @@ class ArrayOp(Op):
         self.result: Net = ArrayNet(result_dtype, self, length) if length else Net(result_dtype, self)
 
 
+class ArrayPack(Node):
+    """Array built from scalar values. It is no stencil, the compiler
+    stores each scalar into the memory of the corresponding array element.
+
+    Attributes:
+        result: The array net
+        elements: Nets of the array elements, aliases into the array memory
+    """
+    def __init__(self, args: Sequence[Net], dtype: str):
+        assert all(transl_type(a.dtype) == dtype for a in args), "All values must have the type of the array"
+        self.name = 'pack_' + dtype + 'arr'
+        self.args = tuple(args)
+        self.node_hash = id(self)
+        self.result = ArrayNet(dtype, self, len(args))
+        self.elements = [Net(dtype, ArrayElement(self.result, i)) for i in range(len(args))]
+
+
 class ArrayElement(Node):
     """Scalar element of an array at a constant index. It is no stencil
     but an alias to the memory of the array element."""
@@ -537,6 +554,11 @@ class ArrayType(Generic[TNum]):
 
     def map(self, func: Callable[[TNum | value[TNum]], Any]) -> 'ArrayType[Any]':
         return self
+
+    def _packed_array(self) -> Any:
+        """Array holding all elements if the elements are only available
+        as array, otherwise None"""
+        return None
 
     def __bool__(self) -> bool:
         raise TypeError(f"The truth value of a {type(self).__name__} is ambiguous, "
