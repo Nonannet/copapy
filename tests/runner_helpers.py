@@ -303,6 +303,22 @@ def array_test_values() -> tuple[list[NumLike], list[NumLike]]:
     packed = cp.array([fs, fs * fs, 0.5, fs + 1.0])
     add(packed * packed[1], [v * 2.25 for v in (1.5, 2.25, 0.5, 2.5)])
 
+    # Convolutions with padding and stride: input 2 x 5 x 9, kernels 3 x 2 x 3 x 3
+    cx = [[[(q * 11 + r * 5 + c * 3) % 7 - 3.0 for c in range(9)] for r in range(5)] for q in range(2)]
+    cw = [[[[(o * 7 + q * 5 + r * 3 + c) % 5 * 0.25 - 0.5 for c in range(3)] for r in range(3)] for q in range(2)] for o in range(3)]
+    cb = [0.5, -1.0, 2.0]
+
+    def conv_ref(o: int, oy: int, ox: int) -> float:
+        return cb[o] + sum(cw[o][q][ky][kx] * cx[q][oy * 2 - 1 + ky][ox - 1 + kx] for q in range(2) for ky in range(3)
+                           for kx in range(3) if 0 <= oy * 2 - 1 + ky < 5 and 0 <= ox - 1 + kx < 9)
+
+    add(cp.conv2d(cp.array(cx), cp.array(cw), cp.array(cb), stride=(2, 1), padding=1),
+        [conv_ref(o, oy, ox) for o in range(3) for oy in range(3) for ox in range(9)])
+    c1 = [[[(o * 3 + q * 2 + k) % 4 * 0.5 - 0.75 for k in range(3)] for q in range(5)] for o in range(2)]
+    add(cp.conv1d(cp.array(cx[0]), cp.array(c1), padding=1),
+        [sum(c1[o][q][k] * cx[0][q][i - 1 + k] for q in range(5) for k in range(3) if 0 <= i - 1 + k < 9)
+         for o in range(2) for i in range(9)])
+
     return ret_test, ret_ref
 
 
