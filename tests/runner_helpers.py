@@ -1,4 +1,5 @@
 """Shared helpers for tests running compiled copapy programs with a coparun runner"""
+import math
 import operator
 import os
 import re
@@ -190,6 +191,7 @@ def math_program(val: Any) -> list[NumLike]:
                        (cp.sin, TRIG_VALS),
                        (cp.cos, TRIG_VALS),
                        (cp.tan, TRIG_VALS),
+                       (cp.tanh, [-20.0, -1.0, -0.1, 0.0, 0.0001, 0.3, 2.5]),
                        (cp.asin, ARC_VALS),
                        (cp.acos, ARC_VALS),
                        (cp.atan, ARC_VALS + [-1000.0, -2.0, 10.0]),
@@ -302,6 +304,28 @@ def array_test_values() -> tuple[list[NumLike], list[NumLike]]:
     add(am[:, 4] + cp.array([[1.0], [2.0]]), [ma[r][4] + b for b in (1.0, 2.0) for r in range(4)])
     packed = cp.array([fs, fs * fs, 0.5, fs + 1.0])
     add(packed * packed[1], [v * 2.25 for v in (1.5, 2.25, 0.5, 2.5)])
+
+    # Element-wise functions
+    pos = [v * v + 0.5 for v in fa]
+    apos = arrays[id(fa)] * arrays[id(fa)] + 0.5
+    for func, ref_func in [(cp.sqrt, math.sqrt), (cp.exp, lambda v: math.exp(v * 0.1)), (cp.log, math.log),
+                           (cp.sin, math.sin), (cp.cos, math.cos), (cp.tan, lambda v: math.tan(v * 0.1)), (cp.atan, math.atan),
+                           (cp.tanh, lambda v: math.tanh(v * 0.1))]:
+        scaled = func in (cp.exp, cp.tan, cp.tanh)  # moderate function values
+        add(func(apos * 0.1 if scaled else apos), [ref_func(v) for v in pos])
+    unit = [v / 12.0 for v in fa]
+    add(cp.asin(arrays[id(fa)] / 12.0), [math.asin(v) for v in unit])
+    add(cp.acos(arrays[id(fa)] / 12.0), [math.acos(v) for v in unit])
+    add(cp.abs(arrays[id(fa)]), [abs(v) for v in fa])
+    add(cp.abs(arrays[id(ia)]), [abs(v) for v in ia])
+    add(cp.sqrt(arrays[id(ib)]), [math.sqrt(v) for v in ib])
+    add(arrays[id(fb)] ** arrays[id(fa)], [p ** q for p, q in zip(fb, fa)])
+    add(apos ** fs, [p ** 1.5 for p in pos])
+    add(i_s ** arrays[id(fa)], [3 ** q for q in fa])
+    add(arrays[id(ib)] ** arrays[id(ia)], [float(p) ** q for p, q in zip(ib, ia)])
+    add(cp.atan2(arrays[id(fa)], arrays[id(ib)]), [math.atan2(p, q) for p, q in zip(fa, ib)])
+    add(cp.atan2(arrays[id(ia)], fs), [math.atan2(p, 1.5) for p in ia])
+    add(cp.atan2(fs, arrays[id(fa)]), [math.atan2(1.5, q) for q in fa])
 
     # Convolutions with padding and stride: input 2 x 5 x 9, kernels 3 x 2 x 3 x 3
     cx = [[[(q * 11 + r * 5 + c * 3) % 7 - 3.0 for c in range(9)] for r in range(5)] for q in range(2)]

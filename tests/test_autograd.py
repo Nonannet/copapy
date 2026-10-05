@@ -1,6 +1,7 @@
 from copapy import value, grad
 import copapy as cp
 import pytest
+import math
 
 
 def test_autograd():
@@ -32,6 +33,23 @@ def test_autograd():
 
     assert pytest.approx(dg[0], abs=1e-4) == 138.83381  # pyright: ignore[reportUnknownMemberType]
     assert pytest.approx(dg[1], abs=1e-4) == 645.57725  # pyright: ignore[reportUnknownMemberType]
+
+
+def test_autograd_tanh():
+    a = value(0.7)
+    b = value(-1.5)
+    y = cp.tanh(a * b) + cp.tanh(a)
+
+    dy = grad(y, (a, b))
+
+    tg = cp.Target()
+    tg.compile(dy)
+    tg.run()
+
+    ref_a = -1.5 * (1 - math.tanh(-1.05) ** 2) + (1 - math.tanh(0.7) ** 2)
+    ref_b = 0.7 * (1 - math.tanh(-1.05) ** 2)
+    assert tg.read_value(dy[0]) == pytest.approx(ref_a, rel=1e-5)  # pyright: ignore[reportUnknownMemberType]
+    assert tg.read_value(dy[1]) == pytest.approx(ref_b, rel=1e-5)  # pyright: ignore[reportUnknownMemberType]
 
 
 def test_autograd_extended():

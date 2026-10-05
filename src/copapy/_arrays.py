@@ -81,7 +81,7 @@ COPY_DIMS = 4
 
 
 def _array_out_type(op: str, dtype1: str, dtype2: str) -> str:
-    return 'float' if op == 'div' or dtype1 != dtype2 else dtype1
+    return 'float' if op in ('div', 'pow', 'atan2') or dtype1 != dtype2 else dtype1
 
 
 def _add_array_op(typed_op: str, args: list[Net], out_dtype: str, length: int | None = None) -> ArrayOp:
@@ -346,6 +346,28 @@ class array(Generic[TNum]):
 
     def __neg__(self) -> 'array[TNum]':
         return self._binary_op('mul', -1)
+
+    def __pow__(self, other: 'array[Any] | NumLike') -> 'array[Any]':
+        if isinstance(other, int) and not isinstance(other, bool) and 1 <= other < 8:
+            ret: array[Any] = self
+            for _ in range(other - 1):
+                ret = ret * self
+            return ret
+        return self._binary_op('pow', other)
+
+    def __rpow__(self, other: NumLike) -> 'array[float]':
+        return self._binary_op('pow', other, reverse=True)
+
+    def __abs__(self) -> 'array[TNum]':
+        return self._unary_op('abs')
+
+    def _unary_op(self, op: str) -> 'array[Any]':
+        """Element-wise function: sqrt, exp, log, sin, cos, tan, asin, acos,
+        atan, tanh (float result) or abs (result of the element type)"""
+        n = value_from_number(self.size).net
+        node = _add_array_op(f"{op}_{self.dtype}arr", [self.net, n], self.dtype if op == 'abs' else 'float', self.size)
+        assert isinstance(node.result, ArrayNet)
+        return array._from_net(node.result, self.shape)
 
     def sum(self) -> value[TNum]:
         """Sum of all elements."""

@@ -1,5 +1,6 @@
 """Tests for the array class: array stencils for element-wise operations,
 reductions, matrix-vector products and the interaction with scalar values."""
+import math
 import operator
 from typing import Any, Callable
 
@@ -77,6 +78,69 @@ def test_matvec(m: int, n: int) -> None:
 
     assert mat.shape == (m, n)
     assert res == pytest.approx([sum(a * b for a, b in zip(r, vx)) for r in rows], rel=1e-5)
+
+
+ARG_VALS = [-3.0, -1.0, -0.5, -0.01, 0.0, 0.3, 0.75, 1.0, 2.5, 9.0, 40.0]
+UNIT_VALS = [-1.0, -0.7, -0.01, 0.0, 0.2, 0.5, 0.95, 1.0, 0.1, -0.3, 0.6]
+POS_VALS = [0.001, 0.5, 1.0, 2.5, 7.0, 100.0, 12345.0, 0.25, 3.0, 9.0, 16.0]
+
+UNARY_FUNCS: dict[str, tuple[Callable[[Any], Any], list[float]]] = {
+    'sqrt': (math.sqrt, POS_VALS), 'exp': (math.exp, ARG_VALS), 'log': (math.log, POS_VALS),
+    'sin': (math.sin, ARG_VALS), 'cos': (math.cos, ARG_VALS), 'tan': (math.tan, ARG_VALS),
+    'asin': (math.asin, UNIT_VALS), 'acos': (math.acos, UNIT_VALS), 'atan': (math.atan, ARG_VALS),
+    'tanh': (math.tanh, ARG_VALS + [1e-4, -0.2, 0.25]), 'abs': (abs, ARG_VALS)}
+
+
+@pytest.mark.parametrize('name', UNARY_FUNCS)
+def test_unary_functions(name: str) -> None:
+    ref_func, vals = UNARY_FUNCS[name]
+    ints = [1, 2, 5, 30] if name in ('sqrt', 'log') else [-1, 0, 1] if name in ('asin', 'acos') else [-7, -1, 0, 1, 2, 5]
+    func = getattr(cp, name)
+
+    res_f, res_i = func(cp.array(vals)), func(cp.array(ints))
+    out_f, out_i = evaluate(res_f, res_i)
+
+    assert isinstance(res_f, cp.array) and res_f.shape == (len(vals),)
+    assert res_f.dtype == 'float' and res_i.dtype == ('int' if name == 'abs' else 'float')
+    assert out_f == pytest.approx([ref_func(v) for v in vals], rel=1e-5, abs=1e-6)
+    assert out_i == pytest.approx([ref_func(v) for v in ints], rel=1e-5, abs=1e-6)
+
+
+@pytest.mark.parametrize('t1,t2', [('int', 'int'), ('int', 'float'), ('float', 'int'), ('float', 'float')])
+def test_binary_functions(t1: str, t2: str) -> None:
+    va = [abs(v) + 1 for v in sample_values(11, t1)]  # positive bases
+    vb = [v % 4 - 1 if t2 == 'int' else v * 0.2 for v in sample_values(11, t2, 5)]
+    a, b = cp.array(va, t1), cp.array(vb, t2)
+    sa, sb = cp.value(va[3]), cp.value(vb[4])
+
+    res = [a ** b, a ** sb, sa ** b, cp.pow(a, 0.5), cp.pow(2, b), 2.5 ** b,
+           cp.atan2(a, b), cp.atan2(a, sb), cp.atan2(sa, b), cp.atan2(a, -1.5), cp.atan2(-2, b)]
+    ref = [[x ** y for x, y in zip(va, vb)], [x ** vb[4] for x in va], [va[3] ** y for y in vb],
+           [x ** 0.5 for x in va], [2 ** y for y in vb], [2.5 ** y for y in vb],
+           [math.atan2(x, y) for x, y in zip(va, vb)], [math.atan2(x, vb[4]) for x in va],
+           [math.atan2(va[3], y) for y in vb], [math.atan2(x, -1.5) for x in va], [math.atan2(-2, y) for y in vb]]
+
+    for r, o, e in zip(res, evaluate(*res), ref):
+        assert r.dtype == 'float'
+        assert o == pytest.approx(e, rel=1e-5, abs=1e-6)
+
+
+def test_small_integer_powers() -> None:
+    """Powers 1 to 7 are multiplications and keep the element type"""
+    va = [-3, -1, 0, 2, 5]
+    a = cp.array(va)
+    m = cp.array([[1.5, -2.0], [0.5, 3.0]])
+
+    res = [a ** 1, a ** 2, a ** 3, cp.pow(a, 7), m ** 2, a ** 0, cp.exp(m).sum(), cp.sigmoid(m)]
+    out = evaluate(*res)
+
+    assert a ** 1 is a
+    assert [r.dtype for r in res[:4]] == ['int'] * 4
+    assert out[:4] == [va, [v ** 2 for v in va], [v ** 3 for v in va], [v ** 7 for v in va]]
+    assert out[4] == [[2.25, 4.0], [0.25, 9.0]]
+    assert out[5] == [1.0] * 5
+    assert out[6] == pytest.approx(sum(math.exp(v) for v in (1.5, -2.0, 0.5, 3.0)), rel=1e-5)
+    assert flat(out[7]) == pytest.approx([1 / (1 + math.exp(-v)) for v in (1.5, -2.0, 0.5, 3.0)], rel=1e-5)
 
 
 def test_chained_ops_and_elements() -> None:
@@ -268,7 +332,9 @@ def hybrid_program(t1: Any, t2: Any, w: Any, s: Any) -> list[Any]:
     """Tensor operations with array implementation and scalar fallbacks"""
     return [t1 + t2, t1 * s - 1.5, 2.0 / (t2 + 10.0), -t1, w @ t1[:, 0], w @ t1, t2.T @ w.T, t1.sum(),
             t1.T[1:3], t1.reshape(-1)[::3], (t1 + t2).mean(),
-            t1 > 0.0, t1 ** 2, t1.map(lambda v: v * v + 1), t1.sum(axis=0)]
+            t1 > 0.0, t1 ** 2, t1.map(lambda v: v * v + 1), t1.sum(axis=0),
+            cp.exp(t1 * 0.1), cp.tanh(t2), cp.sqrt(t1 * t1 + 1.0), cp.sin(t1), cp.abs(t2), cp.atan2(t1, t2),
+            cp.atan2(t1, s), (t1 * t1 + 1.0) ** 0.3, 1.5 ** (t2 * 0.1), cp.pow(t1 ** 2 + 0.5, t2 * 0.1), t1 ** 3]
 
 
 def test_hybrid_tensor() -> None:
@@ -290,6 +356,7 @@ def test_hybrid_tensor() -> None:
 
     assert res_packed[0]._packed_array() is not None  # computed by array stencils
     assert res_scalar[0]._packed_array() is None
+    assert all(r._packed_array() is not None for r in res_packed[-11:])  # functions by array stencils
     for p, s, rp, rs in zip(out_packed, out_scalar, res_packed, res_scalar):
         assert getattr(rp, 'shape', ()) == getattr(rs, 'shape', ())
         p_vals = list(p.values) if isinstance(p, cp.tensor) else [p]
