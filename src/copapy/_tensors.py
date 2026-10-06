@@ -1,4 +1,4 @@
-from copapy._basic_types import NumLike, ArrayType
+from copapy._basic_types import NumLike, ArrayType, value_from_number
 from . import value
 from ._arrays import array, array_dtype
 from ._vectors import vector, VecFloatLike, VecIntLike, VecNumLike
@@ -554,7 +554,7 @@ class tensor(ArrayType[TNum]):
                 if key in seen_consts:
                     b_trans = seen_consts[key]
                 else:
-                    b_trans = value(b)
+                    b_trans = value_from_number(b)
                     seen_consts[key] = b_trans
             return op(a, b_trans)
 

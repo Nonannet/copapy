@@ -3,7 +3,7 @@ from ._mixed import mixed_sum, mixed_homogenize
 from typing import Sequence, TypeVar, Iterable, Any, overload, TypeAlias, Callable, Iterator
 import copapy as cp
 from ._helper_types import TNum
-from ._basic_types import ArrayType
+from ._basic_types import ArrayType, value_from_number
 
 #VecNumLike: TypeAlias = 'vector[int] | vector[float] | value[int] | value[float] | int | float | bool'
 VecNumLike: TypeAlias = 'vector[Any] | value[Any] | int | float | bool'
@@ -78,7 +78,7 @@ class vector(ArrayType[TNum]):
             return vector(a + b for a, b in zip(self.values, other.values))
         if isinstance(other, value):
             return vector(a + other for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
+        o = value_from_number(other)  # Make sure a single constant is allocated
         return vector(a + o if isinstance(a, value) else a + other for a in self.values)
 
     @overload
@@ -104,7 +104,7 @@ class vector(ArrayType[TNum]):
             return vector(a - b for a, b in zip(self.values, other.values))
         if isinstance(other, value):
             return vector(a - other for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
+        o = value_from_number(other)  # Make sure a single constant is allocated
         return vector(a - o if isinstance(a, value) else a - other for a in self.values)
 
     @overload
@@ -119,7 +119,7 @@ class vector(ArrayType[TNum]):
             return vector(b - a for a, b in zip(self.values, other.values))
         if isinstance(other, value):
             return vector(other - a for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
+        o = value_from_number(other)  # Make sure a single constant is allocated
         return vector(o - a if isinstance(a, value) else other - a for a in self.values)
 
     @overload
@@ -136,7 +136,7 @@ class vector(ArrayType[TNum]):
             return vector(a * b for a, b in zip(self.values, other.values))
         if isinstance(other, value):
             return vector(a * other for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
+        o = value_from_number(other)  # Make sure a single constant is allocated
         return vector(a * o if isinstance(a, value) else a * other for a in self.values)
 
     @overload
@@ -162,7 +162,7 @@ class vector(ArrayType[TNum]):
             return vector(a ** b for a, b in zip(self.values, other.values))
         if isinstance(other, value):
             return vector(a ** other for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
+        o = value_from_number(other)  # Make sure a single constant is allocated
         return vector(a ** o if isinstance(a, value) else a ** other for a in self.values)
 
     @overload
@@ -177,7 +177,7 @@ class vector(ArrayType[TNum]):
             return vector(b ** a for a, b in zip(self.values, other.values))
         if isinstance(other, value):
             return vector(other ** a for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
+        o = value_from_number(other)  # Make sure a single constant is allocated
         return vector(o ** a if isinstance(a, value) else other ** a for a in self.values)
 
     def __truediv__(self, other: VecNumLike) -> 'vector[float]':
@@ -186,7 +186,7 @@ class vector(ArrayType[TNum]):
             return vector(a / b for a, b in zip(self.values, other.values))
         if isinstance(other, value):
             return vector(a / other for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
+        o = value_from_number(other)  # Make sure a single constant is allocated
         return vector(a / o if isinstance(a, value) else a / other for a in self.values)
 
     def __rtruediv__(self, other: VecNumLike) -> 'vector[float]':
@@ -195,7 +195,7 @@ class vector(ArrayType[TNum]):
             return vector(b / a for a, b in zip(self.values, other.values))
         if isinstance(other, value):
             return vector(other / a for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
+        o = value_from_number(other)  # Make sure a single constant is allocated
         return vector(o / a if isinstance(a, value) else other / a for a in self.values)
 
     @overload
@@ -254,7 +254,7 @@ class vector(ArrayType[TNum]):
             return vector(a > b for a, b in zip(self.values, other.values))
         if isinstance(other, value):
             return vector(a > other for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
+        o = value_from_number(other)  # Make sure a single constant is allocated
         return vector(a > o if isinstance(a, value) else a > other for a in self.values)
 
     def __lt__(self, other: VecNumLike) -> 'vector[int]':
@@ -263,7 +263,7 @@ class vector(ArrayType[TNum]):
             return vector(a < b for a, b in zip(self.values, other.values))
         if isinstance(other, value):
             return vector(a < other for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
+        o = value_from_number(other)  # Make sure a single constant is allocated
         return vector(a < o if isinstance(a, value) else a < other for a in self.values)
 
     def __ge__(self, other: VecNumLike) -> 'vector[int]':
@@ -272,7 +272,7 @@ class vector(ArrayType[TNum]):
             return vector(a >= b for a, b in zip(self.values, other.values))
         if isinstance(other, value):
             return vector(a >= other for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
+        o = value_from_number(other)  # Make sure a single constant is allocated
         return vector(a >= o if isinstance(a, value) else a >= other for a in self.values)
 
     def __le__(self, other: VecNumLike) -> 'vector[int]':
@@ -281,7 +281,7 @@ class vector(ArrayType[TNum]):
             return vector(a <= b for a, b in zip(self.values, other.values))
         if isinstance(other, value):
             return vector(a <= other for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
+        o = value_from_number(other)  # Make sure a single constant is allocated
         return vector(a <= o if isinstance(a, value) else a <= other for a in self.values)
 
     def __eq__(self, other: VecNumLike | Sequence[int | float]) -> 'vector[int]':  # type: ignore
@@ -290,7 +290,7 @@ class vector(ArrayType[TNum]):
             return vector(a == b for a, b in zip(self.values, other))
         if isinstance(other, value):
             return vector(a == other for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
+        o = value_from_number(other)  # Make sure a single constant is allocated
         return vector(a == o if isinstance(a, value) else a == other for a in self.values)
 
     def __ne__(self, other: VecNumLike) -> 'vector[int]':  # type: ignore
@@ -299,7 +299,7 @@ class vector(ArrayType[TNum]):
             return vector(a != b for a, b in zip(self.values, other.values))
         if isinstance(other, value):
             return vector(a != other for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
+        o = value_from_number(other)  # Make sure a single constant is allocated
         return vector(a != o if isinstance(a, value) else a != other for a in self.values)
 
 
@@ -361,7 +361,7 @@ class vector(ArrayType[TNum]):
             return vector(func(a, b) for a, b in zip(self.values, other.values))
         if isinstance(other, value):
             return vector(func(a, other) for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
+        o = value_from_number(other)  # Make sure a single constant is allocated
         return vector(func(a, o) if isinstance(a, value) else a + other for a in self.values)
 
 
