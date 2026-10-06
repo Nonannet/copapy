@@ -52,10 +52,8 @@ jobs:
         name: musl-object-files
         path: /tmp/musl-object-files
 
-    - name: Add musl copyright notice to license file
-      run: |
-        echo "\n\nMUSL COPYRIGHT NOTICE:" >> LICENSE
-        cat /tmp/musl-object-files/COPYRIGHT >> LICENSE
+    - name: Add musl copyright notice as license file
+      run: cp /tmp/musl-object-files/COPYRIGHT LICENSE-MUSL.txt
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v7
@@ -470,7 +468,7 @@ jobs:
 
       - name: Get version tag name
         id: version
-        run: bash tools/get_tag.sh
+        run: echo "version=$(git describe --tags --abbrev=0)" >> "$GITHUB_OUTPUT"
 
       - name: Release stencils
         env:
@@ -508,8 +506,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-tags: true
 
       - uses: actions/download-artifact@v8
         with:
