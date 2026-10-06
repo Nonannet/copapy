@@ -1,6 +1,6 @@
 from copapy._basic_types import NumLike, ArrayType, value_from_number
 from . import value
-from ._arrays import array, array_dtype
+from ._arrays import array, element_dtype, convert_element
 from ._vectors import vector, VecFloatLike, VecIntLike, VecNumLike
 from ._mixed import mixed_sum
 from typing import TypeVar, Any, overload, TypeAlias, Callable, Iterator, Sequence, Iterable
@@ -36,10 +36,11 @@ class tensor(ArrayType[TNum]):
                 use them, None to decide by tensor.pack_threshold.
         """
         # The elements are defined by _values if set, otherwise by _array
-        self._values: tuple[TNum | value[TNum], ...] | None = None  # Original element values
+        self._values: tuple[TNum | value[TNum], ...] | None = None  # Element values
         self._array: array[Any] | None = None  # Packed array
         self._element_refs: tuple[value[TNum], ...] | None = None  # Cached references into _array
-        self._packed = packed
+        self._packed: bool | None = packed
+        self._dtype: str = 'float'
 
         if shape:
             self.shape: tuple[int, ...] = tuple(shape)
@@ -78,17 +79,22 @@ class tensor(ArrayType[TNum]):
             # Copy constructor
             self.shape = values.shape
             self.ndim = values.ndim
+            self._dtype = values._dtype
             if packed is False:
                 self._values = values.values
             else:
                 self._values = values._values
                 self._array = values._array
                 self._element_refs = values._element_refs
+            return
         else:
             # General n-dimensional case
             assert isinstance(values, Sequence), "Values must be a sequence if shape is not provided"
             self._values, self.shape = self._infer_shape_and_flatten(values)
             self.ndim = len(self.shape)
+
+        self._dtype = element_dtype(self._values)
+        self._values = tuple(convert_element(v, self._dtype) for v in self._values)
 
     @classmethod
     def _from_array(cls, arr: 'array[Any]', packed: bool | None = None) -> 'tensor[Any]':
@@ -98,15 +104,20 @@ class tensor(ArrayType[TNum]):
         ret._array = arr
         ret._element_refs = None
         ret._packed = packed
+        ret._dtype = arr.dtype
         ret.shape = arr.shape
         ret.ndim = arr.ndim
         return ret
 
+    @property
+    def dtype(self) -> str:
+        """Type of all elements"""
+        return self._dtype
+
     # Read-only for tensors, ArrayType declares it writable for vector and quaternion
     @property
     def values(self) -> tuple[TNum | value[TNum], ...]:  # type: ignore[override]
-        """Flat tuple of all elements (read-only): the original values or, for a
-        tensor defined only by its array, references to the array elements"""
+        """Flat tuple of all elements"""
         if self._values is not None:
             return self._values
         if self._element_refs is None:
@@ -133,10 +144,7 @@ class tensor(ArrayType[TNum]):
                 threshold = tensor.pack_threshold
                 if threshold is None or sum(1 for v in values if isinstance(v, value) or v != 0) <= threshold:
                     return None
-            dtype = array_dtype(values, strict=True)
-            if dtype is None:
-                return None
-            self._array = array(list(values), dtype).reshape(*self.shape)
+            self._array = array(list(values), self._dtype).reshape(*self.shape)
         return self._array
 
     def _is_constant(self) -> bool:
