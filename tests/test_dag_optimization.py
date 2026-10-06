@@ -53,10 +53,10 @@ def test_get_dag_stats():
     stat = get_dag_stats([v3.net])
     print(stat)
 
-    assert stat['const_float'] == 2 * v_size
-    # The int constants i and 7 are converted to float (once per constant),
-    # then both additions per element and the sum are float additions
-    assert stat['float_int'] == 2 * sum_size
+    # The int constants i and 7 are converted to float at trace time (7.0 is
+    # merged with i = 7), both additions per element and the sum are float additions
+    assert stat['const_float'] == 2 * v_size + sum_size
+    assert 'float_int' not in stat
     assert stat['add_float_float'] == 3 * sum_size * v_size - 2
 
 
