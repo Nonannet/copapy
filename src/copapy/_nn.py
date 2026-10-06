@@ -3,7 +3,7 @@ from . import tensor
 from . import value
 from typing import TypeVar, Any, Sequence, overload
 import copapy as cp
-from ._arrays import array, _add_array_op
+from ._arrays import array, ArrayType, _add_array_op
 from ._basic_types import ArrayNet
 
 U = TypeVar("U", int, float)
@@ -38,8 +38,8 @@ def sigmoid(x: U | value[U] | vector[U] | tensor[U]) -> Any:
 
 
 def _float_array(x: Any, name: str) -> 'array[Any]':
-    """Float array from an array, a tensor or nested sequences"""
-    if isinstance(x, tensor):
+    """Float array from an array, a tensor, a vector or nested sequences"""
+    if isinstance(x, ArrayType):
         arr = x._get_array(force=True)
         if arr is None:
             arr = array(list(x.values)).reshape(*x.shape)
@@ -62,14 +62,20 @@ def _pair(x: int | Sequence[int], name: str, minimum: int) -> tuple[int, int]:
 
 
 def _conv(x: 'array[float]', weight: 'array[float]', bias: Any, stride: tuple[int, int],
-          padding: tuple[int, int], dilation: tuple[int, int]) -> 'array[float]':
-    """Convolution of an input [n, ci, h, w] with the weights [co, ci, kh, kw]"""
+          padding: tuple[int, int], dilation: tuple[int, int],
+          out_size: tuple[int, int] | None = None) -> 'array[float]':
+    """Convolution of an input [n, ci, h, w] with the weights [co, ci, kh, kw]. The padding
+    is applied in front of the input, the output size is given by out_size or by the same
+    padding behind the input."""
     n, ci, h, w = x.shape
     co, wci, kh, kw = weight.shape
     if wci != ci:
         raise ValueError(f"Input with {ci} channels does not match weights for {wci} channels")
-    oh, ow = ((size + 2 * p - d * (k - 1) - 1) // s + 1
-              for size, k, s, p, d in zip((h, w), (kh, kw), stride, padding, dilation))
+    if out_size is None:
+        oh, ow = ((size + 2 * p - d * (k - 1) - 1) // s + 1
+                  for size, k, s, p, d in zip((h, w), (kh, kw), stride, padding, dilation))
+    else:
+        oh, ow = out_size
     if oh < 1 or ow < 1:
         raise ValueError(f"Kernel of shape {weight.shape[2:]} is larger than the padded input of shape {x.shape[2:]}")
 

@@ -3,6 +3,7 @@ import math
 import operator
 import os
 import re
+import statistics
 import struct
 import subprocess
 import warnings
@@ -12,7 +13,7 @@ import pytest
 
 import copapy as cp
 import copapy.backend as backend
-from copapy import NumLike, iif, value, vector, _binwrite
+from copapy import NumLike, iif, value, vector, _binwrite, filters
 from copapy._stencils import stencil_database
 from copapy.backend import Store, add_read_value_remote, compile_to_dag
 
@@ -304,6 +305,23 @@ def array_test_values() -> tuple[list[NumLike], list[NumLike]]:
     add(am[:, 4] + cp.array([[1.0], [2.0]]), [ma[r][4] + b for b in (1.0, 2.0) for r in range(4)])
     packed = cp.array([fs, fs * fs, 0.5, fs + 1.0])
     add(packed * packed[1], [v * 2.25 for v in (1.5, 2.25, 0.5, 2.5)])
+
+    # Sorting network (lengths not a power of 2, equal elements) and median
+    for data in ([3.5, -1.0, 2.0, -1.0, 7.25, 0.0, 2.0], [5, -3, 5, 0, 12, -3, 7, 1, 0, 9, -8, 5, 2], [4.0], [2, 1]):
+        arr = cp.array(data)  # sorted at runtime by the kernel
+        add(arr.sort(), sorted(data))
+        add(arr.argsort(), sorted(range(len(data)), key=lambda i: data[i]))
+    data_f = [v * 0.75 for v in fa]
+    vec = cp.vector(value(v) * fs * 0.5 for v in fa)  # computed float values
+    add(filters.median(vec), [statistics.median(v * 0.75 for v in fa)])
+    add(filters.median(cp.vector(vec.values[:6])), [statistics.median(data_f[:6])])
+
+    # Convolution (numpy.convolve) by the conv2d stencil, computed kernel
+    kern = [0.5, -1.0, 0.25, 2.0]
+    for mode, start, length in (('full', 0, 14), ('same', 1, 11), ('valid', 3, 8)):
+        conv = filters.convolve(vec, cp.vector(value(k) for k in kern), mode)
+        full = [sum(data_f[i] * kern[k - i] for i in range(11) if 0 <= k - i < 4) for k in range(14)]
+        add(cp.array(list(conv.values)), full[start:start + length])
 
     # Element-wise functions
     pos = [v * v + 0.5 for v in fa]

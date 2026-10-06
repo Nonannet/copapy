@@ -469,6 +469,66 @@ def get_arr_conv_code() -> str:
     """
 
 
+def get_sort_network(compare_exchange: str) -> str:
+    """Loops of Batcher's odd-even merge sort network for n elements. The sequence
+    of compare-exchanges (indices ia < ib) only depends on n, not on the data. With
+    a branch-free compare_exchange the execution time is constant for a given n."""
+    return f"""for (int p = 1; p < n; p += p) {{
+            int mask = ~(2 * p - 1);
+            for (int k = p; k >= 1; k /= 2) {{
+                for (int j = k & (p - 1); j + k < n; j += 2 * k) {{  // k % p, p is a power of 2
+                    int last = (k - 1 < n - j - k - 1) ? k - 1 : n - j - k - 1;
+                    for (int i = 0; i <= last; i++) {{
+                        int ia = i + j, ib = i + j + k;
+                        if ((ia & mask) == (ib & mask)) {{
+                            {compare_exchange}
+                        }}
+                    }}
+                }}
+            }}
+        }}"""
+
+
+@norm_indent
+def get_arr_sort_code(type1: str) -> str:
+    """Sorted copy (sort) and sorting indices (argsort) of an array by a sorting network"""
+    # Swap by a mask from the comparison result: no data dependent branches, also on
+    # targets without min/max instructions (a?b:c is compiled to a branch by gcc). The
+    # barrier on the mask keeps gcc from converting the masked swap into a branch.
+    if type1 == 'float':
+        sort_cx = ('union { float f; int i; } x = {o[ia]}, y = {o[ib]}; '
+                   'int m = -(x.f > y.f); VALUE_BARRIER(m); '
+                   'int d = (x.i ^ y.i) & m; x.i ^= d; y.i ^= d; o[ia] = x.f; o[ib] = y.f;')
+    else:
+        sort_cx = ('int x = o[ia], y = o[ib]; int m = -(x > y); VALUE_BARRIER(m); '
+                   'int d = (x ^ y) & m; o[ia] = x ^ d; o[ib] = y ^ d;')
+    # Order by (value, index): deterministic result equal to a stable sort
+    arg_cx = (f'int xa = o[ia], xb = o[ib]; {type1} va = a[xa], vb = a[xb]; '
+              'int m = -((va > vb) | ((va == vb) & (xa > xb))); VALUE_BARRIER(m); '
+              'int d = (xa ^ xb) & m; o[ia] = xa ^ d; o[ib] = xb ^ d;')
+    return f"""
+    KERNEL void aux_arr_sort_{type1}(const {type1} *restrict a, {type1} *restrict o, int n) {{
+        for (int i = 0; i < n; i++) o[i] = a[i];
+        {get_sort_network(sort_cx)}
+    }}
+
+    KERNEL void aux_arr_argsort_{type1}(const {type1} *restrict a, int *restrict o, int n) {{
+        for (int i = 0; i < n; i++) o[i] = i;
+        {get_sort_network(arg_cx)}
+    }}
+
+    STENCIL void sort_{type1}arr(void) {{
+        aux_arr_sort_{type1}(REF(ref_arg0), REF(ref_out), *(int *)REF(ref_arg1));
+        result_void();
+    }}
+
+    STENCIL void argsort_{type1}arr(void) {{
+        aux_arr_argsort_{type1}(REF(ref_arg0), REF(ref_out), *(int *)REF(ref_arg1));
+        result_void();
+    }}
+    """
+
+
 @norm_indent
 def get_arr_sum_code(type1: str) -> str:
     kernel = f"aux_arr_sum_{type1}"
@@ -600,6 +660,7 @@ if __name__ == "__main__":
 
     for t in types:
         code += get_arr_sum_code(t)
+        code += get_arr_sort_code(t)
 
     print(f"Write file {args.path}...")
     with open(args.path, 'w') as f:

@@ -31,6 +31,14 @@ REF_OBJ(ref_out);
 #define REF(sym) ((void *)(sym))
 #endif
 
+// Hide a value from the optimizer (no instruction): prevents gcc from turning
+// branch-free code (e.g. a swap by a mask from a comparison) back into branches
+#if defined(__GNUC__)
+#define VALUE_BARRIER(x) __asm__("" : "+r"(x))
+#else
+#define VALUE_BARRIER(x)
+#endif
+
 // Array kernels are shared auxiliary functions called as normal function by the
 // array stencils. Loops must not be replaced by memcpy/memset calls (no libc).
 #if defined(__GNUC__) && !defined(__clang__)

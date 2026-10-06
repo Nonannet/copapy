@@ -1,0 +1,132 @@
+"""Tests for the filters: sort, argsort and median by a sorting network stencil"""
+import random
+import statistics
+from typing import Any
+
+import pytest
+
+import copapy as cp
+from copapy import filters
+from copapy.backend import get_dag_stats
+
+
+def evaluate(*exprs: Any) -> list[Any]:
+    tg = cp.Target()
+    tg.compile(*exprs)
+    tg.run()
+    return [tg.read_value(e) for e in exprs]
+
+
+def sample(n: int, dtype: str, seed: int) -> list[Any]:
+    rnd = random.Random(seed)
+    if dtype == 'int':
+        return [rnd.randint(-5, 5) for _ in range(n)]  # many equal elements
+    return [round(rnd.uniform(-10, 10), 1) if rnd.random() > 0.3 else 1.5 for _ in range(n)]
+
+
+@pytest.mark.parametrize('n', [1, 2, 3, 5, 8, 9, 16, 17, 31, 64, 70])
+@pytest.mark.parametrize('dtype', ['int', 'float'])
+def test_sort_argsort_median(n: int, dtype: str) -> None:
+    data = sample(n, dtype, n)
+    v = cp.vector(cp.value(x) for x in data)
+
+    s, a, m = filters.sort(v), filters.argsort(v), filters.median(v)
+    out_s, out_a, out_m = evaluate(s, a, m)
+
+    assert list(out_s.values) == pytest.approx(sorted(data))  # float32
+    assert list(out_a.values) == sorted(range(n), key=lambda i: data[i])  # stable order of equal elements
+    assert out_m == pytest.approx(statistics.median(data))
+    assert isinstance(s, cp.vector) and isinstance(a, cp.vector)
+
+
+@pytest.mark.parametrize('data', [[4.0, 1.0, 3.0, 2.0], [5, 1, 4, 2], [3], [2.5, -1.0, 7.0], [1, 1, 1, 1]])
+def test_constant_inputs(data: list[Any]) -> None:
+    """Constant vectors are evaluated at trace time"""
+    v = cp.vector(data)
+    assert list(filters.sort(v).values) == sorted(data)
+    assert list(filters.argsort(v).values) == sorted(range(len(data)), key=lambda i: data[i])
+    assert filters.median(v) == statistics.median(data)
+
+
+def test_median_even_int() -> None:
+    """The average of the two middle elements is a float, also for int elements"""
+    v = cp.vector(cp.value(x) for x in [7, 1, 4, 2])
+    m = filters.median(v)
+    out, = evaluate(m)
+    assert out == 3.0 and isinstance(out, float)
+
+
+def test_inputs_without_packing() -> None:
+    """Tensors and vectors with packing disabled are sorted by the stencil as well"""
+    data = [3.0, -2.0, 8.5, 0.0, 1.0]
+    t = cp.tensor([cp.value(x) for x in data])
+    v = cp.vector((cp.value(x) for x in data), packed=False)
+    st, sv = filters.sort(t), filters.sort(v)
+    assert isinstance(st, cp.tensor) and isinstance(sv, cp.vector)
+    out_t, out_v = evaluate(st, sv)
+    assert list(out_t.values) == list(out_v.values) == sorted(data)
+
+    with pytest.raises(ValueError):
+        filters.sort(cp.tensor([[cp.value(1.0), cp.value(2.0)]]))  # 2D
+
+
+def test_code_size() -> None:
+    """One sort stencil instead of O(n^2) comparisons"""
+    v = cp.vector(cp.value(float(i % 7)) for i in range(63))
+    stats = get_dag_stats([filters.median(v).net])
+    assert stats.get('sort_floatarr') == 1
+    assert sum(stats.values()) < 200  # O(n^2) implementation: 12475 operations
+
+
+def convolve_ref(a: list[float], v: list[float], mode: str) -> list[float]:
+    """Definition of the discrete convolution with the output ranges of numpy.convolve"""
+    n, m = len(a), len(v)
+    full = [sum(a[i] * v[k - i] for i in range(n) if 0 <= k - i < m) for k in range(n + m - 1)]
+    if mode == 'full':
+        return full
+    big, small = max(n, m), min(n, m)
+    if mode == 'same':
+        start = (small - 1) // 2
+        return full[start:start + big]
+    return full[small - 1:big]  # valid
+
+
+@pytest.mark.parametrize('n,m', [(1, 1), (5, 3), (6, 4), (7, 1), (4, 7), (12, 5), (3, 3)])
+@pytest.mark.parametrize('mode', ['full', 'same', 'valid'])
+def test_convolve(n: int, m: int, mode: str) -> None:
+    a = sample(n, 'float', n)
+    v = [x * 0.5 for x in sample(m, 'float', m + 100)]
+    ref = convolve_ref(a, v, mode)
+
+    va = cp.vector(cp.value(x) for x in a)
+    vv = cp.vector(cp.value(x) for x in v)
+    results = [filters.convolve(va, v, mode),        # constant kernel (FIR filter)
+               filters.convolve(va, vv, mode),       # computed kernel
+               filters.convolve(cp.array(a), v, mode),
+               filters.convolve(cp.tensor([cp.value(x) for x in a]), cp.array(v), mode)]
+    assert [type(r) for r in results] == [cp.vector, cp.vector, cp.array, cp.tensor]
+
+    outs = evaluate(*results)
+    for out in outs:
+        vals = list(out.values) if isinstance(out, cp.vector | cp.tensor) else out
+        assert vals == pytest.approx(ref, abs=1e-4)
+
+    # Constant inputs are evaluated at trace time
+    assert list(filters.convolve(cp.vector(a), v, mode).values) == pytest.approx(ref)
+
+
+def test_convolve_numpy_reference() -> None:
+    np = pytest.importorskip('numpy')
+    a = [1.0, 2.0, 3.0, 4.0, 5.0]
+    v = [0.25, 0.5, 0.25, 1.0]
+    for mode in ('full', 'same', 'valid'):
+        assert convolve_ref(a, v, mode) == pytest.approx(list(np.convolve(a, v, mode)))
+        assert convolve_ref(v, a, mode) == pytest.approx(list(np.convolve(v, a, mode)))
+
+
+def test_convolve_errors() -> None:
+    a = cp.vector([cp.value(1.0), cp.value(2.0)])
+    with pytest.raises(ValueError):
+        filters.convolve(a, [1.0], 'circular')
+    with pytest.raises(ValueError):
+        filters.convolve(cp.tensor([[cp.value(1.0), cp.value(2.0)]]), [1.0])
