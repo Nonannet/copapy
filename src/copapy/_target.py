@@ -146,11 +146,13 @@ class Target():
                 addr, lengths, _ = self._values[variables.net]
                 data = read_data_mem(self._context, addr, lengths)
                 assert data is not None and len(data) == lengths, f"Failed to read array {variables}"
-                flat = struct.unpack(binw.array_format(variables.dtype, variables.size, self.sdb.byteorder), data)
+                flat = struct.unpack(binw.array_format(variables.net.dtype, variables.size, self.sdb.byteorder), data)
             else:
                 source = variables.net.source
                 assert isinstance(source, ArrayConst), f"Array {variables} not found. It might not have been compiled for the target."
                 flat = source.values
+            if variables.dtype == 'bool':
+                flat = tuple(bool(v) for v in flat)
             return variables.get_values(flat)
 
         if isinstance(variables, value) and variables.net not in self._values and \
@@ -164,7 +166,8 @@ class Target():
                 self._values[variables.net] = (base + element.index * size, size, array_net.dtype)
             else:
                 assert isinstance(array_net.source, ArrayConst), f"Value {variables} not found. It might not have been compiled for the target."
-                return array_net.source.values[element.index]
+                const = array_net.source.values[element.index]
+                return bool(const) if variables.dtype == 'bool' else const
 
         if isinstance(variables, ArrayType):
             packed = variables._packed_array()
@@ -220,12 +223,12 @@ class Target():
             addr, lengths, _ = self._values[variables.net]
             flat = array.flatten_data(data)
             assert len(flat) == variables.size, f"Data size {len(flat)} does not match array size {variables.size}"
-            conv = float if variables.dtype == 'float' else int
+            conv = float if variables.net.dtype == 'float' else int
             dw = binw.data_writer(self.sdb.byteorder)
             dw.write_com(binw.Command.COPY_DATA)
             dw.write_int(addr)
             dw.write_int(lengths)
-            dw.write_bytes(binw.pack_array([conv(v) for v in flat], variables.dtype, self.sdb.byteorder))
+            dw.write_bytes(binw.pack_array([conv(v) for v in flat], variables.net.dtype, self.sdb.byteorder))
             dw.write_com(binw.Command.END_COM)
             assert coparun(self._context, dw.get_data()) > 0
             return

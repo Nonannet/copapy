@@ -222,7 +222,9 @@ def test_errors() -> None:
     with pytest.raises(ValueError):
         cp.array([[1, 2], [3]])
     with pytest.raises(ValueError):
-        cp.array([cp.value(1), 2.5])  # int value in a float array
+        cp.array([1, 2.5], 'int')  # float element in an int array
+    with pytest.raises(ValueError):
+        cp.array(['a', 'b'])
     with pytest.raises(ValueError):
         cp.array([[1.0, 2.0], [3.0, 4.0]]) @ cp.array([[1.0, 2.0, 3.0]])
     with pytest.raises(IndexError):
@@ -475,3 +477,64 @@ def test_hybrid_indexing(data: Any, cases: list[Any]) -> None:
         t_packed[(0,) * (t_packed.ndim - 1) + (len(data[0][0]) if t_packed.ndim == 3 else 3,)]
     with pytest.raises(IndexError):
         t_packed[(0,) * (t_packed.ndim + 1)]
+
+
+def test_array_dtype_promotion() -> None:
+    """Mixed elements are promoted: float if any element is float, bool as int"""
+    i = cp.value(3)
+    a = cp.array([i, 2.5, 1])  # int variable converted by a float_int stencil
+    b = cp.array([True, 2])
+    c = cp.array([cp.value(True), i])
+    assert (a.dtype, b.dtype, c.dtype) == ('float', 'int', 'int')
+    assert cp.array([1, 2], 'float').dtype == 'float'
+
+    out = evaluate(a, b, c * 2)
+    assert out == [[3.0, 2.5, 1.0], [1, 2], [2, 6]]
+    assert all(type(v) is float for v in out[0])
+
+
+def test_bool_array() -> None:
+    """Bool arrays are labelled bool and stored and computed as int"""
+    x = cp.value(2.0)
+    flags = [True, False, True, True]
+    b = cp.array(flags)
+    bv = cp.array([x > 1.0, x > 3.0])  # bool values from comparisons
+    assert (b.dtype, b.net.dtype, bv.dtype) == ('bool', 'int', 'bool')
+    assert cp.array([1, 0], 'int').dtype == 'int'
+
+    # Views and elements keep the label, operations compute as int
+    view = b.reshape(2, 2).T[0]
+    assert view.dtype == 'bool' and b[2].dtype == 'bool'
+    s = b + b
+    assert s.dtype == 'int' and (b + 0).dtype == 'int' and b.sum().dtype == 'int'
+    w = b * 2.5
+    assert w.dtype == 'float'
+
+    tg = cp.Target()
+    tg.compile(b, bv, view, s, w, b.sum())
+    tg.run()
+    assert tg.read_value(b) == flags and all(type(v) is bool for v in tg.read_value(b))
+    assert tg.read_value(bv) == [True, False]
+    assert tg.read_value(view) == [True, True]
+    assert tg.read_value(s) == [2, 0, 2, 2] and all(type(v) is int for v in tg.read_value(s))
+    assert tg.read_value(w) == [2.5, 0.0, 2.5, 2.5]
+    assert tg.read_value(b[1]) is False
+
+    tg.write_value(b, [False, True, False, False])
+    tg.run()
+    assert tg.read_value(b) == [False, True, False, False]
+    assert tg.read_value(s) == [0, 2, 0, 0]
+
+    with pytest.raises(ValueError):
+        cp.array([0, 2], 'bool')  # only bool elements in a bool array
+
+
+def test_bool_tensor_packed() -> None:
+    x = cp.tensor([cp.value(float(i)) for i in range(100)])
+    flags = x > 50.0  # bool tensor
+    assert flags.dtype == 'bool'
+    packed = cp.tensor(flags, packed=True)
+    assert packed._get_array() is not None and packed._get_array().dtype == 'bool'  # type: ignore[union-attr]
+    count = packed.sum()
+    out, = evaluate(count)
+    assert out == 49

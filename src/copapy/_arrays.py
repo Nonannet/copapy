@@ -1,11 +1,11 @@
 from typing import Any, Generic, Sequence, Iterable, overload
-from ._basic_types import value, Net, ArrayNet, ArrayConst, ArrayOp, ArrayElement, ArrayPack, NumLike, transl_type, value_from_number, generic_sdb
+from ._basic_types import value, Net, ArrayNet, ArrayConst, ArrayOp, ArrayElement, ArrayPack, NumLike, transl_type, value_from_number, generic_sdb, to_float
 from ._helper_types import TNum
 
 
 def _flatten(values: Any) -> tuple[list[Any], tuple[int, ...]]:
     """Flatten nested sequences and return the values and the shape"""
-    if not isinstance(values, Sequence):
+    if not isinstance(values, Sequence) or isinstance(values, str):
         return [values], ()
     if not values:
         return [], (0,)
@@ -24,27 +24,44 @@ def _nest(values: Sequence[Any], shape: tuple[int, ...]) -> list[Any]:
     return [_nest(values[i * step:(i + 1) * step], shape[1:]) for i in range(shape[0])]
 
 
-def array_dtype(flat: Iterable[Any], strict: bool = False) -> str | None:
-    """Element type of an array holding the values (copapy values or numbers),
-    None if they can not be stored in one array: values of different types,
-    int values together with float numbers, bools or other types. With strict
-    int and float numbers are not mixed either."""
-    value_types: set[str] = set()
-    number_types: set[type] = set()
+def element_dtype(flat: Iterable[Any]) -> str:
+    """Common type of numbers and copapy values (numpy-style promotion): 'float'
+    if any element is float, otherwise 'int' if any element is int, otherwise
+    'bool'."""
+    has_float = has_int = False
+    has_any = False
     for v in flat:
         if isinstance(v, value):
-            value_types.add(v.dtype)
-        elif isinstance(v, bool) or not isinstance(v, int | float):
-            return None
+            dtype = v.dtype
+        elif isinstance(v, bool):
+            dtype = 'bool'
+        elif isinstance(v, int):
+            dtype = 'int'
+        elif isinstance(v, float):
+            dtype = 'float'
         else:
-            number_types.add(type(v))
-    if len(value_types) > 1 or value_types - {'int', 'float'} or (strict and len(number_types) > 1):
-        return None
-    if value_types == {'int'}:
-        return 'int' if number_types <= {int} else None
-    if value_types == {'float'} or float in number_types:
+            raise ValueError("Elements must be numbers or copapy values")
+        has_float |= dtype == 'float'
+        has_int |= dtype == 'int'
+        has_any = True
+    if has_float or not has_any:
         return 'float'
-    return 'int'
+    return 'int' if has_int else 'bool'
+
+
+def convert_element(v: Any, dtype: str) -> Any:
+    """Convert a number or copapy value to dtype: numbers directly, int and bool
+    values to float by a float_int stencil, bool values to int without code.
+    Float elements are not converted to int."""
+    if dtype == 'float':
+        return to_float(v) if isinstance(v, value) else float(v)
+    if dtype == 'int':
+        if isinstance(v, value):
+            assert v.dtype != 'float', "Float value in int array"
+            return v if v.dtype == 'int' else value(v.net, 'int')
+        assert not isinstance(v, float), "Float number in int array"
+        return int(v)
+    return v
 
 
 def _size(shape: Sequence[int]) -> int:
@@ -98,7 +115,7 @@ class array(Generic[TNum]):
 
     Attributes:
         shape: Size of each dimension.
-        dtype: Element type ('int' or 'float').
+        dtype: Element type ('int', 'float' or 'bool')
         net: Underlying array net in the computation graph.
     """
     def __init__(self, values: 'Sequence[TNum] | Sequence[Sequence[TNum]] | Sequence[Any]', dtype: str | None = None):
@@ -107,45 +124,46 @@ class array(Generic[TNum]):
         An array containing copapy values is filled with the current values on
         each run (one load and store per element).
 
+        Elements of different types are promoted: the array is float if any element
+        is float, int elements are converted (int variables by a float_int stencil).
+        An array of only bool elements is a bool array (stored as int).
+
         Arguments:
             values: Nested sequences of int or float numbers or copapy values.
-            dtype: Element type ('int' or 'float'), inferred from values if omitted.
+            dtype: Element type ('int', 'float' or 'bool'), inferred from values if omitted.
         """
         flat, shape = _flatten(values)
         if not shape:
             raise ValueError("Array requires at least one dimension")
         if not flat:
             raise ValueError("Empty arrays are not supported")
+        inferred = element_dtype(flat)
         if dtype is None:
-            dtype = array_dtype(flat)
-            if dtype is None:
-                raise ValueError("Array values must be int or float numbers or copapy values of a single type")
-        assert dtype in ('int', 'float'), f"Unsupported array type {dtype}"
+            dtype = inferred
+        if dtype not in ('int', 'float', 'bool'):
+            raise ValueError(f"Unsupported array type {dtype}")
+        if (dtype == 'int' and inferred == 'float') or (dtype == 'bool' and inferred != 'bool'):
+            raise ValueError(f"{inferred} elements in a {dtype} array")
 
+        stored = transl_type(dtype)  # Bool is stored as int
+        flat = [convert_element(v, stored) for v in flat]
         if any(isinstance(v, value) for v in flat):
-            nets: list[Net] = []
-            for v in flat:
-                if isinstance(v, value):
-                    if transl_type(v.dtype) != dtype:
-                        raise ValueError(f"Value of type {v.dtype} in {dtype} array")
-                    nets.append(v.net)
-                else:
-                    nets.append(value_from_number(int(v) if dtype == 'int' else float(v)).net)
-            self._init(ArrayPack(nets, dtype).result, shape)
+            nets = [v.net if isinstance(v, value) else value_from_number(v).net for v in flat]
+            self._init(ArrayPack(nets, stored).result, shape, dtype)
         else:
-            conv = int if dtype == 'int' else float
-            source = ArrayConst([conv(v) for v in flat], dtype)
-            self._init(ArrayNet(dtype, source, len(flat)), shape)
+            source = ArrayConst(flat, stored)
+            self._init(ArrayNet(stored, source, len(flat)), shape, dtype)
 
-    def _init(self, net: ArrayNet, shape: tuple[int, ...]) -> None:
+    def _init(self, net: ArrayNet, shape: tuple[int, ...], dtype: str | None = None) -> None:
+        assert dtype is None or transl_type(dtype) == net.dtype
         self.net = net
         self.shape = shape
-        self.dtype = net.dtype
+        self.dtype = dtype or net.dtype
 
     @classmethod
-    def _from_net(cls, net: ArrayNet, shape: tuple[int, ...]) -> 'array[Any]':
+    def _from_net(cls, net: ArrayNet, shape: tuple[int, ...], dtype: str | None = None) -> 'array[Any]':
         ret: array[Any] = cls.__new__(cls)
-        ret._init(net, shape)
+        ret._init(net, shape, dtype)
         return ret
 
     @property
@@ -179,7 +197,7 @@ class array(Generic[TNum]):
     def element(self, flat_index: int) -> value[TNum]:
         """Element by its flat index. No code is generated, the element
         is read directly from the array memory."""
-        return value(Net(self.dtype, ArrayElement(self.net, flat_index)))
+        return value(Net(self.net.dtype, ArrayElement(self.net, flat_index)), self.dtype)
 
     def __getitem__(self, key: int | slice | Sequence[int | slice]) -> 'Any':
         """Get an element (all dimensions indexed by integers) or a sub-array
@@ -234,9 +252,9 @@ class array(Generic[TNum]):
 
         dims = [(1, 0)] * (COPY_DIMS - len(dims)) + dims
         params = array([offset] + [n for n, _ in dims] + [s for _, s in dims], 'int')
-        node = _add_array_op('copy_arr', [self.net, params.net], self.dtype, size)
+        node = _add_array_op('copy_arr', [self.net, params.net], self.net.dtype, size)
         assert isinstance(node.result, ArrayNet)
-        return array._from_net(node.result, shape)
+        return array._from_net(node.result, shape, self.dtype)
 
     def reshape(self, *shape: int) -> 'array[TNum]':
         """Same data with a new shape, a dimension of -1 is inferred."""
@@ -249,7 +267,7 @@ class array(Generic[TNum]):
             shape = tuple(self.size // known if d == -1 else d for d in shape)
         if _size(shape) != self.size:
             raise ValueError(f"Can not reshape array of size {self.size} into shape {shape}")
-        return array._from_net(self.net, tuple(shape))
+        return array._from_net(self.net, tuple(shape), self.dtype)
 
     def flatten(self) -> 'array[TNum]':
         return self.reshape(self.size)
@@ -278,6 +296,10 @@ class array(Generic[TNum]):
         strides = (0,) * (len(shape) - self.ndim) + _contiguous_strides(self.shape)
         return self._strided(0, shape, tuple(0 if p == 1 else s for p, s in zip(padded, strides)))
 
+    def _computed(self) -> 'array[Any]':
+        """The array with the type of computed results (bool as int), no code"""
+        return self if self.dtype == self.net.dtype else array._from_net(self.net, self.shape)
+
     def _binary_op(self, op: str, other: 'array[Any] | NumLike', reverse: bool = False) -> 'array[Any]':
         if isinstance(other, array) and other.shape != self.shape:
             shape = broadcast_shapes(self.shape, other.shape)
@@ -286,19 +308,19 @@ class array(Generic[TNum]):
         n = value_from_number(self.size).net
         if isinstance(other, array):
             a, b = (other, self) if reverse else (self, other)
-            typed_op = f"{op}_{a.dtype}arr_{b.dtype}arr"
-            out_dtype = _array_out_type(op, a.dtype, b.dtype)
+            typed_op = f"{op}_{a.net.dtype}arr_{b.net.dtype}arr"
+            out_dtype = _array_out_type(op, a.net.dtype, b.net.dtype)
             args = [a.net, b.net, n]
         elif isinstance(other, value | int | float):
             scalar = other if isinstance(other, value) else value_from_number(other)
             s_dtype = transl_type(scalar.dtype)
             if reverse:
-                typed_op = f"{op}_{s_dtype}_{self.dtype}arr"
-                out_dtype = _array_out_type(op, s_dtype, self.dtype)
+                typed_op = f"{op}_{s_dtype}_{self.net.dtype}arr"
+                out_dtype = _array_out_type(op, s_dtype, self.net.dtype)
                 args = [scalar.net, self.net, n]
             else:
-                typed_op = f"{op}_{self.dtype}arr_{s_dtype}"
-                out_dtype = _array_out_type(op, self.dtype, s_dtype)
+                typed_op = f"{op}_{self.net.dtype}arr_{s_dtype}"
+                out_dtype = _array_out_type(op, self.net.dtype, s_dtype)
                 args = [self.net, scalar.net, n]
         else:
             return NotImplemented
@@ -312,7 +334,7 @@ class array(Generic[TNum]):
     def __add__(self, other: 'array[Any] | NumLike') -> 'array[Any]': ...
     def __add__(self, other: 'array[Any] | NumLike') -> 'array[Any]':
         if isinstance(other, int | float) and other == 0:
-            return self
+            return self._computed()
         return self._binary_op('add', other)
 
     def __radd__(self, other: NumLike) -> 'array[Any]':
@@ -320,7 +342,7 @@ class array(Generic[TNum]):
 
     def __sub__(self, other: 'array[Any] | NumLike') -> 'array[Any]':
         if isinstance(other, int | float) and other == 0:
-            return self
+            return self._computed()
         return self._binary_op('sub', other)
 
     def __rsub__(self, other: NumLike) -> 'array[Any]':
@@ -332,7 +354,7 @@ class array(Generic[TNum]):
     def __mul__(self, other: 'array[Any] | NumLike') -> 'array[Any]': ...
     def __mul__(self, other: 'array[Any] | NumLike') -> 'array[Any]':
         if isinstance(other, int | float) and other == 1:
-            return self
+            return self._computed()
         return self._binary_op('mul', other)
 
     def __rmul__(self, other: NumLike) -> 'array[Any]':
@@ -349,7 +371,7 @@ class array(Generic[TNum]):
 
     def __pow__(self, other: 'array[Any] | NumLike') -> 'array[Any]':
         if isinstance(other, int) and not isinstance(other, bool) and 1 <= other < 8:
-            ret: array[Any] = self
+            ret: array[Any] = self._computed()
             for _ in range(other - 1):
                 ret = ret * self
             return ret
@@ -365,14 +387,14 @@ class array(Generic[TNum]):
         """Element-wise function: sqrt, exp, log, sin, cos, tan, asin, acos,
         atan, tanh (float result) or abs (result of the element type)"""
         n = value_from_number(self.size).net
-        node = _add_array_op(f"{op}_{self.dtype}arr", [self.net, n], self.dtype if op == 'abs' else 'float', self.size)
+        node = _add_array_op(f"{op}_{self.net.dtype}arr", [self.net, n], self.net.dtype if op == 'abs' else 'float', self.size)
         assert isinstance(node.result, ArrayNet)
         return array._from_net(node.result, self.shape)
 
     def sum(self) -> value[TNum]:
         """Sum of all elements."""
         n = value_from_number(self.size).net
-        node = _add_array_op(f"sum_{self.dtype}arr", [self.net, n], self.dtype)
+        node = _add_array_op(f"sum_{self.net.dtype}arr", [self.net, n], self.net.dtype)
         return value(node.result)
 
     def dot(self, other: 'array[Any]') -> value[Any]:
@@ -380,8 +402,8 @@ class array(Generic[TNum]):
         if other.size != self.size:
             raise ValueError(f"Size mismatch: {self.size} and {other.size}")
         n = value_from_number(self.size).net
-        out_dtype = _array_out_type('mul', self.dtype, other.dtype)
-        node = _add_array_op(f"dot_{self.dtype}arr_{other.dtype}arr", [self.net, other.net, n], out_dtype)
+        out_dtype = _array_out_type('mul', self.net.dtype, other.net.dtype)
+        node = _add_array_op(f"dot_{self.net.dtype}arr_{other.net.dtype}arr", [self.net, other.net, n], out_dtype)
         return value(node.result)
 
     def matmul(self, other: 'array[Any]') -> 'value[Any] | array[Any]':
@@ -399,9 +421,9 @@ class array(Generic[TNum]):
             if k != other.shape[0]:
                 raise ValueError(f"Shape mismatch: {self.shape} @ {other.shape}")
             n = other.shape[1]
-            out_dtype = _array_out_type('mul', self.dtype, other.dtype)
+            out_dtype = _array_out_type('mul', self.net.dtype, other.net.dtype)
             dims = array([m, k, n], 'int')
-            node = _add_array_op(f"matmul_{self.dtype}arr_{other.dtype}arr",
+            node = _add_array_op(f"matmul_{self.net.dtype}arr_{other.net.dtype}arr",
                                  [self.net, other.net, dims.net], out_dtype, m * n)
             assert isinstance(node.result, ArrayNet)
             return array._from_net(node.result, (m, n))
@@ -409,8 +431,8 @@ class array(Generic[TNum]):
             m, n = self.shape
             if n != other.shape[0]:
                 raise ValueError(f"Shape mismatch: {self.shape} @ {other.shape}")
-            out_dtype = _array_out_type('mul', self.dtype, other.dtype)
-            node = _add_array_op(f"matvec_{self.dtype}arr_{other.dtype}arr",
+            out_dtype = _array_out_type('mul', self.net.dtype, other.net.dtype)
+            node = _add_array_op(f"matvec_{self.net.dtype}arr_{other.net.dtype}arr",
                                  [self.net, other.net, value_from_number(m).net, value_from_number(n).net],
                                  out_dtype, m)
             assert isinstance(node.result, ArrayNet)

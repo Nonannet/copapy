@@ -198,17 +198,50 @@ def test_integer_division_result():
 
 
 def test_mixed_constant_types():
-    """Equal constants of different type (1, 1.0, True) must not be mixed up"""
+    """Equal constants of different type (1, 1.0, True) are promoted to the
+    type of the tensor: float if any element is float, bool counts as int"""
     vt = cp.tensor([cp.value(1), cp.value(1), cp.value(1)])
-    res = vt + cp.tensor([1, 1.0, 1])
-    assert [v.dtype for v in res.values] == ['int', 'float', 'int']
+    assert vt.dtype == 'int'
 
-    res = vt + cp.tensor([1.0, 1, 1.0])
-    assert [v.dtype for v in res.values] == ['float', 'int', 'float']
+    ct = cp.tensor([1, 1.0, 1])
+    assert ct.dtype == 'float'
+    assert ct.values == (1.0, 1.0, 1.0) and all(type(v) is float for v in ct.values)
+    res = vt + ct
+    assert res.dtype == 'float'
+    assert [v.dtype for v in res.values] == ['float', 'float', 'float']
 
-    compiled, = evaluate(res)
-    assert compiled.values == (2.0, 2, 2.0)
-    assert [type(v) for v in compiled.values] == [float, int, float]
+    res_int = vt + cp.tensor([1, True, 1])
+    assert res_int.dtype == 'int'
+    assert [v.dtype for v in res_int.values] == ['int', 'int', 'int']
+
+    compiled, compiled_int = evaluate(res, res_int)
+    assert compiled.values == (2.0, 2.0, 2.0)
+    assert [type(v) for v in compiled.values] == [float, float, float]
+    assert compiled_int.values == (2, 2, 2)
+    assert [type(v) for v in compiled_int.values] == [int, int, int]
+
+
+def test_dtype_promotion():
+    """The tensor type is float if any element is float, int variables are
+    converted when the tensor is created, the same for small and large tensors"""
+    i, x = cp.value(3), cp.value(2.5)
+    assert cp.tensor([i, x]).dtype == 'float'
+    assert cp.tensor([i, 2]).dtype == 'int'
+    assert cp.tensor([True, False]).dtype == 'bool'
+    assert cp.tensor([True, 2]).values == (1, 2)
+    assert cp.tensor([[1, 2], [3, 4.5]]).dtype == 'float'
+
+    mixed = cp.tensor([i, x])
+    assert [v.dtype for v in mixed.values] == ['float', 'float']  # converted in the constructor
+    assert mixed.values[1] is x  # elements of the tensor type are not converted
+
+    # Small (scalar path) and large (packed) tensors give the same types and results
+    small = cp.tensor([i, x]) * 2
+    large = cp.tensor([i, x] * 50) * 2
+    out_small, out_large = evaluate(small, large)
+    assert out_small.values == (6.0, 5.0)
+    assert out_large.values == (6.0, 5.0) * 50
+    assert all(type(v) is float for v in out_small.values + out_large.values)
 
 
 @pytest.mark.parametrize(
