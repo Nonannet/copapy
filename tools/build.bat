@@ -31,7 +31,8 @@ goto SKIP_X86_64
 :BUILD_X86_64
 echo -------------x86_64 - 64 bit-----------------
 
-call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64
+call "%~dp0vcvars.bat" x64
+if errorlevel 1 exit /b 1
 
 echo - Compile stencil test...
 cl /Zi /Od stencils\test.c /Fe:build\stencils\test.exe
@@ -64,7 +65,7 @@ goto SKIP_X86
 :BUILD_X86
 echo ---------------x86 - 32 bit----------------
 
-call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x86
+call "%~dp0vcvars.bat" x86
 
 REM echo - Build runner for Windows 32 bit...
 REM cl /Zi /Od /DENABLE_LOGGING ^

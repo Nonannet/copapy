@@ -9,7 +9,8 @@ REM ============================================================
 
 mkdir build\runner
 
-call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64
+call "%~dp0vcvars.bat" x64
+if errorlevel 1 exit /b 1
 
 echo - Build entry wrapper (raw)...
 ml64 /c /Fobuild\runner\x86_64_abi_shim.raw.obj src\coparun\x86_64_abi_shim.asm
