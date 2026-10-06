@@ -8,6 +8,10 @@ import copapy as cp
 from test_matrix import *  # noqa: F401,F403
 from test_tensor_basic import *  # noqa: F401,F403
 
+# Constant matrices with more than one nonzero element are packed with a threshold
+# of 1, the elimination of multiplications by 0 and 1 is tested in test_matrix only
+del test_constant_matrices_are_not_variables  # noqa: F821
+
 
 @pytest.fixture(autouse=True)
 def pack_all_tensors() -> Generator[None, None, None]:
