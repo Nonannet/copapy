@@ -316,6 +316,15 @@ def array_test_values() -> tuple[list[NumLike], list[NumLike]]:
     add(filters.median(vec), [statistics.median(v * 0.75 for v in fa)])
     add(filters.median(cp.vector(vec.values[:6])), [statistics.median(data_f[:6])])
 
+    # Indices computed at runtime (clamped, negative counted from the end): the offset of
+    # the strided copy is packed into its parameters, constant parameters at load time
+    ri, rj, rn, ro = value(2), value(1), value(-1), value(9)
+    add(am[ri, rj], [ma[2][1]])
+    add(am[rn], ma[3])
+    add(am[:, ro], [ma[r][5] for r in range(4)])
+    add(cp.vector(fa)[ri - 3], [fa[-1]])  # lookup table from a constant vector
+    add(ai[rj, 0:2] * 2, [v * 2 for v in mi[1][0:2]])
+
     # Convolution (numpy.convolve) by the conv2d stencil, computed kernel
     kern = [0.5, -1.0, 0.25, 2.0]
     for mode, start, length in (('full', 0, 14), ('same', 1, 11), ('valid', 3, 8)):

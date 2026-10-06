@@ -14,11 +14,7 @@ def _as_array(input_vector: ArrayType[Any]) -> array[Any]:
         raise ValueError(f"Expected a 1D vector or tensor, got shape {input_vector.shape}")
     if not input_vector.shape[0]:
         raise ValueError("Empty vectors are not supported")
-    arr = input_vector._get_array(force=True)
-    if arr is None:
-        # Packing disabled for this instance or class: build the array explicitly
-        arr = array(list(input_vector.values), input_vector.dtype)
-    return arr
+    return input_vector._force_array()
 
 
 def sort(input_vector: TArray) -> TArray:
