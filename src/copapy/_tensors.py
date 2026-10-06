@@ -34,7 +34,7 @@ class tensor(ArrayType[TNum]):
                 use them, None to decide by tensor.pack_threshold.
         """
         flat_values: tuple[Any, ...]
-        if shape:
+        if shape is not None:
             flat_list: list[Any] = []
             assert isinstance(values, Iterable), "Values must be a sequence of scalars if shape is provided"
             for v in values:
