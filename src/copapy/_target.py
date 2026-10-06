@@ -2,7 +2,7 @@ from typing import Iterable, overload, TypeVar, Any, Callable, TypeAlias
 from . import _binwrite as binw
 from coparun_module import coparun, read_data_mem, create_target, clear_target
 import struct
-from ._basic_types import value, Net, Node, Store, NumLike, stencil_db_from_package, ArrayOp, ArrayElement, ArrayConst, ArrayPack, transl_type
+from ._basic_types import value, Net, Node, Store, Constant, NumLike, stencil_db_from_package, ArrayOp, ArrayElement, ArrayConst, ArrayPack, transl_type
 from ._arrays import array, ArrayType
 from ._compiler import compile_to_dag
 
@@ -215,8 +215,8 @@ class Target():
         """Write to a copapy value on the target.
 
         Arguments:
-            variables: Singe variable, array or multiple variables to overwrite
-            value: Singe value or multiple values to write, (nested) sequences for arrays
+            variables: Single variable, array or multiple variables to overwrite
+            value: Single value or multiple values to write, (nested) sequences for arrays
         """
         if isinstance(variables, array):
             assert isinstance(data, Iterable), "Data for an array must be a sequence"

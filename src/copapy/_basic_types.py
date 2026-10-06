@@ -70,7 +70,7 @@ class Node:
         self.node_hash = 0
 
     def __repr__(self) -> str:
-        return f"Node:{self.name}({', '.join(str(a) for a in self.args) if self.args else (self.value if isinstance(self, CPConstant) else '')})"
+        return f"Node:{self.name}({', '.join(str(a) for a in self.args) if self.args else (self.value if isinstance(self, HeadNode) else '')})"
 
 
 class Net:
@@ -118,20 +118,20 @@ class value(Generic[TNum]):
             else:
                 self.dtype = source.dtype
         elif dtype == 'int' or dtype == 'bool':
-            new_node = CPConstant(int(source), False)
+            new_node = Input(int(source))
             self.net = Net(new_node.dtype, new_node)
             self.dtype = dtype
         elif dtype == 'float':
-            new_node = CPConstant(float(source), False)
+            new_node = Input(float(source))
             self.net = Net(new_node.dtype, new_node)
             self.dtype = dtype
         elif dtype is None:
             if isinstance(source, bool):
-                new_node = CPConstant(source, False)
+                new_node = Input(source)
                 self.net = Net(new_node.dtype, new_node)
                 self.dtype = 'bool'
             else:
-                new_node = CPConstant(source, False)
+                new_node = Input(source)
                 self.net = Net(new_node.dtype, new_node)
                 self.dtype = new_node.dtype
         else:
@@ -379,8 +379,14 @@ class value(Generic[TNum]):
         return add_op('bwxor', [other, self], True)
 
 
-class CPConstant(Node):
-    def __init__(self, value: Any, anonymous: bool = True):
+class HeadNode(Node):
+    """Base class for scalars stored in the data memory.
+
+    Attributes:
+        value: Numeric value written to the memory when loading the program.
+        dtype: Data type of the value.
+    """
+    def __init__(self, value: Any):
         if isinstance(value, int):
             self.value: int | float =  value
             self.dtype = 'int'
@@ -392,15 +398,33 @@ class CPConstant(Node):
 
         self.name = 'const_' + self.dtype
         self.args = ()
-        self.node_hash = hash(value) ^ hash(self.dtype) if anonymous else id(self)
-        self.anonymous = anonymous
+
+
+class Constant(HeadNode):
+    """Anonymous constant. Constants of equal value and type are the same
+    node and can be removed during optimization."""
+    def __init__(self, value: Any):
+        super().__init__(value)
+        self.node_hash = hash(value) ^ hash(self.dtype)
 
     def __eq__(self, other: object) -> bool:
-        return (self is other) or (self.anonymous and
-                                   isinstance(other, CPConstant) and
-                                   other.anonymous and
+        return (self is other) or (isinstance(other, Constant) and
                                    self.value == other.value and
                                    self.dtype == other.dtype)
+
+    def __hash__(self) -> int:
+        return self.node_hash
+
+
+class Input(HeadNode):
+    """Named value (copapy value) that can be changed by Target.write_value.
+    Each Input is a distinct node, independent of its initial value."""
+    def __init__(self, value: Any):
+        super().__init__(value)
+        self.node_hash = id(self)
+
+    def __eq__(self, other: object) -> bool:
+        return self is other
 
     def __hash__(self) -> int:
         return self.node_hash
@@ -413,7 +437,7 @@ class Store(Node):
         elif isinstance(input, Net):
             net = input
         else:
-            node = CPConstant(input)
+            node = Constant(input)
             net = Net(node.dtype, node)
 
         self.name = 'store_' + transl_type(net.dtype)
@@ -548,7 +572,7 @@ class ArrayElement(Node):
 
 def value_from_number(val: Any) -> value[Any]:
     # Create anonymous constant that can be removed during optimization
-    new_node = CPConstant(val)
+    new_node = Constant(val)
     new_net = Net(new_node.dtype, new_node)
     return value(new_net)
 
@@ -588,7 +612,7 @@ def to_float(val: value[Any]) -> value[Any]:
     if transl_type(val.dtype) != 'int':
         return val
     source = val.net.source
-    if isinstance(source, CPConstant) and source.anonymous:
+    if isinstance(source, Constant):
         return value_from_number(float(source.value))
     return add_op('float', [val])
 
@@ -606,7 +630,7 @@ def add_op(op: str, args: list[value[Any] | int | float], commutative: bool = Fa
         if commutative:
             # A converted variable is computed last and is still in register 0
             def computed(new: value[Any], old: value[Any]) -> bool:
-                return new is not old and not isinstance(new.net.source, CPConstant)
+                return new is not old and not isinstance(new.net.source, HeadNode)
             pairs = list(zip(converted, arg_values))
             converted = [n for n, o in pairs if computed(n, o)] + [n for n, o in pairs if not computed(n, o)]
         arg_values = converted

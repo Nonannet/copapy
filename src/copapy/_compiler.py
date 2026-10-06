@@ -3,17 +3,17 @@ from . import _binwrite as binw
 from ._stencils import stencil_database, patch_entry
 from collections import defaultdict
 import heapq
-from ._basic_types import Net, Node, Store, CPConstant, Op, transl_type, ArrayNet, ArrayConst, ArrayOp, ArrayElement, ArrayPack
+from ._basic_types import Net, Node, Store, HeadNode, Constant, Op, transl_type, ArrayNet, ArrayConst, ArrayOp, ArrayElement, ArrayPack
 
 # Pseudo operation: store register 0 to an array element of an ArrayPack
 PACK_STORE = "pack_store"
 
 
 def is_pack_constant(net: Net) -> bool:
-    """Elements of an ArrayPack that are anonymous constants are written to the
+    """Elements of an ArrayPack that are constants are written to the
     array memory when loading the program instead of storing them on each run.
-    Named constants (copapy values) can be changed by Target.write_value."""
-    return isinstance(net.source, CPConstant) and net.source.anonymous
+    Inputs (copapy values) can be changed by Target.write_value."""
+    return isinstance(net.source, Constant)
 
 
 def stable_toposort(edges: Iterable[tuple[Node, Node]]) -> list[Node]:
@@ -139,7 +139,7 @@ def get_const_nets(nodes: list[Node]) -> list[Net]:
         List of nets whose source node is a Const
     """
     net_lookup = {net.source: net for node in nodes for net in node.args}
-    return [net_lookup[node] for node in nodes if isinstance(node, CPConstant)]
+    return [net_lookup[node] for node in nodes if isinstance(node, HeadNode)]
 
 
 def add_load_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], None, None]:
@@ -175,7 +175,7 @@ def add_load_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], No
                     yield net, Op(f"load_{transl_type(net.dtype)}_reg0_" + '_'.join(type_list), [])
                     registers[0] = net
                 yield element, Op(PACK_STORE, [])
-        elif not isinstance(node, CPConstant | ArrayConst | ArrayElement):
+        elif not isinstance(node, HeadNode | ArrayConst | ArrayElement):
             for i, net in enumerate(node.args):
                 if id(net) != id(registers[i]):  # TODO: consider register swap and commutative ops
                     #if net in registers:
@@ -433,7 +433,7 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
     # Heap variables
     for net, start, lengths in variable_mem_layout:
         variables[net] = (start, lengths, net.dtype)
-        if isinstance(net.source, CPConstant):
+        if isinstance(net.source, HeadNode):
             dw.write_com(binw.Command.COPY_DATA)
             dw.write_int(start)
             dw.write_int(lengths)
@@ -446,7 +446,7 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
             dw.write_bytes(binw.pack_array(net.source.values, net.dtype, sdb.byteorder))
         elif isinstance(net.source, ArrayPack) and any(is_pack_constant(a) for a in net.source.args):
             # Constant elements, the others are stored on each run
-            init = [a.source.value if isinstance(a.source, CPConstant) and is_pack_constant(a) else 0
+            init = [a.source.value if isinstance(a.source, Constant) else 0
                     for a in net.source.args]
             dw.write_com(binw.Command.COPY_DATA)
             dw.write_int(start)

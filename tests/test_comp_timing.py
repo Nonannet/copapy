@@ -6,7 +6,7 @@ import copapy.backend as cpb
 import copapy as cp
 import copapy._binwrite as binw
 from copapy._compiler import get_nets, get_section_layout, get_data_layout
-from copapy._compiler import patch_entry, CPConstant, get_aux_func_layout
+from copapy._compiler import patch_entry, HeadNode, get_aux_func_layout
 
 
 def test_timing_compiler(monkeypatch: pytest.MonkeyPatch):
@@ -113,7 +113,7 @@ def test_timing_compiler(monkeypatch: pytest.MonkeyPatch):
     # Heap variables
     for net, start, lengths in variable_mem_layout:
         variables[net] = (start, lengths, net.dtype)
-        if isinstance(net.source, CPConstant):
+        if isinstance(net.source, HeadNode):
             dw.write_com(binw.Command.COPY_DATA)
             dw.write_int(start)
             dw.write_int(lengths)
