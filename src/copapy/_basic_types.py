@@ -546,25 +546,6 @@ class ArrayElement(Node):
         return self.node_hash
 
 
-class ArrayType(Generic[TNum]):
-    """Interface for vector and tensor types."""
-    def __init__(self, shape: tuple[int, ...]) -> None:
-        self.shape = shape
-        self.values: tuple[TNum | value[TNum], ...] = ()
-
-    def map(self, func: Callable[[TNum | value[TNum]], Any]) -> 'ArrayType[Any]':
-        return self
-
-    def _packed_array(self) -> Any:
-        """Array holding all elements if the elements are only available
-        as array, otherwise None"""
-        return None
-
-    def __bool__(self) -> bool:
-        raise TypeError(f"The truth value of a {type(self).__name__} is ambiguous, "
-                        "compare the .values or the elements instead")
-
-
 def value_from_number(val: Any) -> value[Any]:
     # Create anonymous constant that can be removed during optimization
     new_node = CPConstant(val)

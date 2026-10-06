@@ -538,3 +538,46 @@ def test_bool_tensor_packed() -> None:
     count = packed.sum()
     out, = evaluate(count)
     assert out == 49
+
+
+def test_hybrid_vector() -> None:
+    """Large vectors use array stencils, results equal the scalar path"""
+    n = 100
+    def build(packed: bool | None) -> list[Any]:
+        v1 = cp.vector((cp.value(float(i)) for i in range(n)), packed=packed)
+        v2 = cp.vector((cp.value(float(i % 7) + 0.5) for i in range(n)), packed=packed)
+        s = cp.value(1.5)
+        return [v1 + v2, v1 * s - 1.0, 2.0 / v2, -v1, v1 ** 2, v1 @ v2, v1.sum(), v2.magnitude(),
+                v1.normalize(), v1[10:20], cp.sqrt(v2), v1 > 50.0]
+
+    res_packed = build(None)
+    res_scalar = build(False)
+    assert isinstance(res_packed[0], cp.vector) and res_packed[0]._packed_array() is not None
+    assert res_scalar[0]._packed_array() is None
+
+    out_packed = evaluate(*res_packed)
+    out_scalar = evaluate(*res_scalar)
+    for p, s in zip(out_packed, out_scalar):
+        p_vals = list(p.values) if isinstance(p, cp.vector) else [p]
+        s_vals = list(s.values) if isinstance(s, cp.vector) else [s]
+        assert p_vals == pytest.approx(s_vals, rel=1e-5)
+
+    # Small vectors stay unpacked, the threshold is set per class
+    assert (cp.vector([cp.value(1.0), cp.value(2.0)]) * 2.0)._packed_array() is None
+    assert cp.vector.pack_threshold == cp.tensor.pack_threshold == 64
+
+
+def test_vector_dtype_promotion() -> None:
+    i = cp.value(3)
+    v = cp.vector([i, 2.5, 1])
+    assert v.dtype == 'float' and [type(x).__name__ for x in v.values] == ['value', 'float', 'float']
+    assert cp.vector([1, 2]).dtype == 'int'
+    assert cp.vector(cp.tensor([1, 2])).values == (1, 2)  # 0-d tensors are unwrapped
+
+
+def test_quaternion_not_packed_or_promoted() -> None:
+    """Quaternions keep their elements as given and never use array stencils"""
+    q = cp.quaternion(1, 2, 3.0, cp.value(4))
+    assert q.values[0] == 1 and type(q.values[0]) is int  # no type promotion
+    assert cp.quaternion.pack_threshold is None
+    assert q._get_array() is None and q._get_array(force=True) is None

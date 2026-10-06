@@ -2,8 +2,8 @@ from typing import Iterable, overload, TypeVar, Any, Callable, TypeAlias
 from . import _binwrite as binw
 from coparun_module import coparun, read_data_mem, create_target, clear_target
 import struct
-from ._basic_types import value, Net, Node, Store, NumLike, ArrayType, stencil_db_from_package, ArrayOp, ArrayElement, ArrayConst, ArrayPack, transl_type
-from ._arrays import array
+from ._basic_types import value, Net, Node, Store, NumLike, stencil_db_from_package, ArrayOp, ArrayElement, ArrayConst, ArrayPack, transl_type
+from ._arrays import array, ArrayType
 from ._compiler import compile_to_dag
 
 T = TypeVar("T", int, float)
@@ -173,7 +173,8 @@ class Target():
             packed = variables._packed_array()
             if packed is not None:
                 # Read all elements at once
-                return type(variables)(self.read_value(packed))
+                array_type: Any = type(variables)
+                return array_type(self.read_value(packed))
             return variables.map(lambda v: self.read_value(v))
 
         if isinstance(variables, Iterable):

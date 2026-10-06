@@ -39,7 +39,9 @@ def show_dag(val: value[Any]):
     print('--')
 
 
-def test_get_dag_stats():
+def test_get_dag_stats(monkeypatch: pytest.MonkeyPatch):
+    # Scalar DAG optimization: vectors are not packed into arrays
+    monkeypatch.setattr(cp.vector, 'pack_threshold', None)
 
     sum_size = 10
     v_size = 200
@@ -159,7 +161,7 @@ def test_int_to_float_conversion_errors():
 
 
 if __name__ == "__main__":
-    test_get_dag_stats()
+    test_get_dag_stats(pytest.MonkeyPatch())
     test_dag_reduction()
     test_square_stencil()
     test_square_stencil_result()

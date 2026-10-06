@@ -1,3 +1,4 @@
+import pytest
 import time
 from copapy import backend
 from copapy.backend import Store, stencil_db_from_package
@@ -8,7 +9,9 @@ from copapy._compiler import get_nets, get_section_layout, get_data_layout
 from copapy._compiler import patch_entry, CPConstant, get_aux_func_layout
 
 
-def test_timing_compiler():
+def test_timing_compiler(monkeypatch: pytest.MonkeyPatch):
+    # Timing of the scalar compiler pipeline: vectors are not packed into arrays
+    monkeypatch.setattr(cp.vector, 'pack_threshold', None)
     t1 = cp.vector([10, 11]*128) + cp.vector(cp.value(v) for v in range(256))
     #t2 = t1.sum()
     t3 = cp.vector(cp.value(1 / (v + 1)) for v in range(256))
@@ -205,4 +208,4 @@ def test_timing_compiler():
 
 
 if __name__ == "__main__":
-    test_timing_compiler()
+    test_timing_compiler(pytest.MonkeyPatch())

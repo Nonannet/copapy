@@ -1,6 +1,6 @@
-from copapy._basic_types import NumLike, ArrayType, value_from_number
+from copapy._basic_types import NumLike, value_from_number
 from . import value
-from ._arrays import array, element_dtype, convert_element
+from ._arrays import ArrayType
 from ._vectors import vector, VecFloatLike, VecIntLike, VecNumLike
 from ._mixed import mixed_sum
 from typing import TypeVar, Any, overload, TypeAlias, Callable, Iterator, Sequence, Iterable
@@ -21,8 +21,6 @@ class tensor(ArrayType[TNum]):
     """
 
     pack_threshold: int | None = 64
-    """A tensor is packed if more elements than pack_threshold are copapy values
-    or constants other than zero, None disables packing"""
 
     def __init__(self, values: 'TNum | value[TNum] | vector[TNum] | tensor[TNum] | TensorSequence[TNum] | Iterable[TNum | value[TNum]]',
                  shape: Sequence[int] | None = None, packed: bool | None = None):
@@ -35,15 +33,8 @@ class tensor(ArrayType[TNum]):
             packed: True to always use array stencils for this tensor, False to never
                 use them, None to decide by tensor.pack_threshold.
         """
-        # The elements are defined by _values if set, otherwise by _array
-        self._values: tuple[TNum | value[TNum], ...] | None = None  # Element values
-        self._array: array[Any] | None = None  # Packed array
-        self._element_refs: tuple[value[TNum], ...] | None = None  # Cached references into _array
-        self._packed: bool | None = packed
-        self._dtype: str = 'float'
-
+        flat_values: tuple[Any, ...]
         if shape:
-            self.shape: tuple[int, ...] = tuple(shape)
             flat_list: list[Any] = []
             assert isinstance(values, Iterable), "Values must be a sequence of scalars if shape is provided"
             for v in values:
@@ -52,142 +43,29 @@ class tensor(ArrayType[TNum]):
                 if not isinstance(v, (value, int, float)):
                     raise ValueError("Values must be a sequence of scalars if shape is provided")
                 flat_list.append(v)
-            flat_values: tuple[TNum | value[TNum], ...] = tuple(flat_list)
+            flat_values = tuple(flat_list)
+            new_shape: tuple[int, ...] = tuple(shape)
             size = 1
-            for dim in self.shape:
+            for dim in new_shape:
                 size *= dim
             if len(flat_values) != size:
-                raise ValueError(f"Number of values ({len(flat_values)}) does not match shape {self.shape}")
-            self._values = flat_values
-            self.ndim: int = len(shape)
-        elif isinstance(values, (int, float)):
+                raise ValueError(f"Number of values ({len(flat_values)}) does not match shape {new_shape}")
+        elif isinstance(values, (int, float, value)):
             # Scalar case: 0-dimensional tensor
-            self.shape = ()
-            self._values = (values,)
-            self.ndim = 0
-        elif isinstance(values, value):
-            # Scalar value case
-            self.shape = ()
-            self._values = (values,)
-            self.ndim = 0
+            flat_values, new_shape = (values,), ()
         elif isinstance(values, vector):
             # 1D case from vector
-            self.shape = (len(values),)
-            self._values = values.values
-            self.ndim = 1
+            flat_values, new_shape = values.values, (len(values),)
         elif isinstance(values, tensor):
             # Copy constructor
-            self.shape = values.shape
-            self.ndim = values.ndim
-            self._dtype = values._dtype
-            if packed is False:
-                self._values = values.values
-            else:
-                self._values = values._values
-                self._array = values._array
-                self._element_refs = values._element_refs
+            self._copy_elements(values, packed)
             return
         else:
             # General n-dimensional case
             assert isinstance(values, Sequence), "Values must be a sequence if shape is not provided"
-            self._values, self.shape = self._infer_shape_and_flatten(values)
-            self.ndim = len(self.shape)
+            flat_values, new_shape = self._infer_shape_and_flatten(values)
 
-        self._dtype = element_dtype(self._values)
-        self._values = tuple(convert_element(v, self._dtype) for v in self._values)
-
-    @classmethod
-    def _from_array(cls, arr: 'array[Any]', packed: bool | None = None) -> 'tensor[Any]':
-        """Tensor backed by an array, the element values are references to the array memory"""
-        ret: tensor[Any] = cls.__new__(cls)
-        ret._values = None
-        ret._array = arr
-        ret._element_refs = None
-        ret._packed = packed
-        ret._dtype = arr.dtype
-        ret.shape = arr.shape
-        ret.ndim = arr.ndim
-        return ret
-
-    @property
-    def dtype(self) -> str:
-        """Type of all elements"""
-        return self._dtype
-
-    # Read-only for tensors, ArrayType declares it writable for vector and quaternion
-    @property
-    def values(self) -> tuple[TNum | value[TNum], ...]:  # type: ignore[override]
-        """Flat tuple of all elements"""
-        if self._values is not None:
-            return self._values
-        if self._element_refs is None:
-            assert self._array is not None
-            self._element_refs = tuple(self._array.element(i) for i in range(self._array.size))
-        return self._element_refs
-
-    def _get_array(self, force: bool = False) -> 'array[Any] | None':
-        """Packed array of the tensor if array stencils are used for it
-
-        Packed are tensors with more than pack_threshold elements that are copapy
-        values or constants other than zero. Operations with zeros are eliminated
-        in the scalar path, so only these elements generate code there.
-
-        Arguments:
-            force: Pack a tensor containing copapy values independent of
-                pack_threshold, constant tensors are only packed by the rule above
-        """
-        if self._packed is False or self.ndim == 0:
-            return None
-        if self._array is None:
-            values = self.values
-            if not self._packed and not (force and not self._is_constant()):
-                threshold = tensor.pack_threshold
-                if threshold is None or sum(1 for v in values if isinstance(v, value) or v != 0) <= threshold:
-                    return None
-            self._array = array(list(values), self._dtype).reshape(*self.shape)
-        return self._array
-
-    def _is_constant(self) -> bool:
-        """True if all elements are numbers (no copapy values)"""
-        return self._values is not None and not any(isinstance(v, value) for v in self._values)
-
-    def _view_array(self) -> 'array[Any] | None':
-        """Array for reshaping, transposing and slicing: only if the tensor is already
-        packed and not made of constants, a copy of constants does not generate code"""
-        if self._array is None or self._packed is False:
-            return None
-        if self._values is not None and not any(isinstance(v, value) for v in self._values):
-            return None
-        return self._array
-
-    def _packed_array(self) -> 'array[Any] | None':
-        if self._values is None:
-            return self._array
-        return None
-
-    def _array_op(self, other: Any, op: str, reverse: bool = False) -> 'tensor[Any] | None':
-        """Element-wise operation with array stencils, None if not applicable"""
-        if self._is_constant() and (isinstance(other, int | float) or (isinstance(other, tensor) and other._is_constant())):
-            return None  # Constants are evaluated at trace time
-        a = self._get_array()
-        if isinstance(other, tensor):
-            b = other._get_array()
-            if a is None and b is None:
-                return None
-            if a is None:
-                a = self._get_array(force=True)
-            if b is None:
-                b = other._get_array(force=True)
-            if a is None or b is None:
-                return None
-            return tensor._from_array(a._binary_op(op, b, reverse))
-        if a is None or isinstance(other, bool) or not isinstance(other, value | int | float) or \
-           (isinstance(other, value) and other.dtype == 'bool'):
-            return None
-        if not reverse and isinstance(other, int | float) and \
-           ((op in ('add', 'sub') and other == 0) or (op == 'mul' and other == 1)):
-            return self
-        return tensor._from_array(a._binary_op(op, other, reverse))
+        self._set_elements(flat_values, new_shape, packed)
 
     @staticmethod
     def _infer_shape_and_flatten(values: Sequence[Any]) -> tuple[tuple[Any, ...], tuple[int, ...]]:
@@ -724,7 +602,7 @@ class tensor(ArrayType[TNum]):
 
         if self._array is not None and self._packed is not False:
             # Same memory, same element order
-            ret = tensor._from_array(self._array.reshape(*new_shape), self._packed)
+            ret: tensor[Any] = tensor._from_array(self._array.reshape(*new_shape), self._packed)
             ret._values = self._values
             ret._element_refs = self._element_refs
             return ret
@@ -826,7 +704,10 @@ class tensor(ArrayType[TNum]):
                 b = b if b is not None else other_t._get_array(force=True)
                 if a is not None and b is not None:
                     ret = a.matmul(b)
-                    return ret if isinstance(ret, value) else tensor._from_array(ret)
+                    if isinstance(ret, value):
+                        return ret
+                    packed_result: tensor[Any] = tensor._from_array(ret)
+                    return packed_result
 
         # For 1D x 1D: dot product (returns scalar)
         if self.ndim == 1 and other.ndim == 1:
