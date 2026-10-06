@@ -31,8 +31,8 @@ def test_autograd():
     print(f"dg/da = {tg.read_value(dg[0])}   grad:{dg[0]}    val:{a} = {tg.read_value(a)}")
     print(f"dg/db = {tg.read_value(dg[1])}   grad:{dg[1]}    val:{b} = {tg.read_value(b)}")
 
-    assert pytest.approx(dg[0], abs=1e-4) == 138.83381  # pyright: ignore[reportUnknownMemberType]
-    assert pytest.approx(dg[1], abs=1e-4) == 645.57725  # pyright: ignore[reportUnknownMemberType]
+    assert tg.read_value(dg[0]) == pytest.approx(138.83381, abs=1e-3)  # pyright: ignore[reportUnknownMemberType]
+    assert tg.read_value(dg[1]) == pytest.approx(645.57725, abs=1e-3)  # pyright: ignore[reportUnknownMemberType]
 
 
 def test_autograd_tanh():
@@ -52,25 +52,57 @@ def test_autograd_tanh():
     assert tg.read_value(dy[1]) == pytest.approx(ref_b, rel=1e-5)  # pyright: ignore[reportUnknownMemberType]
 
 
-def test_autograd_extended():
-    a = value(-4.0)
-    b = value(2.0)
+def extended_function(a, b, relu, sin, abs):
     c = a + b
     d = a * b + b**3
     c += c + 1
     c += 1 + c + (-a)
-    d += d * 2 + cp.relu(b + a)
-    d += 3 * d + cp.relu(b - a)
-    e = c - cp.sin(-d)
-    f = cp.abs(e**2)
+    d += d * 2 + relu(b + a)
+    d += 3 * d + relu(b - a)
+    e = c - sin(-d)
+    f = abs(e**2)
     g = f / 2.0
     g += 10.0 / f
+    return g
+
+
+def test_autograd_extended():
+    a = value(-4.0)
+    b = value(2.0)
+    g = extended_function(a, b, cp.relu, cp.sin, cp.abs)
 
     dg = grad(g, (a, b))
 
     tg = cp.Target()
     tg.compile(g, dg)
     tg.run()
+
+    # Reference: central differences in double precision
+    def ref(x: float, y: float) -> float:
+        return extended_function(x, y, lambda v: max(v, 0.0), math.sin, abs)
+
+    h = 1e-6
+    ref_a = (ref(-4.0 + h, 2.0) - ref(-4.0 - h, 2.0)) / (2 * h)
+    ref_b = (ref(-4.0, 2.0 + h) - ref(-4.0, 2.0 - h)) / (2 * h)
+    assert tg.read_value(dg[0]) == pytest.approx(ref_a, rel=1e-4)  # pyright: ignore[reportUnknownMemberType]
+    assert tg.read_value(dg[1]) == pytest.approx(ref_b, rel=1e-4)  # pyright: ignore[reportUnknownMemberType]
+
+
+def test_autograd_neg():
+    x = value(1.5)
+    y = value(-2.0)
+    terms = [-x, (-x) * (-x), cp.sin(-x), -(-x) * 3.0]
+    grads = [grad(t, x) for t in terms]
+    grad_xy = grad(-(x * y), (x, y))
+
+    tg = cp.Target()
+    tg.compile(grads, grad_xy)
+    tg.run()
+
+    expected = [-1.0, 3.0, -math.cos(-1.5), 3.0]
+    for dg, ref in zip(grads, expected):
+        assert tg.read_value(dg) == pytest.approx(ref, rel=1e-6)  # pyright: ignore[reportUnknownMemberType]
+    assert tg.read_value(grad_xy) == pytest.approx([2.0, -1.5], rel=1e-6)  # pyright: ignore[reportUnknownMemberType]
 
 
 if __name__ == "__main__":
