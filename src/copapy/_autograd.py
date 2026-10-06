@@ -107,6 +107,9 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
             elif opn == 'neg':
                 add_grad(a, -b)
 
+            elif opn == 'float':
+                add_grad(a, g)  # int to float conversion
+
             elif opn == 'sin':
                 add_grad(a, g * cp.cos(a))
 
