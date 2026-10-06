@@ -75,11 +75,12 @@ def get_op_code(op: str, type1: str, type2: str, type_out: str) -> str:
 
 
 @norm_indent
-def get_cast(type1: str, type2: str, type_out: str) -> str:
-    return f"""
-    STENCIL void cast_{type_out}_{type1}_{type2}({type1} arg1, {type2} arg2) {{
-        result_{type_out}_{type2}(({type1})arg1, arg2);
-    }}
+def get_int_to_float() -> str:
+    """Conversion of int to float."""
+    return """
+    STENCIL void float_int(int arg1) {
+        result_float((float)arg1);
+    }
     """
 
 
@@ -520,13 +521,10 @@ if __name__ == "__main__":
 
     code += get_entry_function_shell()
 
-    for t1, t2 in permutate(types, types):
-        t_out = 'int' if t1 == 'float' else 'float'
-        code += get_cast(t1, t2, t_out)
+    code += get_int_to_float()
 
-    fnames = ['get_42', 'tanh']
-    for fn, t1 in permutate(fnames, types):
-        code += get_func1(fn, t1)
+    for fn in ['get_42', 'tanh']:
+        code += get_func1(fn, 'float')
 
     for t in types:
         code += get_neg(t)
@@ -535,8 +533,8 @@ if __name__ == "__main__":
         code += get_custom_stencil(f"square_{t}({t} arg1)", f"result_{t}(arg1 * arg1);")
 
     fnames = ['sqrt', 'exp', 'log', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan']
-    for fn, t1 in permutate(fnames, types):
-        code += get_math_func1(fn + 'f', t1, fn)
+    for fn in fnames:
+        code += get_math_func1(fn + 'f', 'float', fn)
 
     code += get_math_func1('fabsf', 'float', 'abs')
     code += get_custom_stencil('abs_int(int arg1)', 'result_int(__builtin_abs(arg1));')
@@ -544,24 +542,23 @@ if __name__ == "__main__":
     for t in types:
         code += get_custom_stencil(f"sign_{t}({t} arg1)", "result_int((arg1 > 0) - (arg1 < 0));")
 
-    fnames = ['atan2', 'pow']
-    for fn, t1, t2 in permutate(fnames, types, types):
-        code += get_math_func2(fn, t1, t2)
+    for fn in ['atan2', 'pow']:
+        code += get_math_func2(fn, 'float', 'float')
 
-    for t1, t2 in permutate(types, types):
-        code += get_min(t1, t2)
-        code += get_max(t1, t2)
+    for t in types:
+        code += get_min(t, t)
+        code += get_max(t, t)
 
-    for op, t1, t2 in permutate(ops, types, types):
-        t_out = t1 if t1 == t2 else 'float'
+    for op, t in permutate(ops, types):
         if op == 'floordiv':
-            code += get_floordiv('floordiv', t1, t2)
+            code += get_floordiv('floordiv', t, t)
         elif op == 'div':
-            code += get_op_code_float(op, t1, t2)
+            if t == 'float':
+                code += get_op_code_float(op, t, t)
         elif op in {'gt', 'eq', 'ge', 'ne'}:
-            code += get_op_code(op, t1, t2, 'int')
+            code += get_op_code(op, t, t, 'int')
         else:
-            code += get_op_code(op, t1, t2, t_out)
+            code += get_op_code(op, t, t, t)
 
     for op in int_ops:
         code += get_op_code(op, 'int', 'int', 'int')

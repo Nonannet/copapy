@@ -2,6 +2,7 @@ import copapy as cp
 from copapy import value
 from copapy.backend import get_dag_stats, Store
 import copapy.backend as cpb
+import math
 import pytest
 from typing import Any
 
@@ -53,7 +54,10 @@ def test_get_dag_stats():
     print(stat)
 
     assert stat['const_float'] == 2 * v_size
-    assert stat['add_float_float'] == sum_size * v_size - 2
+    # The int constants i and 7 are converted to float (once per constant),
+    # then both additions per element and the sum are float additions
+    assert stat['float_int'] == 2 * sum_size
+    assert stat['add_float_float'] == 3 * sum_size * v_size - 2
 
 
 def test_dag_reduction():
@@ -110,8 +114,54 @@ def test_square_stencil_result():
         assert tg.read_value(test) == pytest.approx(ref, rel=1e-4, abs=1e-4)
 
 
+def run(*vals: Any) -> list[Any]:
+    tg = cp.Target()
+    tg.compile(*vals)
+    tg.run()
+    return [tg.read_value(v) for v in vals]
+
+
+def test_int_to_float_conversion():
+    """Float-only operations and mixed types use float stencils, int arguments
+    are converted by the float_int stencil, int constants at trace time"""
+    x = value(2.5)
+    i = value(3)
+    j = value(-2)
+
+    # Int constants are converted at trace time
+    assert 'float_int' not in emitted_ops(x + 1)
+    assert 'add_float_float' in emitted_ops(x + 1)
+    assert 'float_int' not in emitted_ops(cp.sin(value(1.0)) * 2)
+
+    # Int variables are converted at runtime, int-int operations stay int
+    assert emitted_ops(cp.sin(i)).count('float_int') == 1
+    assert 'sin_float' in emitted_ops(cp.sin(i))
+    assert 'add_int_int' in emitted_ops(i + j)
+    assert 'float_int' not in emitted_ops(i + j)
+    assert emitted_ops(i / j).count('float_int') == 2
+
+    # Commutative ops: the converted argument comes first (it is still in register 0)
+    s = x * i
+    assert isinstance(s.net.source, cpb.Op) and s.net.source.args[0].source.name == 'float_int'
+
+    results = run(cp.sin(i), i + x, x + i, x * i, i / j, i // 2.0, x > i, i == 3.0,
+                  cp.pow(i, 2), cp.atan2(i, x), cp.minimum(i, x), cp.sqrt(value(9)), i + j)
+    expected = [math.sin(3), 5.5, 5.5, 7.5, -1.5, 1.0, 0, 1, 9.0, math.atan2(3, 2.5), 2.5, 3.0, 1]
+    for r, e in zip(results, expected):
+        assert r == pytest.approx(e, rel=1e-6)
+    assert isinstance(results[-1], int)
+    assert isinstance(results[4], float)
+
+
+def test_int_to_float_conversion_errors():
+    with pytest.raises(NotImplementedError, match='mod not implemented for float and int'):
+        value(2.5) % value(2)
+
+
 if __name__ == "__main__":
     test_get_dag_stats()
     test_dag_reduction()
     test_square_stencil()
     test_square_stencil_result()
+    test_int_to_float_conversion()
+    test_int_to_float_conversion_errors()

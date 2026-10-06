@@ -601,16 +601,38 @@ def iif(expression: Any, true_result: Any, false_result: Any) -> Any:
     return (expression != 0) * true_result + (expression == 0) * false_result
 
 
+def to_float(val: value[Any]) -> value[Any]:
+    """Convert an int value to float: constants at trace time, variables by
+    the float_int stencil. Float values are returned unchanged."""
+    if transl_type(val.dtype) != 'int':
+        return val
+    source = val.net.source
+    if isinstance(source, CPConstant) and source.anonymous:
+        return value_from_number(float(source.value))
+    return add_op('float', [val])
+
+
 def add_op(op: str, args: list[value[Any] | int | float], commutative: bool = False, dtype: str | None = None) -> value[Any]:
     arg_values = [a if isinstance(a, value) else value_from_number(a) for a in args]
-
-    if commutative:
-        arg_values = sorted(arg_values, key=lambda a: a.dtype)  # TODO: update the stencil generator to generate only sorted order
+    arg_dtypes = [a.dtype for a in arg_values]
 
     typed_op = '_'.join([op] + [transl_type(a.dtype) for a in arg_values])
 
+    if typed_op not in generic_sdb.stencil_definitions and any(transl_type(a.dtype) == 'int' for a in arg_values):
+        # Float-only operations and operations with mixed argument types
+        # have only float stencils: convert the int arguments
+        converted = [to_float(a) for a in arg_values]
+        if commutative:
+            # A converted variable is computed last and is still in register 0
+            def computed(new: value[Any], old: value[Any]) -> bool:
+                return new is not old and not isinstance(new.net.source, CPConstant)
+            pairs = list(zip(converted, arg_values))
+            converted = [n for n, o in pairs if computed(n, o)] + [n for n, o in pairs if not computed(n, o)]
+        arg_values = converted
+        typed_op = '_'.join([op] + [transl_type(a.dtype) for a in arg_values])
+
     if typed_op not in generic_sdb.stencil_definitions:
-        raise NotImplementedError(f"Operation {op} not implemented for {' and '.join([a.dtype for a in arg_values])}")
+        raise NotImplementedError(f"Operation {op} not implemented for {' and '.join(arg_dtypes)}")
 
     result_type = generic_sdb.stencil_definitions[typed_op].split('_')[0]
 
