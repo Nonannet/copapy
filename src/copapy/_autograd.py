@@ -35,7 +35,7 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
 
     if isinstance(y, value):
         y_set = {y}
-    if isinstance(y, tensor):
+    elif isinstance(y, tensor):
         y_set = {v.get_scalar(0) for v in y.flatten()}
     else:
         assert isinstance(y, Sequence) or isinstance(y, vector) or isinstance(y, quaternion)
@@ -105,7 +105,7 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
                 add_grad(a, g * cp.sign(a))
 
             elif opn == 'neg':
-                add_grad(a, -b)
+                add_grad(a, -g)
 
             elif opn == 'float':
                 add_grad(a, g)  # int to float conversion

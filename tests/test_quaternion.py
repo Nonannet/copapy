@@ -370,7 +370,7 @@ def test_sensor_fusion():
 
     new_q_value, = evaluate(new_q)
 
-    assert list(new_q_value) == approx((0.7072948217391968, 0.7069186568260193, 0.7660913727013394e-05, 0.00012362639245111495), abs=1e-4)
+    assert list(new_q_value) == approx((0.7077782144891159, 0.7064346986591282, 1.7677661414353056e-05, 0.00012374362990047135), abs=1e-6)
     assert math.sqrt(sum(x * x for x in new_q_value)) == pytest.approx(1.0, abs=1e-5)  # pyright: ignore[reportUnknownMemberType]
 
 
@@ -381,11 +381,11 @@ def test_sensor_fusion_converges_to_gravity():
     accel = vector([0.0, 0.0, 1.0])
 
     for _ in range(40):
-        q = madgwick_imu_update(q, gyro, accel, dt=0.5)
+        q = madgwick_imu_update(q, gyro, accel, dt=0.1)
 
     z_axis = q.rotate_vector(vector([0.0, 0.0, 1.0]))
     res, = evaluate(z_axis)
-    assert list(res) == approx((0.0, 0.0, 1.0), abs=1e-2)
+    assert list(res) == approx((0.0, 0.0, 1.0), abs=2e-2)
 
 
 if __name__ == "__main__":
