@@ -21,7 +21,8 @@ class tensor(ArrayType[TNum]):
     """
 
     pack_threshold: int | None = 64
-    """Minimum number of elements for packing a tensor, None disables packing"""
+    """A tensor is packed if more elements than pack_threshold are copapy values
+    or constants other than zero, None disables packing"""
 
     def __init__(self, values: 'TNum | value[TNum] | vector[TNum] | tensor[TNum] | TensorSequence[TNum] | Iterable[TNum | value[TNum]]',
                  shape: Sequence[int] | None = None, packed: bool | None = None):
@@ -116,18 +117,22 @@ class tensor(ArrayType[TNum]):
     def _get_array(self, force: bool = False) -> 'array[Any] | None':
         """Packed array of the tensor if array stencils are used for it
 
+        Packed are tensors with more than pack_threshold elements that are copapy
+        values or constants other than zero. Operations with zeros are eliminated
+        in the scalar path, so only these elements generate code there.
+
         Arguments:
-            force: Pack the tensor independent of pack_threshold
+            force: Pack a tensor containing copapy values independent of
+                pack_threshold, constant tensors are only packed by the rule above
         """
         if self._packed is False or self.ndim == 0:
             return None
         if self._array is None:
-            threshold = tensor.pack_threshold
-            if not (force or self._packed or (threshold is not None and self.size() >= threshold)):
-                return None
             values = self.values
-            if not self._packed and self._is_constant() and sum(1 for v in values if v == 0) * 2 >= len(values):
-                return None  # Sparse constants: operations with zeros are eliminated in the scalar path
+            if not self._packed and not (force and not self._is_constant()):
+                threshold = tensor.pack_threshold
+                if threshold is None or sum(1 for v in values if isinstance(v, value) or v != 0) <= threshold:
+                    return None
             dtype = array_dtype(values, strict=True)
             if dtype is None:
                 return None

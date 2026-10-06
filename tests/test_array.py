@@ -370,12 +370,22 @@ def test_hybrid_threshold_and_constants() -> None:
     assert (small * 2.0)._packed_array() is None
     assert (large * 2.0)._packed_array() is not None
 
-    # Constants are still evaluated at trace time and sparse constants stay unpacked
+    # Only copapy values and constants other than zero count for the threshold (64)
+    def mixed(n_values: int, n_nonzero: int) -> Any:
+        return cp.tensor([cp.value(1.0)] * n_values + [2.5] * n_nonzero + [0.0] * (200 - n_values - n_nonzero))
+    assert mixed(64, 0)._get_array() is None
+    assert mixed(65, 0)._get_array() is not None
+    assert mixed(30, 34)._get_array() is None
+    assert mixed(30, 35)._get_array() is not None
+    assert cp.eye(100)._get_array() is not None  # 100 ones
+
+    # Constants are still evaluated at trace time and sparse constants stay unpacked,
+    # also if the other operand is packed
     const = cp.tensor([float(i) for i in range(100)])
     assert (const * 2.0).values[3] == 6.0
-    eye = cp.eye(100)
-    assert eye._get_array() is None
-    res = eye @ large
+    sparse = cp.tensor([[1.0 if i == j and i < 50 else 0.0 for j in range(100)] for i in range(100)])
+    assert sparse._get_array() is None
+    res = sparse @ large
     assert res.values[5] is large.values[5]  # multiplications by 0 and 1 eliminated
 
     threshold = cp.tensor.pack_threshold
