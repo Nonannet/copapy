@@ -1,4 +1,4 @@
-from typing import Any, Generic, Sequence, Iterable, overload
+from typing import Any, Generic, Sequence, Iterable, Callable, TypeVar, overload
 from ._basic_types import value, Net, ArrayNet, ArrayConst, ArrayOp, ArrayElement, ArrayPack, NumLike, transl_type, value_from_number, generic_sdb, to_float
 from ._helper_types import TNum
 
@@ -449,3 +449,157 @@ class array(Generic[TNum]):
     @staticmethod
     def flatten_data(data: Iterable[Any] | Sequence[Any]) -> list[Any]:
         return _flatten(data)[0]
+
+
+TArrayType = TypeVar('TArrayType', bound='ArrayType[Any]')
+
+
+class ArrayType(Generic[TNum]):
+    """Base class for a fixed number of elements that are numbers or
+    copapy values.
+    """
+
+    pack_threshold: int | None = None
+    """Instances are packed if more elements than pack_threshold are copapy values
+    or constants other than zero, None disables packing and type promotion"""
+
+    shape: tuple[int, ...]
+    ndim: int
+
+    # The elements are defined by _values if set, otherwise by _array
+    _values: tuple[TNum | value[TNum], ...] | None  # Element values
+    _array: array[Any] | None  # Packed array
+    _element_refs: tuple[value[TNum], ...] | None  # Cached references into _array
+    _packed: bool | None  # True/False: always/never use array stencils, None: by pack_threshold
+    _dtype: str
+
+    def _set_elements(self, values: Iterable[Any], shape: tuple[int, ...], packed: bool | None = None) -> None:
+        """Set the elements, converted to their common type if packing is enabled for the class"""
+        self._values = tuple(values)
+        self._array = None
+        self._element_refs = None
+        self._packed = packed
+        self.shape = shape
+        self.ndim = len(shape)
+        dtype = element_dtype(self._values)
+        self._dtype = dtype
+        if type(self).pack_threshold is not None:
+            self._values = tuple(convert_element(v, dtype) for v in self._values)
+
+    def _copy_elements(self, other: 'ArrayType[Any]', packed: bool | None = None) -> None:
+        """Take over the elements (and packed array) of another instance"""
+        self.shape = other.shape
+        self.ndim = other.ndim
+        self._dtype = other._dtype
+        self._packed = packed
+        self._element_refs = None
+        if packed is False:
+            self._values = other.values
+            self._array = None
+        else:
+            self._values = other._values
+            self._array = other._array
+            self._element_refs = other._element_refs
+
+    @classmethod
+    def _from_array(cls: type[TArrayType], arr: array[Any], packed: bool | None = None) -> TArrayType:
+        """Instance backed by an array, the elements are references to the array memory"""
+        ret = cls.__new__(cls)
+        ret._values = None
+        ret._array = arr
+        ret._element_refs = None
+        ret._packed = packed
+        ret._dtype = arr.dtype
+        ret.shape = arr.shape
+        ret.ndim = arr.ndim
+        return ret
+
+    @property
+    def values(self) -> tuple[TNum | value[TNum], ...]:
+        """Flat tuple of all elements"""
+        if self._values is not None:
+            return self._values
+        if self._element_refs is None:
+            assert self._array is not None
+            self._element_refs = tuple(self._array.element(i) for i in range(self._array.size))
+        return self._element_refs
+
+    @property
+    def dtype(self) -> str:
+        """Type of the elements: 'int', 'float' or 'bool'"""
+        return self._dtype
+
+    def map(self, func: Callable[[TNum | value[TNum]], Any]) -> 'ArrayType[Any]':
+        return self
+
+    def __bool__(self) -> bool:
+        raise TypeError(f"The truth value of a {type(self).__name__} is ambiguous, "
+                        "compare the .values or the elements instead")
+
+    def _get_array(self, force: bool = False) -> 'array[Any] | None':
+        """Packed array of the elements if array stencils are used for them
+
+        Packed are instances with more than pack_threshold elements that are copapy
+        values or constants other than zero. Operations with zeros are eliminated
+        in the scalar path, so only these elements generate code there.
+
+        Arguments:
+            force: Pack an instance containing copapy values independent of
+                pack_threshold, constant instances are only packed by the rule above
+        """
+        threshold = type(self).pack_threshold
+        if self._packed is False or (threshold is None and not self._packed) or not self.shape:
+            return None
+        if self._array is None:
+            values = self.values
+            if not self._packed and not (force and not self._is_constant()):
+                assert threshold is not None
+                if sum(1 for v in values if isinstance(v, value) or v != 0) <= threshold:
+                    return None
+            self._array = array(list(values), self._dtype).reshape(*self.shape)
+        return self._array
+
+    def _is_constant(self) -> bool:
+        """True if all elements are numbers (no copapy values)"""
+        return self._values is not None and not any(isinstance(v, value) for v in self._values)
+
+    def _view_array(self) -> 'array[Any] | None':
+        """Array for reshaping, transposing and slicing: only if the instance is already
+        packed and not made of constants, a copy of constants does not generate code"""
+        if self._array is None or self._packed is False:
+            return None
+        if self._values is not None and not any(isinstance(v, value) for v in self._values):
+            return None
+        return self._array
+
+    def _packed_array(self) -> 'array[Any] | None':
+        """Array holding all elements if the elements are only available
+        as array, otherwise None"""
+        if self._values is None:
+            return self._array
+        return None
+
+    def _array_op(self: TArrayType, other: Any, op: str, reverse: bool = False) -> TArrayType | None:
+        """Element-wise operation with array stencils, None if not applicable.
+        The result has the class of self."""
+        if self._is_constant() and (isinstance(other, int | float) or (isinstance(other, ArrayType) and other._is_constant())):
+            return None  # Constants are evaluated at trace time
+        a = self._get_array()
+        if isinstance(other, ArrayType):
+            b = other._get_array()
+            if a is None and b is None:
+                return None
+            if a is None:
+                a = self._get_array(force=True)
+            if b is None:
+                b = other._get_array(force=True)
+            if a is None or b is None:
+                return None
+            return type(self)._from_array(a._binary_op(op, b, reverse))
+        if a is None or isinstance(other, bool) or not isinstance(other, value | int | float) or \
+           (isinstance(other, value) and other.dtype == 'bool'):
+            return None
+        if not reverse and isinstance(other, int | float) and \
+           ((op in ('add', 'sub') and other == 0) or (op == 'mul' and other == 1)):
+            return self
+        return type(self)._from_array(a._binary_op(op, other, reverse))

@@ -3,7 +3,8 @@ from ._mixed import mixed_sum, mixed_homogenize
 from typing import Sequence, TypeVar, Iterable, Any, overload, TypeAlias, Callable, Iterator
 import copapy as cp
 from ._helper_types import TNum
-from ._basic_types import ArrayType, value_from_number
+from ._basic_types import value_from_number
+from ._arrays import ArrayType
 
 #VecNumLike: TypeAlias = 'vector[int] | vector[float] | value[int] | value[float] | int | float | bool'
 VecNumLike: TypeAlias = 'vector[Any] | value[Any] | int | float | bool'
@@ -22,15 +23,20 @@ class vector(ArrayType[TNum]):
         ndim (int): Number of dimensions (always 1 for vector).
         shape (tuple[int, ...]): Shape of the vector as a tuple.
     """
-    def __init__(self, values: Iterable[TNum | value[TNum]]):
+
+    pack_threshold: int | None = 64
+
+    def __init__(self, values: Iterable[TNum | value[TNum]], packed: bool | None = None):
         """Create a vector with given values.
 
         Arguments:
             values: iterable of constant values
+            packed: True to always use array stencils for this vector, False to never
+                use them, None to decide by vector.pack_threshold.
         """
-        self.values: tuple[value[TNum] | TNum, ...] = tuple(values)
-        self.ndim: int = 1
-        self.shape: tuple[int, ...] = (len(self.values),)
+        # 0-d tensors (e.g. from iterating a 1D tensor) are unwrapped to their scalar
+        elements = tuple(v.values[0] if isinstance(v, ArrayType) and not v.shape else v for v in values)
+        self._set_elements(elements, (len(elements),), packed)
 
     def __repr__(self) -> str:
         return f"vector({self.values})"
@@ -44,10 +50,16 @@ class vector(ArrayType[TNum]):
     def __getitem__(self, index: slice) -> 'vector[TNum]': ...
     def __getitem__(self, index: int | slice) -> 'vector[TNum] | value[TNum] | TNum':
         if isinstance(index, slice):
+            arr = self._view_array()
+            if arr is not None:
+                return vector._from_array(arr[index])
             return vector(self.values[index])
         return self.values[index]
 
     def __neg__(self) -> 'vector[TNum]':
+        arr = None if self._is_constant() else self._get_array()
+        if arr is not None:
+            return vector._from_array(-arr)
         return vector(-a for a in self.values)
 
     def __iter__(self) -> Iterator[value[TNum] | TNum]:
@@ -73,6 +85,9 @@ class vector(ArrayType[TNum]):
     @overload
     def __add__(self, other: VecNumLike) -> 'vector[int] | vector[float]': ...
     def __add__(self, other: VecNumLike) -> Any:
+        ret = self._array_op(other, 'add')
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a + b for a, b in zip(self.values, other.values))
@@ -99,6 +114,9 @@ class vector(ArrayType[TNum]):
     @overload
     def __sub__(self, other: VecNumLike) -> 'vector[int] | vector[float]': ...
     def __sub__(self, other: VecNumLike) -> Any:
+        ret = self._array_op(other, 'sub')
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a - b for a, b in zip(self.values, other.values))
@@ -114,6 +132,9 @@ class vector(ArrayType[TNum]):
     @overload
     def __rsub__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __rsub__(self, other: VecNumLike) -> Any:
+        ret = self._array_op(other, 'sub', reverse=True)
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(b - a for a, b in zip(self.values, other.values))
@@ -131,6 +152,9 @@ class vector(ArrayType[TNum]):
     @overload
     def __mul__(self, other: VecNumLike) -> 'vector[int] | vector[float]': ...
     def __mul__(self, other: VecNumLike) -> Any:
+        ret = self._array_op(other, 'mul')
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a * b for a, b in zip(self.values, other.values))
@@ -157,6 +181,9 @@ class vector(ArrayType[TNum]):
     @overload
     def __pow__(self, other: VecNumLike) -> 'vector[int] | vector[float]': ...
     def __pow__(self, other: VecNumLike) -> Any:
+        ret = self._array_op(other, 'pow')
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a ** b for a, b in zip(self.values, other.values))
@@ -172,6 +199,9 @@ class vector(ArrayType[TNum]):
     @overload
     def __rpow__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __rpow__(self, other: VecNumLike) -> Any:
+        ret = self._array_op(other, 'pow', reverse=True)
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(b ** a for a, b in zip(self.values, other.values))
@@ -181,6 +211,9 @@ class vector(ArrayType[TNum]):
         return vector(o ** a if isinstance(a, value) else other ** a for a in self.values)
 
     def __truediv__(self, other: VecNumLike) -> 'vector[float]':
+        ret: 'vector[Any] | None' = self._array_op(other, 'div')
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a / b for a, b in zip(self.values, other.values))
@@ -190,6 +223,9 @@ class vector(ArrayType[TNum]):
         return vector(a / o if isinstance(a, value) else a / other for a in self.values)
 
     def __rtruediv__(self, other: VecNumLike) -> 'vector[float]':
+        ret: 'vector[Any] | None' = self._array_op(other, 'div', reverse=True)
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(b / a for a, b in zip(self.values, other.values))
@@ -216,6 +252,13 @@ class vector(ArrayType[TNum]):
             The dot product as a scalar value.
         """
         assert len(self.values) == len(other.values), "Vectors must be of same length."
+        if not (self._is_constant() and other._is_constant()):
+            a, b = self._get_array(), other._get_array()
+            if a is not None or b is not None:
+                a = a if a is not None else self._get_array(force=True)
+                b = b if b is not None else other._get_array(force=True)
+                if a is not None and b is not None:
+                    return a.dot(b)
         return mixed_sum(a * b for a, b in zip(self.values, other.values))
 
     # @ operator
@@ -313,6 +356,9 @@ class vector(ArrayType[TNum]):
         Returns:
             The sum of all vector elements as a scalar value.
         """
+        arr = None if self._is_constant() else self._get_array()
+        if arr is not None:
+            return arr.sum()
         return mixed_sum(self.values)
 
     def magnitude(self) -> 'float | value[float]':
@@ -321,8 +367,7 @@ class vector(ArrayType[TNum]):
         Returns:
             The magnitude of the vector as a scalar value.
         """
-        s = mixed_sum(a * a for a in self.values)
-        return cp.sqrt(s)
+        return cp.sqrt(self.dot(self))
 
     def normalize(self) -> 'vector[float]':
         """Calculate a normalized (unit length) version of the vector.
@@ -362,7 +407,7 @@ class vector(ArrayType[TNum]):
         if isinstance(other, value):
             return vector(func(a, other) for a in self.values)
         o = value_from_number(other)  # Make sure a single constant is allocated
-        return vector(func(a, o) if isinstance(a, value) else a + other for a in self.values)
+        return vector(func(a, o) if isinstance(a, value) else func(a, other) for a in self.values)
 
 
 def cross_product(v1: vector[float], v2: vector[float]) -> vector[float]:

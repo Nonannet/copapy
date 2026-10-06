@@ -2,7 +2,8 @@ from typing import overload, Iterable, Callable, Any, Iterator
 from ._vectors import vector
 from ._tensors import tensor
 import copapy as cp
-from ._basic_types import NumLike, value, unifloat, ArrayType, value_from_number
+from ._basic_types import NumLike, value, unifloat, value_from_number
+from ._arrays import ArrayType
 from ._mixed import mixed_sum
 
 epsilon = 1e-20
@@ -29,12 +30,9 @@ class quaternion(ArrayType[float]):
             y: y component (ignored if w is an iterable).
             z: z component (ignored if w is an iterable).
         """
-        self.shape = (4,)
-        if isinstance(w, Iterable):
-            self.values = tuple(v for v in w)
-            assert len(self.values) == 4, "Sequence must have exactly 4 elements for quaternion initialization."
-        else:
-            self.values = (w, x, y, z)
+        components = tuple(w) if isinstance(w, Iterable) else (w, x, y, z)
+        assert len(components) == 4, "Sequence must have exactly 4 elements for quaternion initialization."
+        self._set_elements(components, (4,))
 
 
     @classmethod
