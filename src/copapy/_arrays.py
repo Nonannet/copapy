@@ -397,6 +397,29 @@ class array(Generic[TNum]):
         node = _add_array_op(f"sum_{self.net.dtype}arr", [self.net, n], self.net.dtype)
         return value(node.result)
 
+    def sort(self) -> 'array[TNum]':
+        """Sorted copy of a 1D array. A sorting network is used: the execution
+        time only depends on the number of elements, not on the values."""
+        self._check_1d('sort')
+        n = value_from_number(self.size).net
+        node = _add_array_op(f"sort_{self.net.dtype}arr", [self.net, n], self.net.dtype, self.size)
+        assert isinstance(node.result, ArrayNet)
+        return array._from_net(node.result, self.shape, self.dtype)
+
+    def argsort(self) -> 'array[int]':
+        """Indices that sort a 1D array, equal elements in order of their index
+        (like a stable sort). The execution time only depends on the number of
+        elements, not on the values."""
+        self._check_1d('argsort')
+        n = value_from_number(self.size).net
+        node = _add_array_op(f"argsort_{self.net.dtype}arr", [self.net, n], 'int', self.size)
+        assert isinstance(node.result, ArrayNet)
+        return array._from_net(node.result, self.shape)
+
+    def _check_1d(self, name: str) -> None:
+        if self.ndim != 1:
+            raise ValueError(f"{name} requires a 1D array, got shape {self.shape}")
+
     def dot(self, other: 'array[Any]') -> value[Any]:
         """Dot product of two arrays with the same number of elements."""
         if other.size != self.size:

@@ -368,6 +368,12 @@ class stencil_database():
             mask = 0b00_0111_1111_1100_0000_0000
             shift = 3
 
+        elif pr.type.endswith('_LDST128_ABS_LO12_NC'):
+            # R_AARCH64_LDST128_ABS_LO12_NC (e.g. vector constants)
+            # ((S + A) & 0xFFF) >> 4
+            mask = 0b00_0011_1111_1100_0000_0000
+            shift = 4
+
         elif pr.type == 'R_ARM_MOVW_ABS_NC':
             # (S + A) & 0xFFFF
             encoding = PatchEncoding.ARM_MOVW_MOVT
