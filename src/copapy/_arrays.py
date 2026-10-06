@@ -1,5 +1,5 @@
 from typing import Any, Generic, Sequence, Iterable, Callable, TypeVar, overload
-from ._basic_types import value, Net, ArrayNet, ArrayConst, ArrayOp, ArrayElement, ArrayPack, NumLike, transl_type, value_from_number, generic_sdb, to_float
+from ._basic_types import value, Net, ArrayNet, ArrayConst, ArrayOp, ArrayElement, ArrayPack, NumLike, transl_type, value_from_number, generic_sdb, to_float, add_op
 from ._helper_types import TNum
 
 
@@ -62,6 +62,19 @@ def convert_element(v: Any, dtype: str) -> Any:
         assert not isinstance(v, float), "Float number in int array"
         return int(v)
     return v
+
+
+def _clamped_index(index: value[Any], dim: int) -> 'value[int] | int':
+    """Index computed at runtime in the range [0, dim - 1]: negative indices
+    count from the end (like Python), then the index is clamped"""
+    if transl_type(index.dtype) != 'int':
+        raise TypeError(f"Indices must be int values, not {index.dtype}")
+    if dim == 1:
+        return 0
+    if index.dtype == 'bool':
+        index = value(index.net, 'int')
+    wrapped = index + (index < 0) * dim
+    return add_op('min', [add_op('max', [wrapped, 0]), dim - 1])
 
 
 def _size(shape: Sequence[int]) -> int:
@@ -199,10 +212,9 @@ class array(Generic[TNum]):
         is read directly from the array memory."""
         return value(Net(self.net.dtype, ArrayElement(self.net, flat_index)), self.dtype)
 
-    def __getitem__(self, key: int | slice | Sequence[int | slice]) -> 'Any':
-        """Get an element (all dimensions indexed by integers) or a sub-array
-        (slices or fewer indices than dimensions). Sub-arrays are copied by
-        a strided copy stencil."""
+    def __getitem__(self, key: 'int | value[int] | slice | Sequence[int | value[int] | slice]') -> 'Any':
+        """Get an element (all dimensions indexed) or a sub-array (slices or fewer
+        indices than dimensions). Sub-arrays are copied by a strided copy stencil."""
         keys = key if isinstance(key, Sequence) else (key,)
         if len(keys) > self.ndim:
             raise IndexError(f"Too many indices for array of rank {self.ndim}")
@@ -210,7 +222,7 @@ class array(Generic[TNum]):
             return self.element(self._flat_index(keys))  # type: ignore[arg-type]
 
         strides = _contiguous_strides(self.shape)
-        offset = 0
+        offset: int | value[int] = 0
         shape: list[int] = []
         new_strides: list[int] = []
         for i, k in enumerate(keys):
@@ -219,6 +231,8 @@ class array(Generic[TNum]):
                 if not -dim <= k < dim:
                     raise IndexError(f"Index {k} out of bounds for dimension of size {dim}")
                 offset += (k % dim) * strides[i]
+            elif isinstance(k, value):
+                offset = offset + _clamped_index(k, dim) * strides[i]
             else:
                 assert isinstance(k, slice), f"Indices must be integers or slices, not {type(k)}"
                 start, stop, step = k.indices(dim)
@@ -227,9 +241,10 @@ class array(Generic[TNum]):
                 new_strides.append(step * strides[i])
         shape += self.shape[len(keys):]
         new_strides += strides[len(keys):]
-        return self._strided(offset, tuple(shape), tuple(new_strides))
+        ret = self._strided(offset, tuple(shape), tuple(new_strides))
+        return ret.element(0) if not shape else ret
 
-    def _strided(self, offset: int, shape: tuple[int, ...], strides: tuple[int, ...]) -> 'array[TNum]':
+    def _strided(self, offset: 'int | value[int]', shape: tuple[int, ...], strides: tuple[int, ...]) -> 'array[TNum]':
         """New array with the elements at offset + sum(index * stride)"""
         size = _size(shape)
         if size == 0:
@@ -245,7 +260,7 @@ class array(Generic[TNum]):
             else:
                 dims.append((n, s))
 
-        if offset == 0 and size == self.size and (not dims or dims == [(size, 1)]):
+        if isinstance(offset, int) and offset == 0 and size == self.size and (not dims or dims == [(size, 1)]):
             return self.reshape(*shape)  # No copy required
         if len(dims) > COPY_DIMS:
             raise NotImplementedError(f"Strided copy for more than {COPY_DIMS} non-contiguous dimensions")
@@ -581,6 +596,15 @@ class ArrayType(Generic[TNum]):
                     return None
             self._array = array(list(values), self._dtype).reshape(*self.shape)
         return self._array
+
+    def _force_array(self) -> 'array[Any]':
+        """Elements as array independent of the pack threshold, constant
+        elements are stored as data"""
+        arr = self._get_array(force=True)
+        if arr is None:
+            # Packing disabled for this instance or class or constant elements
+            arr = array(list(self.values), self._dtype).reshape(*self.shape)
+        return arr
 
     def _is_constant(self) -> bool:
         """True if all elements are numbers (no copapy values)"""

@@ -9,6 +9,13 @@ from ._basic_types import Net, Node, Store, CPConstant, Op, transl_type, ArrayNe
 PACK_STORE = "pack_store"
 
 
+def is_pack_constant(net: Net) -> bool:
+    """Elements of an ArrayPack that are anonymous constants are written to the
+    array memory when loading the program instead of storing them on each run.
+    Named constants (copapy values) can be changed by Target.write_value."""
+    return isinstance(net.source, CPConstant) and net.source.anonymous
+
+
 def stable_toposort(edges: Iterable[tuple[Node, Node]]) -> list[Node]:
     """Perform a stable topological sort on a directed acyclic graph (DAG).
 
@@ -158,8 +165,11 @@ def add_load_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], No
             yield None, node
             registers = [None, None]
         elif isinstance(node, ArrayPack):
-            # Store each value from register 0 to the memory of its array element
+            # Store each value from register 0 to the memory of its array element,
+            # constants are written to the array memory when loading the program
             for net, element in zip(node.args, node.elements):
+                if is_pack_constant(net):
+                    continue
                 if id(net) != id(registers[0]):
                     type_list = ['int' if r is None else transl_type(r.dtype) for r in registers]
                     yield net, Op(f"load_{transl_type(net.dtype)}_reg0_" + '_'.join(type_list), [])
@@ -393,6 +403,9 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
     variable_list |= {net for _, node in extended_output_ops if isinstance(node, ArrayOp)
                       for net in (*node.args, node.result)}
 
+    # Packed arrays (also if all elements are constants and no store is emitted)
+    variable_list |= {node.result for node in ordered_ops if isinstance(node, ArrayPack)}
+
     # Array elements are aliases into the memory of their arrays
     element_nets = [net for net in variable_list if isinstance(net.source, ArrayElement)]
     variable_list = {net for net in variable_list if not isinstance(net.source, ArrayElement)}
@@ -431,6 +444,14 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
             dw.write_int(start)
             dw.write_int(lengths)
             dw.write_bytes(binw.pack_array(net.source.values, net.dtype, sdb.byteorder))
+        elif isinstance(net.source, ArrayPack) and any(is_pack_constant(a) for a in net.source.args):
+            # Constant elements, the others are stored on each run
+            init = [a.source.value if isinstance(a.source, CPConstant) and is_pack_constant(a) else 0
+                    for a in net.source.args]
+            dw.write_com(binw.Command.COPY_DATA)
+            dw.write_int(start)
+            dw.write_int(lengths)
+            dw.write_bytes(binw.pack_array(init, net.dtype, sdb.byteorder))
 
     object_addr_lookup = {net: offs for net, offs, _ in variable_mem_layout}
 

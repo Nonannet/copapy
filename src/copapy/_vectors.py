@@ -47,8 +47,15 @@ class vector(ArrayType[TNum]):
     @overload
     def __getitem__(self, index: int) -> value[TNum] | TNum: ...
     @overload
+    def __getitem__(self, index: value[int]) -> value[TNum]: ...
+    @overload
     def __getitem__(self, index: slice) -> 'vector[TNum]': ...
-    def __getitem__(self, index: int | slice) -> 'vector[TNum] | value[TNum] | TNum':
+    def __getitem__(self, index: int | value[int] | slice) -> 'vector[TNum] | value[TNum] | TNum':
+        """Element by an int or a copapy value (computed at runtime, clamped to
+        the valid range, negative counted from the end) or a sub-vector by a slice"""
+        if isinstance(index, value):
+            element: value[TNum] = self._force_array()[index]
+            return element
         if isinstance(index, slice):
             arr = self._view_array()
             if arr is not None:

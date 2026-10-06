@@ -3,7 +3,7 @@ from . import value
 from ._arrays import ArrayType
 from ._vectors import vector, VecFloatLike, VecIntLike, VecNumLike
 from ._mixed import mixed_sum
-from typing import TypeVar, Any, overload, TypeAlias, Callable, Iterator, Sequence, Iterable
+from typing import TypeVar, Any, overload, TypeAlias, Callable, Iterator, Sequence, Iterable, cast
 from ._helper_types import TNum
 
 TensorNumLike: TypeAlias = 'tensor[Any] | vector[Any] | value[Any] | int | float | bool'
@@ -147,7 +147,7 @@ class tensor(ArrayType[TNum]):
         flat_idx = self._get_flat_index(key)
         return self.values[flat_idx]
 
-    def __getitem__(self, key: int | slice | Sequence[int | slice]) -> 'tensor[TNum]':
+    def __getitem__(self, key: 'int | value[int] | slice | Sequence[int | value[int] | slice]') -> 'tensor[TNum]':
         """Get a sub-tensor or element.
 
         Arguments:
@@ -162,6 +162,13 @@ class tensor(ArrayType[TNum]):
         if self.ndim == 0:
             raise TypeError("Cannot index a 0-d tensor")
 
+        if any(isinstance(k, value) for k in (key if isinstance(key, Sequence) else (key,))):
+            ret = self._force_array()[key]
+            if isinstance(ret, value):
+                return tensor(ret)
+            packed: tensor[TNum] = tensor._from_array(ret)
+            return packed
+
         # Sub-tensors of a packed tensor by a strided copy, single elements from the values
         arr = self._view_array()
         if arr is not None:
@@ -175,7 +182,7 @@ class tensor(ArrayType[TNum]):
 
         # Handle tuple of indices/slices
         if isinstance(key, Sequence):
-            return self._handle_slice(key)
+            return self._handle_slice(cast(Sequence[int | slice], key))  # No runtime indices here
 
         # Handle single integer index
         assert isinstance(key, int), f"indices must be integers, slices, or tuples thereof, not {type(key)}"
