@@ -42,7 +42,8 @@ dev = [
     "ruff",
     "mypy",
     "pytest",
-    "pelfy>=1.0.8"
+    "pelfy>=1.0.8",
+    "scipy"
 ]
 mindev = [
     "pytest",

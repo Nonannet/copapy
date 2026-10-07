@@ -214,3 +214,99 @@ def test_gaussian_filter_errors() -> None:
         filters.gaussian_filter(t, (1.0, 1.0, 1.0))
     with pytest.raises(ValueError):
         filters.gaussian_filter(t, -1.0)
+
+
+@pytest.mark.parametrize('numtaps,cutoff,pass_zero,window,fs', [
+    (31, 50.0, 'lowpass', 'hamming', 1000.0), (8, 0.3, 'lowpass', 'hann', 2.0), (1, 0.5, 'lowpass', 'hamming', 2.0),
+    (21, 0.4, 'highpass', 'blackman', 2.0), (33, 120.0, 'highpass', 'hamming', 1000.0),
+    (41, (0.2, 0.5), 'bandpass', 'hamming', 2.0), (30, (60.0, 180.0), 'bandpass', 'rectangular', 800.0)])
+def test_firwin_scipy_reference(numtaps: int, cutoff: Any, pass_zero: str, window: str, fs: float) -> None:
+    signal = pytest.importorskip('scipy.signal')
+    scipy_window = 'boxcar' if window == 'rectangular' else window
+    ref = signal.firwin(numtaps, cutoff, pass_zero=pass_zero, window=scipy_window, fs=fs)
+    assert filters.firwin(numtaps, cutoff, pass_zero, window, fs) == pytest.approx(list(ref), abs=1e-12)
+
+
+def test_firwin_gain() -> None:
+    def gain(taps: list[float], f: float) -> float:
+        """Amplitude response at the frequency f relative to the Nyquist frequency"""
+        return abs(sum(t * complex(math.cos(math.pi * f * n), -math.sin(math.pi * f * n)) for n, t in enumerate(taps)))
+
+    low, high, band = filters.firwin(41, 0.3), filters.firwin(41, 0.3, 'highpass'), filters.firwin(41, (0.3, 0.6), 'bandpass')
+    assert low == pytest.approx(low[::-1])  # linear phase
+    assert [gain(low, f) for f in (0.0, 0.1, 0.3)] == pytest.approx([1.0, 1.0, 0.5], abs=0.01)
+    assert [gain(high, f) for f in (1.0, 0.5, 0.3)] == pytest.approx([1.0, 1.0, 0.5], abs=0.01)
+    assert [gain(band, f) for f in (0.45, 0.3, 0.6)] == pytest.approx([1.0, 0.5, 0.5], abs=0.01)
+    assert max(gain(low, 0.5), gain(high, 0.1), gain(band, 0.1), gain(band, 0.8)) < 0.01
+
+
+def test_firwin_filtering() -> None:
+    """A low-pass and a high-pass separate two sine waves"""
+    n = 96
+    slow = [math.sin(2 * math.pi * 0.02 * i) for i in range(n)]
+    fast = [0.5 * math.sin(2 * math.pi * 0.35 * i) for i in range(n)]
+    x = cp.vector(cp.value(a + b) for a, b in zip(slow, fast))
+
+    out_low, out_high = evaluate(filters.convolve(x, filters.firwin(31, 0.3), 'same'),
+                                 filters.convolve(x, filters.firwin(31, 0.3, 'highpass'), 'same'))
+    inner = slice(15, n - 15)  # without the edges, where the input is extended with zeros
+    assert list(out_low.values)[inner] == pytest.approx(slow[inner], abs=0.01)
+    assert list(out_high.values)[inner] == pytest.approx(fast[inner], abs=0.01)
+
+
+def test_firwin_errors() -> None:
+    for args in [(0, 0.3), (8, 0.3, 'highpass'), (9, 0.3, 'bandstop'), (9, 0.3, 'lowpass', 'kaiser'), (9, 1.2),
+                 (9, 0.0), (9, (0.5, 0.2), 'bandpass'), (9, 0.3, 'bandpass'), (9, (0.2, 0.5), 'lowpass')]:
+        with pytest.raises(ValueError):
+            filters.firwin(*args)  # type: ignore[arg-type]
+
+
+def test_lowpass_highpass_bandpass() -> None:
+    """Three sine waves are separated by the filters"""
+    n, fs = 128, 1000.0
+    waves = [[amp * math.sin(2 * math.pi * f / fs * i) for i in range(n)] for f, amp in [(15.0, 1.0), (150.0, 0.7), (400.0, 0.5)]]
+    data = [sum(s) for s in zip(*waves)]
+    x = cp.vector(cp.value(v) for v in data)
+
+    results = [filters.lowpass(x, 70.0, 41, fs=fs), filters.bandpass(x, (80.0, 250.0), 41, fs=fs),
+               filters.highpass(x, 300.0, 41, fs=fs)]
+    assert all(isinstance(r, cp.vector) and len(r) == n for r in results)
+    inner = slice(20, n - 20)  # without the edges, where the input is extended with zeros
+    for out, wave in zip(evaluate(*results), waves):
+        assert list(out.values)[inner] == pytest.approx(wave[inner], abs=0.02)
+
+    # Other input types, equal to convolve with the coefficients of firwin
+    ref = convolve_ref(data, filters.firwin(31, 0.2), 'same')
+    low_t, low_a = filters.lowpass(cp.tensor([cp.value(v) for v in data]), 0.2, 31), filters.lowpass(cp.array(data), 0.2, 31)
+    assert isinstance(low_t, cp.tensor) and isinstance(low_a, cp.array)
+    out_t, out_a = evaluate(low_t, low_a)
+    assert list(out_t.values) == pytest.approx(ref, abs=1e-4) and out_a == pytest.approx(ref, abs=1e-4)
+    assert list(filters.lowpass(cp.vector(data), 0.2, 31).values) == pytest.approx(ref)  # constants
+
+    with pytest.raises(ValueError):
+        filters.lowpass(cp.vector(cp.value(v) for v in data[:10]), 0.2, 31)  # more taps than samples
+    with pytest.raises(ValueError):
+        filters.highpass(x, 0.2, 30)  # even number of taps
+
+
+def test_estimated_numtaps() -> None:
+    """Without numtaps the number of coefficients is estimated from the transition width"""
+    estimate = filters._estimate_numtaps  # pyright: ignore[reportPrivateUsage]
+    assert estimate(50.0, 'hamming', 1000.0, None) == 133  # width 25: 3.3 * 1000 / 25
+    assert estimate(450.0, 'hamming', 1000.0, None) == 133  # nearest edge is the Nyquist frequency
+    assert estimate((80.0, 250.0), 'hamming', 1000.0, None) == 83  # width 40
+    assert estimate((200.0, 230.0), 'hann', 1000.0, None) == 207  # width 15, limited by the band
+    assert estimate(0.2, 'hamming', 2.0, 0.2) == 33
+    assert estimate(0.2, 'blackman', 2.0, 0.2) == 55
+
+    data = sample(128, 'float', 7)
+    x = cp.vector(cp.value(v) for v in data)
+    out_default, out_width = evaluate(filters.lowpass(x, 0.2), filters.highpass(x, 0.5, width=0.2))
+    assert list(out_default.values) == pytest.approx(convolve_ref(data, filters.firwin(67, 0.2), 'same'), abs=1e-4)
+    assert list(out_width.values) == pytest.approx(convolve_ref(data, filters.firwin(33, 0.5, 'highpass'), 'same'), abs=1e-4)
+
+    with pytest.raises(ValueError, match='numtaps .133.'):
+        filters.lowpass(x, 50.0, fs=1000.0)  # more taps estimated than samples
+    for kwargs in [{'width': 0.0}, {'window': 'kaiser'}, {'fs': 0.3}]:
+        with pytest.raises(ValueError):
+            filters.lowpass(x, 0.2, **kwargs)  # type: ignore[arg-type]

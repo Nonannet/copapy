@@ -8,7 +8,7 @@ from ._sorting import _as_array
 from typing import Any, Sequence, TypeAlias, overload
 import math
 
-__all__ = ["median", "convolve", "gaussian_filter", "mean"]
+__all__ = ["median", "convolve", "firwin", "lowpass", "highpass", "bandpass","gaussian_filter","mean"]
 
 ConvLike: TypeAlias = 'ArrayType[Any] | array[Any] | Sequence[float | value[Any]]'
 
@@ -152,6 +152,188 @@ def gaussian_filter(a: Any, sigma: float | Sequence[float], truncate: float = 4.
         xa = _conv(xa.reshape(-1, 1, n, width), weight, None, (1, 1), (m // 2, 0), (1, 1), out_size=(n, width))
     xa = xa.reshape(*shape)
     return type(a)._from_array(xa) if isinstance(a, ArrayType) else xa
+
+
+_WINDOWS: dict[str, tuple[float, ...]] = {
+    # Coefficients a_k of the cosine sum: sum((-1)^k * a_k * cos(2 * pi * k * n / (N - 1)))
+    'rectangular': (1.0,),
+    'hann': (0.5, 0.5),
+    'hamming': (0.54, 0.46),
+    'blackman': (0.42, 0.5, 0.08),
+}
+
+
+def firwin(numtaps: int, cutoff: float | Sequence[float], pass_zero: str = 'lowpass',
+           window: str = 'hamming', fs: float = 2.0) -> list[float]:
+    """
+    Coefficients of a linear phase FIR filter designed by the window method
+    (like scipy.signal.firwin). The filter is applied with convolve:
+
+        >>> taps = filters.firwin(31, 50.0, fs=1000.0)
+        >>> filtered = filters.convolve(samples, taps, 'same')
+
+    Arguments:
+        numtaps: Number of coefficients, the delay of the filter is (numtaps - 1) / 2
+            samples. It must be odd for a high-pass.
+        cutoff: Cutoff frequency (half amplitude) in the unit of fs, two
+            frequencies (lower, upper) for a band-pass.
+        pass_zero: 'lowpass', 'highpass' or 'bandpass'
+        window: 'hamming', 'hann', 'blackman' or 'rectangular'
+        fs: Sampling frequency, cutoff is relative to the Nyquist frequency
+            for the default of 2.
+
+    Returns:
+        Coefficients scaled to a gain of 1 at frequency 0 (low-pass), at the
+        Nyquist frequency (high-pass) or at the center of the band (band-pass).
+    """
+    if pass_zero not in ('lowpass', 'highpass', 'bandpass'):
+        raise ValueError(f"pass_zero must be 'lowpass', 'highpass' or 'bandpass', not {pass_zero!r}")
+    if window not in _WINDOWS:
+        raise ValueError(f"window must be one of {', '.join(_WINDOWS)}, not {window!r}")
+    if numtaps < 1:
+        raise ValueError("numtaps must be at least 1")
+    if pass_zero == 'highpass' and numtaps % 2 == 0:
+        raise ValueError("A high-pass requires an odd number of taps")
+
+    # Band edges relative to the Nyquist frequency
+    edges = [2.0 * c / fs for c in ([cutoff] if isinstance(cutoff, int | float) else cutoff)]
+    if len(edges) != (2 if pass_zero == 'bandpass' else 1):
+        raise ValueError(f"A {pass_zero} requires {'two cutoff frequencies' if pass_zero == 'bandpass' else 'one cutoff frequency'}")
+    if not all(0.0 < e < 1.0 for e in edges) or edges != sorted(set(edges)):
+        raise ValueError("Cutoff frequencies must be increasing and between 0 and fs / 2")
+    left, right = {'lowpass': (0.0, edges[0]), 'highpass': (edges[0], 1.0), 'bandpass': (edges[0], edges[-1])}[pass_zero]
+
+    def sinc(x: float) -> float:
+        return math.sin(math.pi * x) / (math.pi * x) if x else 1.0
+
+    center = 0.5 * (numtaps - 1)
+    taps: list[float] = []
+    for n in range(numtaps):
+        w = sum((-1) ** k * a * math.cos(2 * math.pi * k * n / (numtaps - 1)) for k, a in enumerate(_WINDOWS[window])) if numtaps > 1 else 1.0
+        taps.append(w * (right * sinc(right * (n - center)) - left * sinc(left * (n - center))))
+
+    # Gain of 1 in the pass band
+    f0 = 0.0 if left == 0.0 else 1.0 if right == 1.0 else 0.5 * (left + right)
+    gain = sum(t * math.cos(math.pi * (n - center) * f0) for n, t in enumerate(taps))
+    return [t / gain for t in taps]
+
+
+# Width of the transition between pass band and stop band multiplied by numtaps / fs
+_TRANSITION_WIDTHS = {'rectangular': 0.9, 'hann': 3.1, 'hamming': 3.3, 'blackman': 5.5}
+
+
+def _estimate_numtaps(cutoff: float | Sequence[float], window: str, fs: float, width: float | None) -> int:
+    """Odd number of coefficients for a transition of the given width, by default
+    half the distance of the cutoff to the nearest band edge"""
+    if window not in _TRANSITION_WIDTHS:
+        raise ValueError(f"window must be one of {', '.join(_TRANSITION_WIDTHS)}, not {window!r}")
+    if width is None:
+        edges = [0.0, *([float(cutoff)] if isinstance(cutoff, int | float) else cutoff), 0.5 * fs]
+        width = 0.5 * min(b - a for a, b in zip(edges, edges[1:]))
+        if width <= 0:
+            raise ValueError("Cutoff frequencies must be increasing and between 0 and fs / 2")
+    elif width <= 0:
+        raise ValueError("width must be positive")
+    return math.ceil(_TRANSITION_WIDTHS[window] * fs / width - 1e-9) | 1
+
+
+def _fir_filter(a: Sequence | array, cutoff: float | Sequence[float], pass_zero: str, numtaps: int | None,
+                window: str, fs: float, width: float | None) -> Any:
+    """Filtered samples aligned with the input (delay of the filter removed)"""
+    if numtaps is None:
+        numtaps = _estimate_numtaps(cutoff, window, fs, width)
+    size = len(a.values) if isinstance(a, ArrayType) else a.size if isinstance(a, array) else len(a)
+    if numtaps > size:
+        raise ValueError(f"numtaps ({numtaps}) must not exceed the number of samples ({size}), "
+                         "a smaller numtaps or a larger width gives a shorter filter")
+    return convolve(a, firwin(numtaps, cutoff, pass_zero, window, fs), 'same')
+
+
+@overload
+def lowpass(a: vector[Any], cutoff: float, numtaps: int | None = None, window: str = 'hamming', fs: float = 2.0, width: float | None = None) -> vector[float]: ...
+@overload
+def lowpass(a: tensor[Any], cutoff: float, numtaps: int | None = None, window: str = 'hamming', fs: float = 2.0, width: float | None = None) -> tensor[float]: ...
+@overload
+def lowpass(a: 'array[Any] | Sequence[float | value[Any]]', cutoff: float, numtaps: int | None = None, window: str = 'hamming', fs: float = 2.0, width: float | None = None) -> array[float]: ...
+def lowpass(a: Any, cutoff: float, numtaps: int | None = None, window: str = 'hamming', fs: float = 2.0, width: float | None = None) -> Any:
+    """
+    Low-pass filter (firwin FIR filter) with no delay, the input is extended
+    with zeros beyond its edges, which affects the first and last
+    (numtaps - 1) / 2 samples.
+
+    Arguments:
+        a: Samples as 1D vector, tensor, array or sequence
+        cutoff: Cutoff frequency (halved amplitude) in the unit of fs
+        numtaps: Number of filter coefficients, more coefficients give a
+            steeper transition between pass band and stop band.
+        window: 'hamming', 'hann', 'blackman' or 'rectangular'
+        fs: Sampling frequency, cutoff is relative to the Nyquist frequency.
+        width: Width of the transition between pass band and stop band in the
+            unit of fs, used to estimate numtaps if it is not given. The default
+            is half the distance of the cutoff to the nearest band edge.
+
+    Returns:
+        Filtered samples with the length and type of the input.
+    """
+    return _fir_filter(a, cutoff, 'lowpass', numtaps, window, fs, width)
+
+
+@overload
+def highpass(a: vector[Any], cutoff: float, numtaps: int | None = None, window: str = 'hamming', fs: float = 2.0, width: float | None = None) -> vector[float]: ...
+@overload
+def highpass(a: tensor[Any], cutoff: float, numtaps: int | None = None, window: str = 'hamming', fs: float = 2.0, width: float | None = None) -> tensor[float]: ...
+@overload
+def highpass(a: 'array[Any] | Sequence[float | value[Any]]', cutoff: float, numtaps: int | None = None, window: str = 'hamming', fs: float = 2.0, width: float | None = None) -> array[float]: ...
+def highpass(a: Any, cutoff: float, numtaps: int | None = None, window: str = 'hamming', fs: float = 2.0, width: float | None = None) -> Any:
+    """
+    High-pass filter (firwin FIR filter) with no delay, the input is extended
+    with zeros beyond its edges, which affects the first and last
+    (numtaps - 1) / 2 samples.
+
+    Arguments:
+        a: Samples as 1D vector, tensor, array or sequence
+        cutoff: Cutoff frequency (halved amplitude) in the unit of fs
+        numtaps: Odd number of filter coefficients, more coefficients give a
+            steeper transition between stop band and pass band.
+        window: 'hamming', 'hann', 'blackman' or 'rectangular'
+        fs: Sampling frequency, cutoff is relative to the Nyquist frequency.
+        width: Width of the transition between pass band and stop band in the
+            unit of fs, used to estimate numtaps if it is not given. The default
+            is half the distance of the cutoff to the nearest band edge.
+
+    Returns:
+        Filtered samples with the length and type of the input.
+    """
+    return _fir_filter(a, cutoff, 'highpass', numtaps, window, fs, width)
+
+
+@overload
+def bandpass(a: vector[Any], cutoff: Sequence[float], numtaps: int | None = None, window: str = 'hamming', fs: float = 2.0, width: float | None = None) -> vector[float]: ...
+@overload
+def bandpass(a: tensor[Any], cutoff: Sequence[float], numtaps: int | None = None, window: str = 'hamming', fs: float = 2.0, width: float | None = None) -> tensor[float]: ...
+@overload
+def bandpass(a: 'array[Any] | Sequence[float | value[Any]]', cutoff: Sequence[float], numtaps: int | None = None, window: str = 'hamming', fs: float = 2.0, width: float | None = None) -> array[float]: ...
+def bandpass(a: Any, cutoff: Sequence[float], numtaps: int | None = None, window: str = 'hamming', fs: float = 2.0, width: float | None = None) -> Any:
+    """
+    Band-pass filter (firwin FIR filter) with no delay, the input is extended
+    with zeros beyond its edges, which affects the first and last
+    (numtaps - 1) / 2 samples.
+
+    Arguments:
+        a: Samples as 1D vector, tensor, array or sequence
+        cutoff: Lower and upper cutoff frequency (halved amplitude) in the unit of fs
+        numtaps: Number of filter coefficients, more coefficients give
+            steeper transitions between pass band and stop bands.
+        window: 'hamming', 'hann', 'blackman' or 'rectangular'
+        fs: Sampling frequency, cutoff is relative to the Nyquist frequency.
+        width: Width of the transition between pass band and stop band in the
+            unit of fs, used to estimate numtaps if it is not given. The default
+            is half the distance of the cutoff to the nearest band edge.
+
+    Returns:
+        Filtered samples with the length and type of the input.
+    """
+    return _fir_filter(a, cutoff, 'bandpass', numtaps, window, fs, width)
 
 
 def mean(input_vector: vector[Any]) -> unifloat:
