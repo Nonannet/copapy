@@ -311,6 +311,8 @@ def array_test_values() -> tuple[list[NumLike], list[NumLike]]:
         arr = cp.array(data)  # sorted at runtime by the kernel
         add(arr.sort(), sorted(data))
         add(arr.argsort(), sorted(range(len(data)), key=lambda i: data[i]))
+        add(arr.min(), [min(data)])
+        add(arr.max(), [max(data)])
     data_f = [v * 0.75 for v in fa]
     vec = cp.vector(value(v) * fs * 0.5 for v in fa)  # computed float values
     add(filters.median(vec), [statistics.median(v * 0.75 for v in fa)])

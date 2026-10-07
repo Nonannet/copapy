@@ -38,7 +38,7 @@ from ._basic_types import NumLike, value, generic_sdb, iif
 from ._vectors import vector, distance, scalar_projection, angle_between, rotate_vector, vector_projection
 from ._quaternion import quaternion
 from ._tensors import tensor, zeros, ones, arange, eye, identity, diagonal, concat
-from ._math import sqrt, abs, sign, sin, cos, tan, tanh, asin, acos, atan, atan2, log, exp, pow, get_42, clamp, minimum, maximum
+from ._math import sqrt, abs, sign, sin, cos, tan, tanh, asin, acos, atan, atan2, log, exp, pow, get_42, clamp, minimum, maximum, min, max
 from ._casts import cast, to_float, to_int, to_bool
 from ._autograd import grad
 from ._tensors import tensor as matrix
@@ -90,6 +90,8 @@ __all__ = [
     "clamp",
     "minimum",
     "maximum",
+    "min",
+    "max",
     "cast",
     "to_float",
     "to_int",

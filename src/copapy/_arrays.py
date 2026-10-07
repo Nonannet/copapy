@@ -412,6 +412,19 @@ class array(Generic[TNum]):
         node = _add_array_op(f"sum_{self.net.dtype}arr", [self.net, n], self.net.dtype)
         return value(node.result)
 
+    def min(self) -> value[TNum]:
+        """Smallest element."""
+        return self._min_max('min')
+
+    def max(self) -> value[TNum]:
+        """Largest element."""
+        return self._min_max('max')
+
+    def _min_max(self, op: str) -> value[TNum]:
+        n = value_from_number(self.size).net
+        node = _add_array_op(f"{op}_{self.net.dtype}arr", [self.net, n], self.net.dtype)
+        return value(node.result, self.dtype)
+
     def sort(self) -> 'array[TNum]':
         """Sorted copy of a 1D array. A sorting network is used: the execution
         time only depends on the number of elements, not on the values."""
