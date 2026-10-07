@@ -1,4 +1,4 @@
-"""Tests for the filters: sort, argsort and median by a sorting network stencil"""
+"""Tests for sort, argsort and the filters: median by a sorting network stencil, convolve"""
 import random
 import statistics
 from typing import Any
@@ -30,7 +30,7 @@ def test_sort_argsort_median(n: int, dtype: str) -> None:
     data = sample(n, dtype, n)
     v = cp.vector(cp.value(x) for x in data)
 
-    s, a, m = filters.sort(v), filters.argsort(v), filters.median(v)
+    s, a, m = cp.sort(v), cp.argsort(v), filters.median(v)
     out_s, out_a, out_m = evaluate(s, a, m)
 
     assert list(out_s.values) == pytest.approx(sorted(data))  # float32
@@ -43,8 +43,8 @@ def test_sort_argsort_median(n: int, dtype: str) -> None:
 def test_constant_inputs(data: list[Any]) -> None:
     """Constant vectors are evaluated at trace time"""
     v = cp.vector(data)
-    assert list(filters.sort(v).values) == sorted(data)
-    assert list(filters.argsort(v).values) == sorted(range(len(data)), key=lambda i: data[i])
+    assert list(cp.sort(v).values) == sorted(data)
+    assert list(cp.argsort(v).values) == sorted(range(len(data)), key=lambda i: data[i])
     assert filters.median(v) == statistics.median(data)
 
 
@@ -61,13 +61,28 @@ def test_inputs_without_packing() -> None:
     data = [3.0, -2.0, 8.5, 0.0, 1.0]
     t = cp.tensor([cp.value(x) for x in data])
     v = cp.vector((cp.value(x) for x in data), packed=False)
-    st, sv = filters.sort(t), filters.sort(v)
+    st, sv = cp.sort(t), cp.sort(v)
     assert isinstance(st, cp.tensor) and isinstance(sv, cp.vector)
     out_t, out_v = evaluate(st, sv)
     assert list(out_t.values) == list(out_v.values) == sorted(data)
 
     with pytest.raises(ValueError):
-        filters.sort(cp.tensor([[cp.value(1.0), cp.value(2.0)]]))  # 2D
+        cp.sort(cp.tensor([[cp.value(1.0), cp.value(2.0)]]))  # 2D
+    with pytest.raises(ValueError):
+        cp.sort(cp.tensor([[2.0, 1.0], [4.0, 3.0]]))  # 2D constants
+    with pytest.raises(ValueError):
+        cp.argsort(cp.tensor([[2.0, 1.0], [4.0, 3.0]]))
+
+
+def test_sort_quaternion() -> None:
+    """Sorting works for every 1D ArrayType and keeps its class"""
+    q = cp.quaternion(cp.value(0.5), cp.value(-1.0), cp.value(2.0), cp.value(0.0))
+    sq, aq = cp.sort(q), cp.argsort(q)
+    assert isinstance(sq, cp.quaternion)
+    out_s, out_a = evaluate(sq, aq)
+    assert list(out_s.values) == [-1.0, 0.0, 0.5, 2.0]
+    assert list(out_a.values) == [1, 3, 0, 2]
+    assert list(cp.sort(cp.quaternion(0.5, -1.0, 2.0, 0.0)).values) == [-1.0, 0.0, 0.5, 2.0]
 
 
 def test_code_size() -> None:

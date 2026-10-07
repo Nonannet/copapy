@@ -39,10 +39,13 @@ from ._vectors import vector, distance, scalar_projection, angle_between, rotate
 from ._quaternion import quaternion
 from ._tensors import tensor, zeros, ones, arange, eye, identity, diagonal, concat
 from ._math import sqrt, abs, sign, sin, cos, tan, tanh, asin, acos, atan, atan2, log, exp, pow, get_42, clamp, minimum, maximum
+from ._casts import cast, to_float, to_int, to_bool
 from ._nn import relu, sigmoid, conv1d, conv2d
 from ._autograd import grad
 from ._tensors import tensor as matrix
 from ._arrays import array
+from ._sorting import sort, argsort
+from . import filters
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -87,6 +90,10 @@ __all__ = [
     "clamp",
     "minimum",
     "maximum",
+    "cast",
+    "to_float",
+    "to_int",
+    "to_bool",
     "relu",
     "distance",
     "scalar_projection",
@@ -100,5 +107,8 @@ __all__ = [
     "sigmoid",
     "conv1d",
     "conv2d",
+    "sort",
+    "argsort",
+    "filters",
     "jit"
 ]

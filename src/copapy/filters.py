@@ -1,58 +1,18 @@
-from . import vector
-from ._basic_types import unifloat
+from ._vectors import vector
+from ._tensors import tensor
+from ._basic_types import value, unifloat, NumLike
 from ._arrays import array, ArrayType
 from ._nn import _float_array, _conv
-from ._helper_types import TNum
-from typing import Any, Sequence, TypeVar, cast
+from ._casts import to_float
+from ._sorting import _as_array
+from typing import Any, Sequence, TypeAlias, overload
 
-TArray = TypeVar('TArray', bound=ArrayType[Any])
+__all__ = ["median", "convolve", "mean"]
 
-
-def _as_array(input_vector: ArrayType[Any]) -> array[Any]:
-    """Elements of the input as array, packed independent of the pack threshold"""
-    if input_vector.ndim != 1:
-        raise ValueError(f"Expected a 1D vector or tensor, got shape {input_vector.shape}")
-    if not input_vector.shape[0]:
-        raise ValueError("Empty vectors are not supported")
-    return input_vector._force_array()
+ConvLike: TypeAlias = 'ArrayType[Any] | array[Any] | Sequence[float | value[Any]]'
 
 
-def sort(input_vector: TArray) -> TArray:
-    """
-    Sort the elements of a vector in ascending order.
-
-    Arguments:
-        input_vector: The input vector (or 1D tensor) containing numerical values.
-
-    Returns:
-        Sorted vector.
-    """
-    if input_vector._is_constant():
-        constants: list[Any] = list(input_vector.values)
-        array_type: Any = type(input_vector)
-        return cast(TArray, array_type(sorted(constants)))
-    return type(input_vector)._from_array(_as_array(input_vector).sort())
-
-
-def argsort(input_vector: ArrayType[TNum]) -> vector[int]:
-    """
-    Perform an indirect sort. It returns a vector of indices that index data
-    in sorted order. Equal elements are in order of their index (like a stable sort).
-
-    Arguments:
-        input_vector: The input vector (or 1D tensor) containing numerical values.
-
-    Returns:
-        Index vector.
-    """
-    if input_vector._is_constant():
-        data: list[Any] = list(input_vector.values)
-        indices: list[int] = sorted(range(len(data)), key=lambda i: data[i])
-        return vector(indices)
-    return vector._from_array(_as_array(input_vector).argsort())
-
-
-def median(input_vector: ArrayType[TNum]) -> Any:
+def median(input_vector: ArrayType[float]) -> unifloat:
     """
     Median of the elements of a vector: the middle element of the sorted
     elements or the average of the two middle elements for an even number
@@ -67,10 +27,10 @@ def median(input_vector: ArrayType[TNum]) -> Any:
     n = len(input_vector.values)
     if input_vector._is_constant():
         data: list[Any] = sorted(input_vector.values)
-        return data[n // 2] if n % 2 else (data[n // 2 - 1] + data[n // 2]) / 2
+        return float(data[n // 2]) if n % 2 else (data[n // 2 - 1] + data[n // 2]) / 2
     sorted_arr = _as_array(input_vector).sort()
     if n % 2:
-        return sorted_arr.element(n // 2)
+        return to_float(sorted_arr.element(n // 2))
     return (sorted_arr.element(n // 2 - 1) + sorted_arr.element(n // 2)) * 0.5
 
 
@@ -83,6 +43,12 @@ def _constants(x: Any) -> list[Any] | None:
     return None
 
 
+@overload
+def convolve(a: vector[Any], v: ConvLike, mode: str = 'full') -> vector[float]: ...
+@overload
+def convolve(a: tensor[Any], v: ConvLike, mode: str = 'full') -> tensor[float]: ...
+@overload
+def convolve(a: 'array[Any] | Sequence[float | value[Any]]', v: ConvLike, mode: str = 'full') -> array[float]: ...
 def convolve(a: Any, v: Any, mode: str = 'full') -> Any:
     """
     Discrete linear convolution of two 1D sequences.
