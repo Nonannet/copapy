@@ -33,11 +33,11 @@ The Copapy framework also includes a runner as a Python module built from the sa
 
 While hardware I/O is obviously a core aspect of the project it is not yet available. However the computation engine is already fully functional - for all above mentioned target architectures - and available for testing and experimentation simply by installing the package. The project focuses now on integration into the first demonstration hardware platform.
 
-Furthermore in development are currently:
-- Array stencils for handling large arrays and generating SIMD-optimized code - e.g., for machine vision and neural network applications
-- Constant regrouping for further symbolic optimization of the computation graph
+Array stencils for handling large arrays - e.g., for machine vision and neural network applications - are available and use auto-vectorizing of the C compiler. Automatic differentiation covers element-wise array operations, reductions and matrix products, but not yet convolutions, pooling, sorting, transposing and slicing of arrays.
 
-Despite missing SIMD-optimization, benchmark performance shows promising numbers. The following chart plots the results in comparison to NumPy 2.3.5:
+Furthermore in development is currently constant regrouping for further symbolic optimization of the computation graph.
+
+Even without using the array stencils, benchmark performance shows promising numbers. The following chart was measured with scalar stencils only (one stencil per element) and plots the results in comparison to NumPy 2.3.5:
 
 ![Copapy architecture](docs/source/media/benchmark_results_001.svg)
 
@@ -180,10 +180,10 @@ print(f"quadratic error = {tg.read_value(error)}")
 ```
 
 ```
-Joint angles: [-0.7221821546554565, 2.6245293617248535]
-Joint position: [1.3509329557418823, -1.189529299736023]
-End-effector position: [0.6995794177055359, 0.7014330625534058]
-quadratic error = 2.2305819129542215e-06
+Joint angles: vector((-0.7229549288749695, 2.6246931552886963))
+Joint position: vector((1.3498780727386475, -1.1907261610031128))
+End-effector position: vector((0.6998459100723267, 0.7006908655166626))
+quadratic error = 5.010516588299652e-07
 ```
 
 ## How it works
@@ -226,6 +226,17 @@ For more complex operations - where inlining is less useful - stencils call a no
 ```
 
 Unlike stencils, non-stencil functions like `sinf` are not stripped and do not need to be tail-call-optimizable. These functions can be provided as C code and compiled together with the stencils or can be object files like in the case of `sinf` compiled from C and assembly code and merged into the stencil object files. Math functions like `sinf` are currently provided by the MUSL C library, with architecture-specific optimizations. 
+
+Array operations use the same mechanism. Instead of passing operands in registers, an array stencil accesses its operands and its result in heap memory through placeholder symbols, which are patched to the actual addresses. The loop over the elements is in a non-stencil function shared by all stencils of that operation:
+
+```c
+add_floatarr_floatarr(void) {
+    aux_arr_add_float_float_vv(REF(ref_arg0), REF(ref_arg1), REF(ref_out), *(int *)REF(ref_arg2));
+    result_float_ref();
+}
+```
+
+Here `ref_arg0` and `ref_arg1` are the two arrays, `ref_arg2` is the number of elements and `ref_out` is the result array. The name of the dummy function `result_float_ref()` tells the compiler the element type of the result.
 
 Non-stencil functions and constants used by them are stored together with the stencils in ELF object files for each supported CPU architecture. The required non-stencil functions and constants are bundled during compilation. The compiler includes only the data and code required for a specific Copapy program.
 
