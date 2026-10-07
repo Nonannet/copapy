@@ -92,7 +92,7 @@ class vector(ArrayType[TNum]):
     @overload
     def __add__(self, other: VecNumLike) -> 'vector[int] | vector[float]': ...
     def __add__(self, other: VecNumLike) -> Any:
-        ret = self._array_op(other, 'add')
+        ret = self._try_array_op(other, 'add')
         if ret is not None:
             return ret
         if isinstance(other, vector):
@@ -121,7 +121,7 @@ class vector(ArrayType[TNum]):
     @overload
     def __sub__(self, other: VecNumLike) -> 'vector[int] | vector[float]': ...
     def __sub__(self, other: VecNumLike) -> Any:
-        ret = self._array_op(other, 'sub')
+        ret = self._try_array_op(other, 'sub')
         if ret is not None:
             return ret
         if isinstance(other, vector):
@@ -139,7 +139,7 @@ class vector(ArrayType[TNum]):
     @overload
     def __rsub__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __rsub__(self, other: VecNumLike) -> Any:
-        ret = self._array_op(other, 'sub', reverse=True)
+        ret = self._try_array_op(other, 'sub', reverse=True)
         if ret is not None:
             return ret
         if isinstance(other, vector):
@@ -159,7 +159,7 @@ class vector(ArrayType[TNum]):
     @overload
     def __mul__(self, other: VecNumLike) -> 'vector[int] | vector[float]': ...
     def __mul__(self, other: VecNumLike) -> Any:
-        ret = self._array_op(other, 'mul')
+        ret = self._try_array_op(other, 'mul')
         if ret is not None:
             return ret
         if isinstance(other, vector):
@@ -188,7 +188,7 @@ class vector(ArrayType[TNum]):
     @overload
     def __pow__(self, other: VecNumLike) -> 'vector[int] | vector[float]': ...
     def __pow__(self, other: VecNumLike) -> Any:
-        ret = self._array_op(other, 'pow')
+        ret = self._try_array_op(other, 'pow')
         if ret is not None:
             return ret
         if isinstance(other, vector):
@@ -206,7 +206,7 @@ class vector(ArrayType[TNum]):
     @overload
     def __rpow__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __rpow__(self, other: VecNumLike) -> Any:
-        ret = self._array_op(other, 'pow', reverse=True)
+        ret = self._try_array_op(other, 'pow', reverse=True)
         if ret is not None:
             return ret
         if isinstance(other, vector):
@@ -218,7 +218,7 @@ class vector(ArrayType[TNum]):
         return vector(o ** a if isinstance(a, value) else other ** a for a in self.values)
 
     def __truediv__(self, other: VecNumLike) -> 'vector[float]':
-        ret: 'vector[Any] | None' = self._array_op(other, 'div')
+        ret: 'vector[Any] | None' = self._try_array_op(other, 'div')
         if ret is not None:
             return ret
         if isinstance(other, vector):
@@ -230,7 +230,7 @@ class vector(ArrayType[TNum]):
         return vector(a / o if isinstance(a, value) else a / other for a in self.values)
 
     def __rtruediv__(self, other: VecNumLike) -> 'vector[float]':
-        ret: 'vector[Any] | None' = self._array_op(other, 'div', reverse=True)
+        ret: 'vector[Any] | None' = self._try_array_op(other, 'div', reverse=True)
         if ret is not None:
             return ret
         if isinstance(other, vector):

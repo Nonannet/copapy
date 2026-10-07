@@ -110,14 +110,17 @@ def broadcast_shapes(shape1: tuple[int, ...], shape2: tuple[int, ...]) -> tuple[
 COPY_DIMS = 4
 
 
-def _array_out_type(op: str, dtype1: str, dtype2: str) -> str:
-    return 'float' if op in ('div', 'pow', 'atan2') or dtype1 != dtype2 else dtype1
-
-
-def _add_array_op(typed_op: str, args: list[Net], out_dtype: str, length: int | None = None) -> ArrayOp:
+def _add_array_op(typed_op: str, args: list[Net], length: int | None = None, dtype: str | None = None) -> ArrayOp:
+    """Add an array stencil, the result is an array of the given length or a scalar.
+    The type of the result is defined by the stencil, dtype is only required for
+    stencils independent of the element type."""
     if typed_op not in generic_sdb.stencil_definitions:
         raise NotImplementedError(f"Array operation {typed_op} not available, stencils might need to be rebuilt")
-    return ArrayOp(typed_op, args, out_dtype, length)
+    result_type = generic_sdb.stencil_definitions[typed_op].split('_')[0]
+    if result_type == 'void':
+        assert dtype, f"Result type of {typed_op} is not defined, stencils might need to be rebuilt"
+        result_type = dtype
+    return ArrayOp(typed_op, args, result_type, length)
 
 
 class array(Generic[TNum]):
@@ -267,7 +270,7 @@ class array(Generic[TNum]):
 
         dims = [(1, 0)] * (COPY_DIMS - len(dims)) + dims
         params = array([offset] + [n for n, _ in dims] + [s for _, s in dims], 'int')
-        node = _add_array_op('copy_arr', [self.net, params.net], self.net.dtype, size)
+        node = _add_array_op('copy_arr', [self.net, params.net], size, self.net.dtype)
         assert isinstance(node.result, ArrayNet)
         return array._from_net(node.result, shape, self.dtype)
 
@@ -324,22 +327,19 @@ class array(Generic[TNum]):
         if isinstance(other, array):
             a, b = (other, self) if reverse else (self, other)
             typed_op = f"{op}_{a.net.dtype}arr_{b.net.dtype}arr"
-            out_dtype = _array_out_type(op, a.net.dtype, b.net.dtype)
             args = [a.net, b.net, n]
         elif isinstance(other, value | int | float):
             scalar = other if isinstance(other, value) else value_from_number(other)
             s_dtype = transl_type(scalar.dtype)
             if reverse:
                 typed_op = f"{op}_{s_dtype}_{self.net.dtype}arr"
-                out_dtype = _array_out_type(op, s_dtype, self.net.dtype)
                 args = [scalar.net, self.net, n]
             else:
                 typed_op = f"{op}_{self.net.dtype}arr_{s_dtype}"
-                out_dtype = _array_out_type(op, self.net.dtype, s_dtype)
                 args = [self.net, scalar.net, n]
         else:
             return NotImplemented
-        node = _add_array_op(typed_op, args, out_dtype, self.size)
+        node = _add_array_op(typed_op, args, self.size)
         assert isinstance(node.result, ArrayNet)
         return array._from_net(node.result, self.shape)
 
@@ -402,14 +402,14 @@ class array(Generic[TNum]):
         """Element-wise function: sqrt, exp, log, sin, cos, tan, asin, acos,
         atan, tanh (float result) or abs (result of the element type)"""
         n = value_from_number(self.size).net
-        node = _add_array_op(f"{op}_{self.net.dtype}arr", [self.net, n], self.net.dtype if op == 'abs' else 'float', self.size)
+        node = _add_array_op(f"{op}_{self.net.dtype}arr", [self.net, n], self.size)
         assert isinstance(node.result, ArrayNet)
         return array._from_net(node.result, self.shape)
 
     def sum(self) -> value[TNum]:
         """Sum of all elements."""
         n = value_from_number(self.size).net
-        node = _add_array_op(f"sum_{self.net.dtype}arr", [self.net, n], self.net.dtype)
+        node = _add_array_op(f"sum_{self.net.dtype}arr", [self.net, n])
         return value(node.result)
 
     def min(self) -> value[TNum]:
@@ -422,7 +422,7 @@ class array(Generic[TNum]):
 
     def _min_max(self, op: str) -> value[TNum]:
         n = value_from_number(self.size).net
-        node = _add_array_op(f"{op}_{self.net.dtype}arr", [self.net, n], self.net.dtype)
+        node = _add_array_op(f"{op}_{self.net.dtype}arr", [self.net, n])
         return value(node.result, self.dtype)
 
     def sort(self) -> 'array[TNum]':
@@ -430,7 +430,7 @@ class array(Generic[TNum]):
         time only depends on the number of elements, not on the values."""
         self._check_1d('sort')
         n = value_from_number(self.size).net
-        node = _add_array_op(f"sort_{self.net.dtype}arr", [self.net, n], self.net.dtype, self.size)
+        node = _add_array_op(f"sort_{self.net.dtype}arr", [self.net, n], self.size)
         assert isinstance(node.result, ArrayNet)
         return array._from_net(node.result, self.shape, self.dtype)
 
@@ -440,7 +440,7 @@ class array(Generic[TNum]):
         elements, not on the values."""
         self._check_1d('argsort')
         n = value_from_number(self.size).net
-        node = _add_array_op(f"argsort_{self.net.dtype}arr", [self.net, n], 'int', self.size)
+        node = _add_array_op(f"argsort_{self.net.dtype}arr", [self.net, n], self.size)
         assert isinstance(node.result, ArrayNet)
         return array._from_net(node.result, self.shape)
 
@@ -453,8 +453,7 @@ class array(Generic[TNum]):
         if other.size != self.size:
             raise ValueError(f"Size mismatch: {self.size} and {other.size}")
         n = value_from_number(self.size).net
-        out_dtype = _array_out_type('mul', self.net.dtype, other.net.dtype)
-        node = _add_array_op(f"dot_{self.net.dtype}arr_{other.net.dtype}arr", [self.net, other.net, n], out_dtype)
+        node = _add_array_op(f"dot_{self.net.dtype}arr_{other.net.dtype}arr", [self.net, other.net, n])
         return value(node.result)
 
     def matmul(self, other: 'array[Any]') -> 'value[Any] | array[Any]':
@@ -472,20 +471,18 @@ class array(Generic[TNum]):
             if k != other.shape[0]:
                 raise ValueError(f"Shape mismatch: {self.shape} @ {other.shape}")
             n = other.shape[1]
-            out_dtype = _array_out_type('mul', self.net.dtype, other.net.dtype)
             dims = array([m, k, n], 'int')
             node = _add_array_op(f"matmul_{self.net.dtype}arr_{other.net.dtype}arr",
-                                 [self.net, other.net, dims.net], out_dtype, m * n)
+                                 [self.net, other.net, dims.net], m * n)
             assert isinstance(node.result, ArrayNet)
             return array._from_net(node.result, (m, n))
         if self.ndim == 2 and other.ndim == 1:
             m, n = self.shape
             if n != other.shape[0]:
                 raise ValueError(f"Shape mismatch: {self.shape} @ {other.shape}")
-            out_dtype = _array_out_type('mul', self.net.dtype, other.net.dtype)
             node = _add_array_op(f"matvec_{self.net.dtype}arr_{other.net.dtype}arr",
                                  [self.net, other.net, value_from_number(m).net, value_from_number(n).net],
-                                 out_dtype, m)
+                                 m)
             assert isinstance(node.result, ArrayNet)
             return array._from_net(node.result, (m,))
         raise NotImplementedError(f"matmul not implemented for shapes {self.shape} @ {other.shape}")
@@ -639,7 +636,7 @@ class ArrayType(Generic[TNum]):
             return self._array
         return None
 
-    def _array_op(self: TArrayType, other: Any, op: str, reverse: bool = False) -> TArrayType | None:
+    def _try_array_op(self: TArrayType, other: Any, op: str, reverse: bool = False) -> TArrayType | None:
         """Element-wise operation with array stencils, None if not applicable.
         The result has the class of self."""
         if self._is_constant() and (isinstance(other, int | float) or (isinstance(other, ArrayType) and other._is_constant())):

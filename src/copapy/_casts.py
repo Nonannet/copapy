@@ -41,7 +41,7 @@ def _cast_array(x: array[Any], dtype: str) -> array[Any]:
     if dtype == 'int' and x.dtype == 'bool':
         return x._computed()
     n = value_from_number(x.size).net
-    node = _add_array_op(f"{dtype}_{x.net.dtype}arr", [x.net, n], transl_type(dtype), x.size)
+    node = _add_array_op(f"{dtype}_{x.net.dtype}arr", [x.net, n], x.size)
     assert isinstance(node.result, ArrayNet)
     return array._from_net(node.result, x.shape, dtype)
 
