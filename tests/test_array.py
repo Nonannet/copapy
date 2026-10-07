@@ -418,8 +418,9 @@ def test_hybrid_code_size() -> None:
 
 
 def test_autograd_array_error() -> None:
-    x = cp.tensor([cp.value(float(i)) for i in range(100)])
-    y = (x * 2.0).sum()
+    """Strided copies (transposing) are not differentiable yet"""
+    x = cp.tensor([[cp.value(float(i * 10 + j)) for j in range(10)] for i in range(10)])
+    y = ((x * 2.0).T * x).sum()
     with pytest.raises(NotImplementedError):
         cp.grad(y, list(x.values))
 

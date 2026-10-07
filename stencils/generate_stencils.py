@@ -249,41 +249,61 @@ def get_store_code(type1: str, type2: str) -> str:
     """
 
 
-def arr_out_type(op: str, type1: str, type2: str) -> str:
+def arr_operand_type(op: str, type1: str, type2: str) -> str:
+    """Returns type of both operands of an array operation they must be casted to
+    before the operation."""
     return 'float' if op in ('div', 'pow', 'atan2') or type1 != type2 else type1
 
 
-def arr_operand(type1: str, x: str, type_out: str) -> str:
+def arr_out_type(op: str, type1: str, type2: str) -> str:
+    """Element type of the result of an array operation: int for comparisons,
+    otherwise the type of the casted operands"""
+    return 'int' if op in ('gt', 'ge') else arr_operand_type(op, type1, type2)
+
+
+def arr_casted_operand(type1: str, x: str, type_out: str) -> str:
+    """C expression x of type1 casted to type_out"""
     return x if type1 == type_out else f"({type_out}){x}"
 
 
 @norm_indent
 def get_arr_op_code(op: str, type1: str, type2: str, func: str = '') -> str:
-    """Element-wise binary operation or function func(a, b) for array-array (vv),
-    array-scalar (vs) and scalar-array (sv) operands"""
+    """Element-wise binary operation for the operand types type1 and type2:
+    an operator (add, sub, ...), a comparison (gt, ge), min, max or a C function
+    func(a, b). Three stencils are generated, each calling its own kernel:
+
+        {op}_{type1}arr_{type2}arr    array  and array   (kernel _vv)
+        {op}_{type1}arr_{type2}       array  and scalar  (kernel _vs)
+        {op}_{type1}_{type2}arr       scalar and array   (kernel _sv)
+    """
+    t_op = arr_operand_type(op, type1, type2)
     t_out = arr_out_type(op, type1, type2)
     kernel = f"aux_arr_{op}_{type1}_{type2}"
-    a = arr_operand(type1, 'a[i]', t_out)
-    b = arr_operand(type2, 'b[i]', t_out)
-    sa = arr_operand(type1, 'a', t_out)
-    sb = arr_operand(type2, 'b', t_out)
 
     def expr(x: str, y: str) -> str:
-        if op in ('min', 'max'):
-            return f"({x} {'<' if op == 'min' else '>'} {y} ? {x} : {y})"
-        return f"{func}({x}, {y})" if func else f"{x} {op_signs[op]} {y}"
+        """C expression for one element of the result, x and y are the C
+        expressions of the first and second operand (element or scalar)"""
+        x = arr_casted_operand(type1, x, t_op)
+        y = arr_casted_operand(type2, y, t_op)
+        if op == 'min':
+            return f"({x} < {y} ? {x} : {y})"
+        if op == 'max':
+            return f"({x} > {y} ? {x} : {y})"
+        if func:
+            return f"{func}({x}, {y})"
+        return f"{x} {op_signs[op]} {y}"
 
     return f"""
     KERNEL void {kernel}_vv(const {type1} *restrict a, const {type2} *restrict b, {t_out} *restrict o, int n) {{
-        for (int i = 0; i < n; i++) o[i] = {expr(a, b)};
+        for (int i = 0; i < n; i++) o[i] = {expr('a[i]', 'b[i]')};
     }}
 
     KERNEL void {kernel}_vs(const {type1} *restrict a, {type2} b, {t_out} *restrict o, int n) {{
-        for (int i = 0; i < n; i++) o[i] = {expr(a, sb)};
+        for (int i = 0; i < n; i++) o[i] = {expr('a[i]', 'b')};
     }}
 
     KERNEL void {kernel}_sv({type1} a, const {type2} *restrict b, {t_out} *restrict o, int n) {{
-        for (int i = 0; i < n; i++) o[i] = {expr(sa, b)};
+        for (int i = 0; i < n; i++) o[i] = {expr('a', 'b[i]')};
     }}
 
     STENCIL void {op}_{type1}arr_{type2}arr(void) {{
@@ -324,7 +344,7 @@ def get_arr_dot_code(type1: str, type2: str) -> str:
     """Dot product and matrix-vector product (row-major m x n matrix)"""
     t_out = arr_out_type('mul', type1, type2)
     kernel = f"aux_arr_dot_{type1}_{type2}"
-    body = get_reduction_body(t_out, lambda i: f"{arr_operand(type1, f'a[{i}]', t_out)} * {arr_operand(type2, f'b[{i}]', t_out)}")
+    body = get_reduction_body(t_out, lambda i: f"{arr_casted_operand(type1, f'a[{i}]', t_out)} * {arr_casted_operand(type2, f'b[{i}]', t_out)}")
     return f"""
     KERNEL {t_out} {kernel}(const {type1} *restrict a, const {type2} *restrict b, int n) {{
         {body}
@@ -352,10 +372,10 @@ def get_arr_matmul_code(type1: str, type2: str) -> str:
     are passed as int array [m, k, n]. The i-k-j loop order keeps the inner loop
     contiguous for vectorization, the first k step initializes the output row."""
     t_out = arr_out_type('mul', type1, type2)
-    a = arr_operand(type1, 'ar[q]', t_out)
-    a0 = arr_operand(type1, 'ar[0]', t_out)
-    b = arr_operand(type2, 'bq[j]', t_out)
-    b0 = arr_operand(type2, 'b[j]', t_out)
+    a = arr_casted_operand(type1, 'ar[q]', t_out)
+    a0 = arr_casted_operand(type1, 'ar[0]', t_out)
+    b = arr_casted_operand(type2, 'bq[j]', t_out)
+    b0 = arr_casted_operand(type2, 'b[j]', t_out)
     return f"""
     KERNEL void aux_arr_matmul_{type1}_{type2}(const {type1} *restrict a, const {type2} *restrict b, {t_out} *restrict o, const int *restrict p) {{
         int m = p[0], k = p[1], n = p[2];
@@ -385,7 +405,7 @@ def get_arr_func1_code(name: str, func: str, type1: str, type_out: str = 'float'
     kernel = f"aux_arr_{name}_{type1}"
     return f"""
     KERNEL void {kernel}(const {type1} *restrict a, {type_out} *restrict o, int n) {{
-        for (int i = 0; i < n; i++) o[i] = {func}({arr_operand(type1, 'a[i]', type_out)});
+        for (int i = 0; i < n; i++) o[i] = {func}({arr_casted_operand(type1, 'a[i]', type_out)});
     }}
 
     STENCIL void {name}_{type1}arr(void) {{
@@ -737,7 +757,7 @@ if __name__ == "__main__":
     for op, t1, t2 in permutate(['add', 'sub', 'mul', 'div'], types, types):
         code += get_arr_op_code(op, t1, t2)
 
-    for op, t1, t2 in permutate(['min', 'max'], types, types):
+    for op, t1, t2 in permutate(['min', 'max', 'gt', 'ge'], types, types):
         code += get_arr_op_code(op, t1, t2)
 
     for fn, t1, t2 in permutate(['pow', 'atan2'], types, types):

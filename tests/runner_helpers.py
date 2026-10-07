@@ -384,6 +384,12 @@ def array_test_values() -> tuple[list[NumLike], list[NumLike]]:
     add(cp.maximum(arrays[id(ia)], arrays[id(fb)]), [float(max(p, q)) for p, q in zip(ia, fb)])
     add(cp.minimum(fs, arrays[id(ia)]), [float(min(1.5, q)) for q in ia])
 
+    # Comparisons (int result)
+    add(arrays[id(fa)] > arrays[id(ib)], [int(p > q) for p, q in zip(fa, ib)])
+    add(arrays[id(ia)] >= 2, [int(p >= 2) for p in ia])
+    add(arrays[id(fa)] < fs, [int(p < 1.5) for p in fa])
+    add(arrays[id(ia)] <= arrays[id(ib)], [int(p <= q) for p, q in zip(ia, ib)])
+
     return ret_test, ret_ref
 
 
