@@ -198,14 +198,14 @@ def math_program(val: Any) -> list[NumLike]:
                        (cp.atan, ARC_VALS + [-1000.0, -2.0, 10.0]),
                        (cp.abs, SIGNED_VALS),
                        (cp.sign, SIGNED_VALS),
-                       (cp.relu, SIGNED_VALS),
-                       (cp.sigmoid, [-20.0, -1.0, 0.0, 2.5, 20.0]),
+                       (cp.nn.relu, SIGNED_VALS),
+                       (cp.nn.sigmoid, [-20.0, -1.0, 0.0, 2.5, 20.0]),
                        (cp.get_42, [1.0])]:
         ret += [func(val(a)) for a in args]
 
     # Integer arguments
     ret += [cp.abs(val(-9)), cp.sign(val(-9)), cp.sign(val(0)), cp.sign(val(7)), cp.sqrt(val(9)),
-            cp.minimum(val(-9), 5), cp.maximum(val(-9), 5), cp.clamp(val(-9), -5, 5), cp.relu(val(-9))]
+            cp.minimum(val(-9), 5), cp.maximum(val(-9), 5), cp.clamp(val(-9), -5, 5), cp.nn.relu(val(-9))]
 
     # Both arguments variable, only the first or only the second one
     for func2 in (cp.atan2, cp.pow, cp.minimum, cp.maximum):
@@ -363,10 +363,10 @@ def array_test_values() -> tuple[list[NumLike], list[NumLike]]:
         return cb[o] + sum(cw[o][q][ky][kx] * cx[q][oy * 2 - 1 + ky][ox - 1 + kx] for q in range(2) for ky in range(3)
                            for kx in range(3) if 0 <= oy * 2 - 1 + ky < 5 and 0 <= ox - 1 + kx < 9)
 
-    add(cp.conv2d(cp.array(cx), cp.array(cw), cp.array(cb), stride=(2, 1), padding=1),
+    add(cp.nn.conv2d(cp.array(cx), cp.array(cw), cp.array(cb), stride=(2, 1), padding=1),
         [conv_ref(o, oy, ox) for o in range(3) for oy in range(3) for ox in range(9)])
     c1 = [[[(o * 3 + q * 2 + k) % 4 * 0.5 - 0.75 for k in range(3)] for q in range(5)] for o in range(2)]
-    add(cp.conv1d(cp.array(cx[0]), cp.array(c1), padding=1),
+    add(cp.nn.conv1d(cp.array(cx[0]), cp.array(c1), padding=1),
         [sum(c1[o][q][k] * cx[0][q][i - 1 + k] for q in range(5) for k in range(3) if 0 <= i - 1 + k < 9)
          for o in range(2) for i in range(9)])
 

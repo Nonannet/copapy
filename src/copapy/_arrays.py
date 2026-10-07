@@ -122,9 +122,9 @@ def _add_array_op(typed_op: str, args: list[Net], out_dtype: str, length: int | 
 
 class array(Generic[TNum]):
     """Homogeneous n-dimensional array stored contiguously (row-major) in the
-    target memory. In contrast to tensor, operations on arrays compile to a single
-    array stencil per operation instead of one stencil per element, which keeps
-    compile time and code size independent of the array size.
+    target memory. Operations on arrays compile to a array stencil instead of
+    one stencil per element, which keeps compile time and code size
+    independent of the array size.
 
     Attributes:
         shape: Size of each dimension.
