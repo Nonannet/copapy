@@ -2,10 +2,12 @@ from . import vector
 from . import tensor
 from ._vectors import VecNumLike
 from ._tensors import TensorNumLike
-from ._arrays import array
+from ._arrays import array, ArrayType
 from . import value, NumLike
 from typing import TypeVar, Any, overload, Callable
 from ._basic_types import add_op, unifloat
+from functools import reduce
+import builtins
 import math
 
 T = TypeVar("T", int, float, value[int], value[float])
@@ -473,7 +475,11 @@ def minimum(x: U | value[U] | vector[U], y: vector[U]) -> vector[U]: ...
 def minimum(x: tensor[U], y: U | value[U] | tensor[U]) -> tensor[U]: ...
 @overload
 def minimum(x: U | value[U] | tensor[U], y: tensor[U]) -> tensor[U]: ...
-def minimum(x: U | value[U] | vector[U] | tensor[U], y: U | value[U] | vector[U] | tensor[U]) -> Any:
+@overload
+def minimum(x: array[Any], y: Any) -> array[Any]: ...
+@overload
+def minimum(x: Any, y: array[Any]) -> array[Any]: ...
+def minimum(x: Any, y: Any) -> Any:
     """Minimum function to get the smaller of two values.
 
     Arguments:
@@ -483,8 +489,12 @@ def minimum(x: U | value[U] | vector[U] | tensor[U], y: U | value[U] | vector[U]
     Returns:
         Minimum of x and y
     """
+    if isinstance(x, array):
+        return x._binary_op('min', y)
+    if isinstance(y, array):
+        return y._binary_op('min', x, reverse=True)
     if isinstance(x, tensor) or isinstance(y, tensor):
-        return _map2_tensor(x, y, minimum)
+        return _map2_tensor(x, y, minimum, 'min')
     if isinstance(x, vector) or isinstance(y, vector):
         return _map2_vector(x, y, minimum)
     if isinstance(x, value) or isinstance(y, value):
@@ -506,7 +516,11 @@ def maximum(x: U | value[U] | vector[U], y: vector[U]) -> vector[U]: ...
 def maximum(x: tensor[U], y: U | value[U] | tensor[U]) -> tensor[U]: ...
 @overload
 def maximum(x: U | value[U] | tensor[U], y: tensor[U]) -> tensor[U]: ...
-def maximum(x: U | value[U] | vector[U] | tensor[U], y: U | value[U] | vector[U] | tensor[U]) -> Any:
+@overload
+def maximum(x: array[Any], y: Any) -> array[Any]: ...
+@overload
+def maximum(x: Any, y: array[Any]) -> array[Any]: ...
+def maximum(x: Any, y: Any) -> Any:
     """Maximum function to get the larger of two values.
 
     Arguments:
@@ -516,13 +530,67 @@ def maximum(x: U | value[U] | vector[U] | tensor[U], y: U | value[U] | vector[U]
     Returns:
         Maximum of x and y
     """
+    if isinstance(x, array):
+        return x._binary_op('max', y)
+    if isinstance(y, array):
+        return y._binary_op('max', x, reverse=True)
     if isinstance(x, tensor) or isinstance(y, tensor):
-        return _map2_tensor(x, y, maximum)
+        return _map2_tensor(x, y, maximum, 'max')
     if isinstance(x, vector) or isinstance(y, vector):
         return _map2_vector(x, y, maximum)
     if isinstance(x, value) or isinstance(y, value):
         return add_op('max', [x, y])
     return x if x > y else y
+
+
+@overload
+def min(x: array[U]) -> value[U]: ...
+@overload
+def min(x: ArrayType[U]) -> U | value[U]: ...
+def min(x: ArrayType[U] | array[U]) -> Any:
+    """Smallest element of a vector, tensor or array.
+
+    Arguments:
+        x: Vector, tensor or array
+
+    Returns:
+        Minimum of all elements
+    """
+    return _min_max(x, 'min')
+
+
+@overload
+def max(x: array[U]) -> value[U]: ...
+@overload
+def max(x: ArrayType[U]) -> U | value[U]: ...
+def max(x: ArrayType[U] | array[U]) -> Any:
+    """Largest element of a vector, tensor or array.
+
+    Arguments:
+        x: Vector, tensor or array
+
+    Returns:
+        Maximum of all elements
+    """
+    return _min_max(x, 'max')
+
+
+def _min_max(x: Any, op: str) -> Any:
+    """Reduction by an array stencil for arrays and packed instances, otherwise by
+    one scalar operation for each copapy value (constants are reduced at trace time)."""
+    if isinstance(x, array):
+        return x._min_max(op)
+    if not isinstance(x, ArrayType):
+        raise TypeError(f"{op} requires a vector, tensor or array, not {type(x).__name__}")
+    if not x.values:
+        raise ValueError(f"{op} of an empty {type(x).__name__}")
+    arr = None if x._is_constant() else x._get_array()
+    if arr is not None:
+        return arr._min_max(op)
+    constants = [v for v in x.values if not isinstance(v, value)]
+    start: list[Any] = [getattr(builtins, op)(constants)] if constants else []
+    func = lambda x, y: add_op(op, [x, y])
+    return reduce(func, start + [v for v in x.values if isinstance(v, value)])
 
 
 @overload
@@ -594,9 +662,9 @@ def _map2_tensor(self: TensorNumLike, other: TensorNumLike, func: Callable[[Any,
     if array_op:
         ret = None
         if isinstance(self, tensor):
-            ret = self._array_op(other, array_op)
+            ret = self._try_array_op(other, array_op)
         elif isinstance(other, tensor):
-            ret = other._array_op(self, array_op, reverse=True)
+            ret = other._try_array_op(self, array_op, reverse=True)
         if ret is not None:
             return ret
     if isinstance(self, tensor) and isinstance(other, tensor):

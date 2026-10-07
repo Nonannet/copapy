@@ -237,7 +237,7 @@ def _estimate_numtaps(cutoff: float | Sequence[float], window: str, fs: float, w
     return math.ceil(_TRANSITION_WIDTHS[window] * fs / width - 1e-9) | 1
 
 
-def _fir_filter(a: Sequence | array, cutoff: float | Sequence[float], pass_zero: str, numtaps: int | None,
+def _fir_filter(a: Sequence[Any] | array[Any], cutoff: float | Sequence[float], pass_zero: str, numtaps: int | None,
                 window: str, fs: float, width: float | None) -> Any:
     """Filtered samples aligned with the input (delay of the filter removed)"""
     if numtaps is None:

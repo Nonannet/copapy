@@ -561,6 +561,34 @@ def get_arr_sum_code(type1: str) -> str:
     """
 
 
+@norm_indent
+def get_arr_minmax_code(op: str, type1: str, lanes: int = 8) -> str:
+    """Smallest (min) or largest (max) element of an array. Independent partial
+    results allow vectorization like for the sum."""
+    kernel = f"aux_arr_{op}_{type1}"
+    cmp = '<' if op == 'min' else '>'
+    decl = ', '.join(f'r{k} = a[0]' for k in range(lanes))
+    body = ' '.join(f'r{k} = a[i + {k}] {cmp} r{k} ? a[i + {k}] : r{k};' for k in range(lanes))
+    total = ' '.join(f'r = r{k} {cmp} r ? r{k} : r;' for k in range(lanes))
+    return f"""
+    KERNEL {type1} {kernel}(const {type1} *restrict a, int n) {{
+        {type1} {decl}, r = a[0];
+        int i = 0;
+        for (; i + {lanes} <= n; i += {lanes}) {{
+            {body}
+        }}
+        for (; i < n; i++) r = a[i] {cmp} r ? a[i] : r;
+        {total}
+        return r;
+    }}
+
+    STENCIL void {op}_{type1}arr(void) {{
+        *({type1} *)REF(ref_out) = {kernel}(REF(ref_arg0), *(int *)REF(ref_arg1));
+        result_void();
+    }}
+    """
+
+
 def permutate(*lists: list[str]) -> Generator[list[str], None, None]:
     if len(lists) == 0:
         yield []
@@ -682,6 +710,8 @@ if __name__ == "__main__":
 
     for t in types:
         code += get_arr_sum_code(t)
+        code += get_arr_minmax_code('min', t)
+        code += get_arr_minmax_code('max', t)
         code += get_arr_sort_code(t)
 
     print(f"Write file {args.path}...")
