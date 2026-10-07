@@ -3,7 +3,7 @@ from . import value
 from ._arrays import ArrayType
 from ._vectors import vector, VecFloatLike, VecIntLike, VecNumLike
 from ._mixed import mixed_sum
-from typing import TypeVar, Any, overload, TypeAlias, Callable, Iterator, Sequence, Iterable, cast
+from typing import TypeVar, Any, overload, TypeAlias, Callable, Iterator, Sequence, Iterable, Literal, cast
 from ._helper_types import TNum
 
 TensorNumLike: TypeAlias = 'tensor[Any] | vector[Any] | value[Any] | int | float | bool'
@@ -859,21 +859,28 @@ class tensor(ArrayType[TNum]):
             return new_values[0]
         return tensor(new_values, tuple(new_shape))
 
-    def mean(self, axis: int | None = None) -> Any:
-        """Calculate mean along axis or overall.
+    @overload
+    def mean(self, axis: None = None, keepdims: Literal[False] = False) -> float | value[float]: ...
+    @overload
+    def mean(self, axis: None = None, *, keepdims: Literal[True]) -> 'tensor[float]': ...
+    @overload
+    def mean(self, axis: int | Sequence[int], keepdims: Literal[True]) -> 'tensor[float]': ...
+    @overload
+    def mean(self, axis: int | Sequence[int], keepdims: bool = False) -> 'float | value[float] | tensor[float]': ...
+    def mean(self, axis: int | Sequence[int] | None = None, keepdims: bool = False) -> Any:
+        """Calculate mean of all elements or along specified axis/axes.
 
         Arguments:
-            axis: Axis along which to compute mean. If None, computes overall mean.
+            axis: Axis or tuple of axes along which to compute mean. If None, computes overall mean.
+            keepdims: If True, keep reduced dimensions as size 1.
 
         Returns:
-            Scalar or tensor with reduced dimension.
+            Scalar or tensor with reduced dimension(s).
         """
-        if axis is None:
-            total_sum: Any = self.sum()
-            return total_sum / self.size()
-
-        sum_result: Any = self.sum(axis)
-        return sum_result / self.shape[axis]
+        total: Any = self.sum(axis, keepdims)
+        # Number of elements averaged into each element of the result
+        count = self.size() // (total.size() if isinstance(total, tensor) else 1)
+        return total / count
 
     def map(self, func: Callable[[Any], value[U] | U]) -> 'tensor[U]':
         """Apply a function to each element.
