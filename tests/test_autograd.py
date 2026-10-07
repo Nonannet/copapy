@@ -105,5 +105,20 @@ def test_autograd_neg():
     assert tg.read_value(grad_xy) == pytest.approx([2.0, -1.5], rel=1e-6)  # pyright: ignore[reportUnknownMemberType]
 
 
+def test_autograd_atan2_min_max():
+    a, b = value(0.7), value(-1.3)
+    terms = [cp.atan2(a, b), cp.maximum(a, b) * 2.0 + cp.minimum(a, b), cp.sign(a) * b]
+    grads = [grad(t, (a, b)) for t in terms]
+
+    tg = cp.Target()
+    tg.compile(*grads)
+    tg.run()
+
+    denom = 0.7 ** 2 + 1.3 ** 2
+    expected = [[-1.3 / denom, -0.7 / denom], [2.0, 1.0], [0.0, 1.0]]
+    for dg, ref in zip(grads, expected):
+        assert tg.read_value(dg) == pytest.approx(ref, rel=1e-5)  # pyright: ignore[reportUnknownMemberType]
+
+
 if __name__ == "__main__":
     test_autograd()
