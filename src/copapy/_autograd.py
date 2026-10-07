@@ -62,7 +62,7 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
             a: value[float] = value(args[0])
             b: value[float] = value(args[1]) if len(args) > 1 else a
 
-            if opn in ['ge', 'gt', 'eq', 'ne', 'floordiv', 'bwand', 'bwor', 'bwxor']:
+            if opn in ['ge', 'gt', 'eq', 'ne', 'floordiv', 'bwand', 'bwor', 'bwxor', 'int']:
                 pass  # Derivative is 0 for all ops returning integers
 
             elif opn == 'add':
