@@ -388,6 +388,14 @@ def test_mean():
     assert t.mean(axis=0).values == pytest.approx((2.5, 3.5, 4.5))  # pyright: ignore[reportUnknownMemberType]
     assert t.mean(axis=1).values == pytest.approx((2.0, 5.0))  # pyright: ignore[reportUnknownMemberType]
     assert t.mean(axis=-1).values == pytest.approx((2.0, 5.0))  # pyright: ignore[reportUnknownMemberType]
+    assert t.mean(axis=(0, 1)) == pytest.approx(3.5)  # pyright: ignore[reportUnknownMemberType]
+    assert t.mean(keepdims=True).shape == (1, 1)
+    assert t.mean(keepdims=True).values == pytest.approx((3.5,))  # pyright: ignore[reportUnknownMemberType]
+    assert t.mean(axis=0, keepdims=True).shape == (1, 3)
+    assert t.mean(axis=0, keepdims=True).values == pytest.approx((2.5, 3.5, 4.5))  # pyright: ignore[reportUnknownMemberType]
+
+    t3 = cp.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
+    assert t3.mean(axis=(0, -1)).values == pytest.approx((3.5, 5.5))  # pyright: ignore[reportUnknownMemberType]
 
 
 def test_compiled_reductions():
