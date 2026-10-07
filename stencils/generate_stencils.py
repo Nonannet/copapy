@@ -75,12 +75,12 @@ def get_op_code(op: str, type1: str, type2: str, type_out: str) -> str:
 
 
 @norm_indent
-def get_int_to_float() -> str:
-    """Conversion of int to float."""
-    return """
-    STENCIL void float_int(int arg1) {
-        result_float((float)arg1);
-    }
+def get_cast(type_out: str, type_in: str) -> str:
+    """Conversion of type_in to type_out."""
+    return f"""
+    STENCIL void {type_out}_{type_in}({type_in} arg1) {{
+        result_{type_out}(({type_out})arg1);
+    }}
     """
 
 
@@ -394,6 +394,22 @@ def get_arr_func1_code(name: str, func: str, type1: str, type_out: str = 'float'
 
 
 @norm_indent
+def get_arr_cast_code(name: str, type1: str, expr: str, type_out: str) -> str:
+    """Element-wise type conversion of an array, expr converts the element a[i]"""
+    kernel = f"aux_arr_{name}_{type1}"
+    return f"""
+    KERNEL void {kernel}(const {type1} *restrict a, {type_out} *restrict o, int n) {{
+        for (int i = 0; i < n; i++) o[i] = {expr};
+    }}
+
+    STENCIL void {name}_{type1}arr(void) {{
+        {kernel}(REF(ref_arg0), REF(ref_out), *(int *)REF(ref_arg1));
+        result_void();
+    }}
+    """
+
+
+@norm_indent
 def get_arr_copy_code() -> str:
     """Strided copy of 32 bit elements for transposing, slicing and broadcasting.
     Parameters as int array: [offset, n0, n1, n2, n3, s0, s1, s2, s3] with the
@@ -581,7 +597,8 @@ if __name__ == "__main__":
 
     code += get_entry_function_shell()
 
-    code += get_int_to_float()
+    code += get_cast('float', 'int')
+    code += get_cast('int', 'float')
 
     for fn in ['get_42', 'tanh']:
         code += get_func1(fn, 'float')
@@ -654,6 +671,11 @@ if __name__ == "__main__":
     for t1, t2 in permutate(types, types):
         code += get_arr_dot_code(t1, t2)
         code += get_arr_matmul_code(t1, t2)
+
+    code += get_arr_cast_code('float', 'int', '(float)a[i]', 'float')
+    code += get_arr_cast_code('int', 'float', '(int)a[i]', 'int')
+    for t in types:
+        code += get_arr_cast_code('bool', t, 'a[i] != 0', 'int')
 
     code += get_arr_copy_code()
     code += get_arr_conv_code()
