@@ -90,7 +90,7 @@ def detect_process_arch() -> str:
     elif arch in ('i386', 'i686', 'x86'):
         arch_family = 'x86'
     elif arch in ('arm64', 'aarch64'):
-        arch_family = 'arm64'
+        arch_family = 'arm64' if bits == 64 else 'armv7'
     elif 'armv7' in arch or 'armv8' in arch:
         arch_family = 'armv7'  # Treat armv8 (64 bit CPU) as armv7 for 32 bit
     elif 'armv6' in arch:
