@@ -395,6 +395,18 @@ class array(Generic[TNum]):
     def __rpow__(self, other: NumLike) -> 'array[float]':
         return self._binary_op('pow', other, reverse=True)
 
+    def __gt__(self, other: 'array[Any] | NumLike') -> 'array[int]':
+        return self._binary_op('gt', other)
+
+    def __lt__(self, other: 'array[Any] | NumLike') -> 'array[int]':
+        return self._binary_op('gt', other, reverse=True)
+
+    def __ge__(self, other: 'array[Any] | NumLike') -> 'array[int]':
+        return self._binary_op('ge', other)
+
+    def __le__(self, other: 'array[Any] | NumLike') -> 'array[int]':
+        return self._binary_op('ge', other, reverse=True)
+
     def __abs__(self) -> 'array[TNum]':
         return self._unary_op('abs')
 
