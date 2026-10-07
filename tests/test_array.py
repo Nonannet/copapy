@@ -131,7 +131,7 @@ def test_small_integer_powers() -> None:
     a = cp.array(va)
     m = cp.array([[1.5, -2.0], [0.5, 3.0]])
 
-    res = [a ** 1, a ** 2, a ** 3, cp.pow(a, 7), m ** 2, a ** 0, cp.exp(m).sum(), cp.sigmoid(m)]
+    res = [a ** 1, a ** 2, a ** 3, cp.pow(a, 7), m ** 2, a ** 0, cp.exp(m).sum(), cp.nn.sigmoid(m)]
     out = evaluate(*res)
 
     assert a ** 1 is a

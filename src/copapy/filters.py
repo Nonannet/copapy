@@ -2,7 +2,7 @@ from ._vectors import vector
 from ._tensors import tensor
 from ._basic_types import value, unifloat, NumLike
 from ._arrays import array, ArrayType, _size
-from ._nn import _float_array, _conv
+from .nn import _float_array, _conv
 from ._casts import to_float
 from ._sorting import _as_array
 from typing import Any, Sequence, TypeAlias, overload

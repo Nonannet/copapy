@@ -38,8 +38,8 @@ UNARY_CASES: list[tuple[Callable[..., Any], Callable[..., Any], list[float]]] = 
     (cp.atan, math.atan, ARC_VALS + [-1000.0, -10.0, -2.0, 2.0, 10.0, 1000.0]),
     (cp.abs, abs, [-1000.5, -2.5, -0.0, 0.0, 2.5, 1000.5]),
     (cp.sign, sign_ref, [-1000.5, -2.5, 0.0, 2.5, 1000.5]),
-    (cp.relu, lambda x: max(x, 0.0), [-1000.5, -2.5, 0.0, 2.5, 1000.5]),
-    (cp.sigmoid, lambda x: 1.0 / (1.0 + math.exp(-x)), [-20.0, -2.5, -1.0, 0.0, 1.0, 2.5, 20.0]),
+    (cp.nn.relu, lambda x: max(x, 0.0), [-1000.5, -2.5, 0.0, 2.5, 1000.5]),
+    (cp.nn.sigmoid, lambda x: 1.0 / (1.0 + math.exp(-x)), [-20.0, -2.5, -1.0, 0.0, 1.0, 2.5, 20.0]),
 ]
 
 

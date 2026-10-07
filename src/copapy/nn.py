@@ -6,6 +6,8 @@ import copapy as cp
 from ._arrays import array, ArrayType, _add_array_op
 from ._basic_types import ArrayNet
 
+__all__ = ["relu", "sigmoid", "conv1d", "conv2d"]
+
 U = TypeVar("U", int, float)
 TArr = TypeVar("TArr", array[Any], tensor[Any])
 

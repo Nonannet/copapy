@@ -77,7 +77,7 @@ def test_conv2d(ci: int, h: int, w: int, co: int, kh: int, kw: int,
     db = sample((co,), 3) if bias else None
     ref = ref_conv2d(dx, dw, db, stride, padding, dilation)
 
-    res = cp.conv2d(cp.array(dx), cp.array(dw), cp.array(db) if db else None, stride, padding, dilation)
+    res = cp.nn.conv2d(cp.array(dx), cp.array(dw), cp.array(db) if db else None, stride, padding, dilation)
     out, = evaluate(res)
 
     assert res.shape == (co, len(ref[0]), len(ref[0][0]))
@@ -100,7 +100,7 @@ def test_conv1d(ci: int, length: int, co: int, k: int, stride: int, padding: int
     db = sample((co,), 3) if bias else None
     ref = ref_conv1d(dx, dw, db, stride, padding, dilation)
 
-    res = cp.conv1d(cp.array(dx), cp.array(dw), cp.array(db) if db else None, stride, padding, dilation)
+    res = cp.nn.conv1d(cp.array(dx), cp.array(dw), cp.array(db) if db else None, stride, padding, dilation)
     out, = evaluate(res)
 
     assert res.shape == (co, len(ref[0]))
@@ -111,8 +111,8 @@ def test_batch() -> None:
     dx, dw, db = sample((3, 2, 6, 7)), sample((4, 2, 3, 3), 5), sample((4,), 3)
     d1, w1 = sample((3, 2, 12)), sample((4, 2, 3), 5)
 
-    res2 = cp.conv2d(cp.array(dx), cp.array(dw), cp.array(db), stride=2, padding=1)
-    res1 = cp.conv1d(cp.array(d1), cp.array(w1), cp.array(db), padding=1)
+    res2 = cp.nn.conv2d(cp.array(dx), cp.array(dw), cp.array(db), stride=2, padding=1)
+    res1 = cp.nn.conv1d(cp.array(d1), cp.array(w1), cp.array(db), padding=1)
     out2, out1 = evaluate(res2, res1)
 
     assert res2.shape == (3, 4, 3, 4)
@@ -126,10 +126,10 @@ def test_tensor_int_and_nested_inputs() -> None:
     dx, dw = sample((2, 5, 6), dtype='int'), sample((3, 2, 2, 2), 5, 'int')
     ref = ref_conv2d(dx, dw)
 
-    res_t = cp.conv2d(cp.tensor(dx), cp.tensor(dw))
-    res_a = cp.conv2d(cp.array(dx), dw, [0, 0, 0])
+    res_t = cp.nn.conv2d(cp.tensor(dx), cp.tensor(dw))
+    res_a = cp.nn.conv2d(cp.array(dx), dw, [0, 0, 0])
     d1 = dx[0][:2]  # 2 channels of length 6
-    res_c = cp.conv1d(cp.tensor([[cp.value(float(v)) for v in row] for row in d1]), dw[0]).sum()
+    res_c = cp.nn.conv1d(cp.tensor([[cp.value(float(v)) for v in row] for row in d1]), dw[0]).sum()
     out_t, out_a, out_c = evaluate(res_t, res_a, res_c)
 
     assert isinstance(res_t, cp.tensor) and isinstance(res_a, cp.array)
@@ -143,7 +143,7 @@ def test_chained_layers_and_rerun() -> None:
     """Two layers with operations in between, weights and inputs rewritten on the target"""
     dx, dw1, db1, dw2 = sample((1, 8, 8)), sample((2, 1, 3, 3), 5), sample((2,), 3), sample((1, 2, 3, 3), 7)
     x, w1, b1 = cp.array(dx), cp.array(dw1), cp.array(db1)
-    y = cp.conv2d(cp.conv2d(x, w1, b1, padding=1) * 0.5, cp.array(dw2), stride=2)
+    y = cp.nn.conv2d(cp.nn.conv2d(x, w1, b1, padding=1) * 0.5, cp.array(dw2), stride=2)
 
     def ref(vx: Any, vw1: Any) -> Any:
         hidden = [[[v * 0.5 for v in row] for row in ch] for ch in ref_conv2d(vx, vw1, db1, padding=1)]
@@ -165,7 +165,7 @@ def test_code_size_independent_of_shape() -> None:
     from copapy.backend import compile_to_dag
 
     def program_size(n: int) -> int:
-        y = cp.conv2d(cp.array(sample((2, n, n))), cp.array(sample((3, 2, 3, 3))))
+        y = cp.nn.conv2d(cp.array(sample((2, n, n))), cp.array(sample((3, 2, 3, 3))))
         dw, _ = compile_to_dag([y.net.source], cp.generic_sdb)
         return len(dw.get_data()) - 4 * 2 * n * n  # without the data of the input
 
@@ -176,18 +176,18 @@ def test_errors() -> None:
     x = cp.array(sample((2, 5, 5)))
     w = cp.array(sample((3, 2, 3, 3)))
     with pytest.raises(ValueError):
-        cp.conv2d(x, cp.array(sample((3, 1, 3, 3))))  # channel mismatch
+        cp.nn.conv2d(x, cp.array(sample((3, 1, 3, 3))))  # channel mismatch
     with pytest.raises(ValueError):
-        cp.conv2d(x, w, cp.array([1.0, 2.0]))  # bias size
+        cp.nn.conv2d(x, w, cp.array([1.0, 2.0]))  # bias size
     with pytest.raises(ValueError):
-        cp.conv2d(x, cp.array(sample((3, 2, 6, 6))))  # kernel larger than input
+        cp.nn.conv2d(x, cp.array(sample((3, 2, 6, 6))))  # kernel larger than input
     with pytest.raises(ValueError):
-        cp.conv2d(x, w, stride=0)
+        cp.nn.conv2d(x, w, stride=0)
     with pytest.raises(ValueError):
-        cp.conv2d(x, w, padding=(1, 2, 3))
+        cp.nn.conv2d(x, w, padding=(1, 2, 3))
     with pytest.raises(ValueError):
-        cp.conv2d(cp.array(sample((5, 5))), w)  # missing channel dimension
+        cp.nn.conv2d(cp.array(sample((5, 5))), w)  # missing channel dimension
     with pytest.raises(ValueError):
-        cp.conv1d(x, w)
+        cp.nn.conv1d(x, w)
     with pytest.raises(TypeError):
-        cp.conv2d(x, 1.0)
+        cp.nn.conv2d(x, 1.0)

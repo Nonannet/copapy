@@ -13,8 +13,8 @@ def test_autograd():
     d = a * b + b**3
     c += c + 1
     c += 1 + c + (-a)
-    d += d * 2 + cp.relu(b + a)
-    d += 3 * d + cp.relu(-a + b)
+    d += d * 2 + cp.nn.relu(b + a)
+    d += 3 * d + cp.nn.relu(-a + b)
     e = c - d
     f = e**2
     g = f / 2.0
@@ -69,7 +69,7 @@ def extended_function(a, b, relu, sin, abs):
 def test_autograd_extended():
     a = value(-4.0)
     b = value(2.0)
-    g = extended_function(a, b, cp.relu, cp.sin, cp.abs)
+    g = extended_function(a, b, cp.nn.relu, cp.sin, cp.abs)
 
     dg = grad(g, (a, b))
 
