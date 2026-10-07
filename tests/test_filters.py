@@ -1,4 +1,5 @@
 """Tests for sort, argsort and the filters: median by a sorting network stencil, convolve"""
+import math
 import random
 import statistics
 from typing import Any
@@ -145,3 +146,71 @@ def test_convolve_errors() -> None:
         filters.convolve(a, [1.0], 'circular')
     with pytest.raises(ValueError):
         filters.convolve(cp.tensor([[cp.value(1.0), cp.value(2.0)]]), [1.0])
+
+
+def gaussian_ref(flat: list[float], shape: tuple[int, ...], sigmas: list[float], truncate: float = 4.0) -> list[float]:
+    """Separable Gaussian filter of row-major data with zeros beyond the edges"""
+    for axis, s in enumerate(sigmas):
+        r = int(truncate * s + 0.5)
+        if r == 0:
+            continue
+        k = [math.exp(-0.5 * (i / s) ** 2) for i in range(-r, r + 1)]
+        k = [w / sum(k) for w in k]
+        n, stride = shape[axis], math.prod(shape[axis + 1:])
+        flat = [sum(k[j + r] * flat[idx + j * stride] for j in range(-r, r + 1) if 0 <= (idx // stride) % n + j < n)
+                for idx in range(len(flat))]
+    return flat
+
+
+def nest(flat: list[Any], shape: tuple[int, ...]) -> Any:
+    if len(shape) == 1:
+        return list(flat)
+    step = len(flat) // shape[0]
+    return [nest(flat[i * step:(i + 1) * step], shape[1:]) for i in range(shape[0])]
+
+
+def flatten(data: Any) -> list[Any]:
+    return [x for d in data for x in flatten(d)] if isinstance(data, list) else [data]
+
+
+@pytest.mark.parametrize('shape,sigma', [((9,), 1.0), ((3,), 2.0), ((5, 7), 0.8), ((6, 4), (1.5, 0.0)),
+                                         ((3, 4, 5), 0.7), ((4, 3, 6), (0.5, 1.0, 1.5))])
+def test_gaussian_filter(shape: tuple[int, ...], sigma: Any) -> None:
+    data = sample(math.prod(shape), 'float', sum(shape))
+    sigmas = [float(sigma)] * len(shape) if isinstance(sigma, float) else list(sigma)
+    ref = gaussian_ref(data, shape, sigmas)
+
+    t = cp.tensor([cp.value(x) for x in data], shape)
+    results = [filters.gaussian_filter(t, sigma), filters.gaussian_filter(cp.array(nest(data, shape)), sigma),
+               filters.gaussian_filter(nest(data, shape), sigma), filters.gaussian_filter(cp.tensor(data, shape), sigma)]
+    assert [type(r) for r in results] == [cp.tensor, cp.array, cp.array, cp.tensor]
+    assert all(r.shape == shape for r in results)
+
+    for out in evaluate(*results):
+        vals = list(out.values) if isinstance(out, cp.tensor) else flatten(out)
+        assert vals == pytest.approx(ref, abs=1e-4)
+
+
+def test_gaussian_filter_vector() -> None:
+    data = sample(12, 'float', 3)
+    g = filters.gaussian_filter(cp.vector(cp.value(x) for x in data), 1.2, truncate=2.0)
+    assert isinstance(g, cp.vector)
+    out, = evaluate(g)
+    assert list(out.values) == pytest.approx(gaussian_ref(data, (12,), [1.2], 2.0), abs=1e-4)
+
+
+def test_gaussian_filter_scipy_reference() -> None:
+    np = pytest.importorskip('numpy')
+    ndimage = pytest.importorskip('scipy.ndimage')
+    for shape, sigmas in [((9,), [1.0]), ((5, 7), [0.8, 1.6]), ((3, 4, 5), [0.7, 0.0, 1.1])]:
+        data = sample(math.prod(shape), 'float', 1)
+        ref = ndimage.gaussian_filter(np.array(data).reshape(shape), sigmas, mode='constant')
+        assert gaussian_ref(data, shape, sigmas) == pytest.approx(list(ref.flatten()))
+
+
+def test_gaussian_filter_errors() -> None:
+    t = cp.tensor([[cp.value(1.0), cp.value(2.0)]])
+    with pytest.raises(ValueError):
+        filters.gaussian_filter(t, (1.0, 1.0, 1.0))
+    with pytest.raises(ValueError):
+        filters.gaussian_filter(t, -1.0)
