@@ -432,7 +432,7 @@ class tensor(ArrayType[TNum]):
         if array_op:
             if isinstance(other, Sequence | vector):
                 other = tensor(other)
-            ret = self._array_op(other, array_op, reverse)
+            ret = self._try_array_op(other, array_op, reverse)
             if ret is not None:
                 return ret
 

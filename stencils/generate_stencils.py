@@ -269,6 +269,8 @@ def get_arr_op_code(op: str, type1: str, type2: str, func: str = '') -> str:
     sb = arr_operand(type2, 'b', t_out)
 
     def expr(x: str, y: str) -> str:
+        if op in ('min', 'max'):
+            return f"({x} {'<' if op == 'min' else '>'} {y} ? {x} : {y})"
         return f"{func}({x}, {y})" if func else f"{x} {op_signs[op]} {y}"
 
     return f"""
@@ -286,17 +288,17 @@ def get_arr_op_code(op: str, type1: str, type2: str, func: str = '') -> str:
 
     STENCIL void {op}_{type1}arr_{type2}arr(void) {{
         {kernel}_vv(REF(ref_arg0), REF(ref_arg1), REF(ref_out), *(int *)REF(ref_arg2));
-        result_void();
+        result_{t_out}_ref();
     }}
 
     STENCIL void {op}_{type1}arr_{type2}(void) {{
         {kernel}_vs(REF(ref_arg0), *({type2} *)REF(ref_arg1), REF(ref_out), *(int *)REF(ref_arg2));
-        result_void();
+        result_{t_out}_ref();
     }}
 
     STENCIL void {op}_{type1}_{type2}arr(void) {{
         {kernel}_sv(*({type1} *)REF(ref_arg0), REF(ref_arg1), REF(ref_out), *(int *)REF(ref_arg2));
-        result_void();
+        result_{t_out}_ref();
     }}
     """
 
@@ -334,12 +336,12 @@ def get_arr_dot_code(type1: str, type2: str) -> str:
 
     STENCIL void dot_{type1}arr_{type2}arr(void) {{
         *({t_out} *)REF(ref_out) = {kernel}(REF(ref_arg0), REF(ref_arg1), *(int *)REF(ref_arg2));
-        result_void();
+        result_{t_out}_ref();
     }}
 
     STENCIL void matvec_{type1}arr_{type2}arr(void) {{
         aux_arr_matvec_{type1}_{type2}(REF(ref_arg0), REF(ref_arg1), REF(ref_out), *(int *)REF(ref_arg2), *(int *)REF(ref_arg3));
-        result_void();
+        result_{t_out}_ref();
     }}
     """
 
@@ -372,7 +374,7 @@ def get_arr_matmul_code(type1: str, type2: str) -> str:
 
     STENCIL void matmul_{type1}arr_{type2}arr(void) {{
         aux_arr_matmul_{type1}_{type2}(REF(ref_arg0), REF(ref_arg1), REF(ref_out), REF(ref_arg2));
-        result_void();
+        result_{t_out}_ref();
     }}
     """
 
@@ -388,7 +390,7 @@ def get_arr_func1_code(name: str, func: str, type1: str, type_out: str = 'float'
 
     STENCIL void {name}_{type1}arr(void) {{
         {kernel}(REF(ref_arg0), REF(ref_out), *(int *)REF(ref_arg1));
-        result_void();
+        result_{type_out}_ref();
     }}
     """
 
@@ -404,7 +406,7 @@ def get_arr_cast_code(name: str, type1: str, expr: str, type_out: str) -> str:
 
     STENCIL void {name}_{type1}arr(void) {{
         {kernel}(REF(ref_arg0), REF(ref_out), *(int *)REF(ref_arg1));
-        result_void();
+        result_{type_out}_ref();
     }}
     """
 
@@ -480,8 +482,56 @@ def get_arr_conv_code() -> str:
 
     STENCIL void conv2d_floatarr_floatarr(void) {
         aux_arr_conv2d(REF(ref_arg0), REF(ref_arg1), REF(ref_arg2), REF(ref_out), REF(ref_arg3));
-        result_void();
+        result_float_ref();
     }
+    """
+
+
+@norm_indent
+def get_arr_pool_code(op: str) -> str:
+    """2D pooling of a float input [n, h, w] (batch and channels as n): largest
+    element (max) or mean (avg) of each window. Parameters as int array:
+    [n, h, w, kh, kw, oh, ow, sh, sw, ph, pw] with the output size o, the
+    strides s and the padding p. The padding is ignored for max and counts as
+    zeros for avg. Like for the convolution each window element is accumulated
+    over the output rows and the loop bounds exclude the padding."""
+    init = '-__builtin_inff()' if op == 'max' else '0.0f'
+    accumulate = 'float v = xr[ox * sw - tx]; r[ox] = v > r[ox] ? v : r[ox];' if op == 'max' else 'r[ox] += xr[ox * sw - tx];'
+    scale = '' if op == 'max' else 'for (int i = 0; i < oh * ow; i++) oc[i] *= 1.0f / (float)(kh * kw);'
+    return f"""
+    KERNEL void aux_arr_{op}pool2d(const float *restrict x, float *restrict o, const int *restrict p) {{
+        int n = p[0], h = p[1], w = p[2], kh = p[3], kw = p[4], oh = p[5], ow = p[6];
+        int sh = p[7], sw = p[8], ph = p[9], pw = p[10];
+        for (int c = 0; c < n; c++) {{
+            const float *xc = x + c * h * w;
+            float *restrict oc = o + c * oh * ow;
+            for (int i = 0; i < oh * ow; i++) oc[i] = {init};
+            for (int ky = 0; ky < kh; ky++) {{
+                // Input row of output row oy: oy * sh - ty, must be in [0, h)
+                int ty = ph - ky;
+                int y0 = ty > 0 ? (ty + sh - 1) / sh : 0;
+                int y1 = h + ty > 0 ? (h + ty - 1) / sh + 1 : 0;
+                if (y1 > oh) y1 = oh;
+                for (int kx = 0; kx < kw; kx++) {{
+                    int tx = pw - kx;
+                    int x0 = tx > 0 ? (tx + sw - 1) / sw : 0;
+                    int x1 = w + tx > 0 ? (w + tx - 1) / sw + 1 : 0;
+                    if (x1 > ow) x1 = ow;
+                    for (int oy = y0; oy < y1; oy++) {{
+                        const float *xr = xc + (oy * sh - ty) * w;
+                        float *restrict r = oc + oy * ow;
+                        for (int ox = x0; ox < x1; ox++) {{ {accumulate} }}
+                    }}
+                }}
+            }}
+            {scale}
+        }}
+    }}
+
+    STENCIL void {op}pool2d_floatarr(void) {{
+        aux_arr_{op}pool2d(REF(ref_arg0), REF(ref_out), REF(ref_arg1));
+        result_float_ref();
+    }}
     """
 
 
@@ -535,12 +585,12 @@ def get_arr_sort_code(type1: str) -> str:
 
     STENCIL void sort_{type1}arr(void) {{
         aux_arr_sort_{type1}(REF(ref_arg0), REF(ref_out), *(int *)REF(ref_arg1));
-        result_void();
+        result_{type1}_ref();
     }}
 
     STENCIL void argsort_{type1}arr(void) {{
         aux_arr_argsort_{type1}(REF(ref_arg0), REF(ref_out), *(int *)REF(ref_arg1));
-        result_void();
+        result_int_ref();
     }}
     """
 
@@ -556,7 +606,7 @@ def get_arr_sum_code(type1: str) -> str:
 
     STENCIL void sum_{type1}arr(void) {{
         *({type1} *)REF(ref_out) = {kernel}(REF(ref_arg0), *(int *)REF(ref_arg1));
-        result_void();
+        result_{type1}_ref();
     }}
     """
 
@@ -584,7 +634,7 @@ def get_arr_minmax_code(op: str, type1: str, lanes: int = 8) -> str:
 
     STENCIL void {op}_{type1}arr(void) {{
         *({type1} *)REF(ref_out) = {kernel}(REF(ref_arg0), *(int *)REF(ref_arg1));
-        result_void();
+        result_{type1}_ref();
     }}
     """
 
@@ -678,9 +728,16 @@ if __name__ == "__main__":
         code += get_store_code(t1, t2)
 
     # Array stencils:
+    # The result stub gives the element type of the result written to ref_out,
+    # result_void for results of the type of the arguments (strided copy)
     code += get_result_stubs1('void').replace('void arg1', 'void')
+    for t in types:
+        code += f"void result_{t}_ref(void);\n"
 
     for op, t1, t2 in permutate(['add', 'sub', 'mul', 'div'], types, types):
+        code += get_arr_op_code(op, t1, t2)
+
+    for op, t1, t2 in permutate(['min', 'max'], types, types):
         code += get_arr_op_code(op, t1, t2)
 
     for fn, t1, t2 in permutate(['pow', 'atan2'], types, types):
@@ -707,6 +764,8 @@ if __name__ == "__main__":
 
     code += get_arr_copy_code()
     code += get_arr_conv_code()
+    code += get_arr_pool_code('max')
+    code += get_arr_pool_code('avg')
 
     for t in types:
         code += get_arr_sum_code(t)

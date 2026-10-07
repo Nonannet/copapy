@@ -372,6 +372,18 @@ def array_test_values() -> tuple[list[NumLike], list[NumLike]]:
         [sum(c1[o][q][k] * cx[0][q][i - 1 + k] for q in range(5) for k in range(3) if 0 <= i - 1 + k < 9)
          for o in range(2) for i in range(9)])
 
+    # Pooling with padding and stride (window 3 x 2), element-wise minimum and maximum
+    def pool_window(q: int, oy: int, ox: int) -> list[float]:
+        return [cx[q][iy][ix] for iy in range(oy * 2 - 1, oy * 2 + 2) for ix in range(ox - 1, ox + 1)
+                if 0 <= iy < 5 and 0 <= ix < 9]
+
+    pool_index = [(q, oy, ox) for q in range(2) for oy in range(3) for ox in range(10)]
+    add(cp.nn.max_pool2d(cp.array(cx), (3, 2), (2, 1), 1), [max(pool_window(*i)) for i in pool_index])
+    add(cp.nn.avg_pool2d(cp.array(cx), (3, 2), (2, 1), 1), [sum(pool_window(*i)) / 6 for i in pool_index])
+    add(cp.nn.relu(arrays[id(fa)]), [max(p, 0.0) for p in fa])
+    add(cp.maximum(arrays[id(ia)], arrays[id(fb)]), [float(max(p, q)) for p, q in zip(ia, fb)])
+    add(cp.minimum(fs, arrays[id(ia)]), [float(min(1.5, q)) for q in ia])
+
     return ret_test, ret_ref
 
 
