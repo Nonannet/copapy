@@ -246,6 +246,8 @@ jobs:
         path: build/artifacts/runner-linux-armv7mthumb_fpv5/*
 
   build-riscv64:
+    # The emulation of RISC-V 64 is slow, therefore only the tests executing
+    # the stencils most directly are run instead of the full test suite
     needs: [build_stencils]
     runs-on: ubuntu-latest
     continue-on-error: true
@@ -271,7 +273,8 @@ jobs:
                   -DENABLE_LOGGING \
                   -o build/runner/coparun src/coparun/runmem.c \
                   src/coparun/coparun.c src/coparun/mem_man.c && \
-                  pytest && \
+                  pytest tests/test_coparun_module.py tests/test_math.py \
+                  tests/test_casts.py tests/test_min_max.py tests/test_dynamic_index.py && \
                   bash tools/create_asm.sh"
 
     - uses: actions/upload-artifact@v7
@@ -325,6 +328,50 @@ jobs:
         name: runner-linux-riscv32
         path: build/runner/*
 
+  build-armv81m:
+    # The stencils for Cortex-M55 and M85 can not be executed by the host of
+    # the 32 bit ARM job, therefore only the runner is tested with qemu-user
+    needs: [build_stencils]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+    - uses: actions/checkout@v7
+    - uses: actions/download-artifact@v8
+      with:
+        name: stencil-object-files
+        path: src/copapy/obj
+    - name: Install qemu-user and ARM cross compiler
+      run: sudo apt-get update && sudo apt-get install -y qemu-user gcc-arm-linux-gnueabihf
+    - name: Build ARMv6 runner
+      # The Thumb code for Cortex-M is called by the runner compiled for ARMv6,
+      # the tests expect it as ARMv7 runner
+      run: |
+        mkdir -p build/runner
+        arm-linux-gnueabihf-gcc -march=armv6 -mfpu=vfp -mfloat-abi=hard -marm -static \
+        -Wall -Wextra -Wconversion -Wsign-conversion \
+        -Wshadow -Wstrict-overflow -O3 \
+        -DENABLE_LOGGING \
+        -o build/runner/coparun-armv7 src/coparun/runmem.c \
+        src/coparun/coparun.c src/coparun/mem_man.c
+    - uses: actions/setup-python@v7
+      with:
+        python-version: "3.12"
+    - name: Install Python dependencies
+      run: python -m pip install .[mindev]
+    - name: Run ARMv8.1-M test with qemu-user
+      run: pytest tests/test_runner_armv81mthumb.py -W error::UserWarning
+    - name: Create assembly listings
+      run: bash tools/create_asm.sh
+      env:
+        CP_TARGET_ARCH: armv81mthumb
+        RUNNER: qemu-arm -cpu max build/runner/coparun-armv7
+        OBJDUMP: arm-linux-gnueabihf-objdump
+
+    - uses: actions/upload-artifact@v7
+      with:
+        name: runner-linux-armv81mthumb
+        path: build/runner/*
+
   build-windows:
     needs: [build_stencils]
     runs-on: windows-2022
@@ -373,7 +420,7 @@ jobs:
         path: build/runner/*
 
   release-stencils:
-    needs: [build_stencils, build-ubuntu, build-ubuntu32, build-windows, build-arm64, build-arm32, build-riscv64, build-riscv32]
+    needs: [build_stencils, build-ubuntu, build-ubuntu32, build-windows, build-arm64, build-arm32, build-armv81m, build-riscv64, build-riscv32]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
@@ -427,7 +474,7 @@ jobs:
           fi
 
   build-docs:
-    needs: [build_stencils, build-ubuntu, build-ubuntu32, build-windows, build-arm64, build-arm32, build-riscv64, build-riscv32]
+    needs: [build_stencils, build-ubuntu, build-ubuntu32, build-windows, build-arm64, build-arm32, build-armv81m, build-riscv64, build-riscv32]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
