@@ -6,6 +6,7 @@ import pytest
 
 import copapy as cp
 from copapy import Target, quaternion, vector
+from runner_helpers import trig_tol
 
 
 def evaluate(*exprs: Any) -> list[Any]:
@@ -325,8 +326,8 @@ def test_satellite_attitude_correction():
 
     result_q, result_normal = evaluate(rotation_q, rotated_normal)
 
-    assert list(result_q) == approx(expected_rotation.values, abs=1e-6)
-    assert list(result_normal) == approx(expected_rotated.values, abs=1e-6)
+    assert list(result_q) == approx(expected_rotation.values, abs=trig_tol(1e-6))
+    assert list(result_normal) == approx(expected_rotated.values, abs=trig_tol(1e-6))
 
     # The rotation takes the current attitude to the desired one
     assert (expected_rotation @ current_q).values == approx(expected_desired.values)

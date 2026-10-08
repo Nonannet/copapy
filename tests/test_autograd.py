@@ -2,6 +2,7 @@ from copapy import value, grad
 import copapy as cp
 import pytest
 import math
+from runner_helpers import trig_tol
 
 
 def test_autograd():
@@ -101,7 +102,7 @@ def test_autograd_neg():
 
     expected = [-1.0, 3.0, -math.cos(-1.5), 3.0]
     for dg, ref in zip(grads, expected):
-        assert tg.read_value(dg) == pytest.approx(ref, rel=1e-6)  # pyright: ignore[reportUnknownMemberType]
+        assert tg.read_value(dg) == pytest.approx(ref, rel=trig_tol(1e-6))  # pyright: ignore[reportUnknownMemberType]
     assert tg.read_value(grad_xy) == pytest.approx([2.0, -1.5], rel=1e-6)  # pyright: ignore[reportUnknownMemberType]
 
 

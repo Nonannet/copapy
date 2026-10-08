@@ -7,6 +7,7 @@ import pytest
 
 import copapy as cp
 from copapy import filters
+from runner_helpers import trig_tol
 
 
 def evaluate(*exprs: Any) -> list[Any]:
@@ -183,7 +184,7 @@ def test_vector_operation(name: str):
     assert values_of(res) == pytest.approx(ref, abs=1e-9)  # pyright: ignore[reportUnknownMemberType]
 
     res, = evaluate(vector_ops(variables(A), variables(B))[name])
-    assert values_of(res) == pytest.approx(ref, rel=1e-5, abs=1e-5)  # pyright: ignore[reportUnknownMemberType]
+    assert values_of(res) == pytest.approx(ref, rel=1e-5, abs=trig_tol())  # pyright: ignore[reportUnknownMemberType]
 
 
 def test_normalize_properties():

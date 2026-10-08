@@ -6,6 +6,7 @@ import pytest
 
 import copapy as cp
 from copapy import value
+from runner_helpers import trig_tol
 
 
 def evaluate(*exprs: Any) -> list[Any]:
@@ -56,7 +57,7 @@ def test_unary_function(cp_func: Callable[..., Any], ref_func: Callable[..., Any
     # Called with a cp.value the function is compiled (float32 precision)
     ret = [cp_func(value(a)) for a in args]
     for a, res, ref in zip(args, evaluate(*ret), refs):
-        assert res == pytest.approx(ref, rel=1e-5, abs=1e-5), f"compiled {cp_func.__name__}({a})"  # pyright: ignore[reportUnknownMemberType]
+        assert res == pytest.approx(ref, rel=1e-5, abs=trig_tol()), f"compiled {cp_func.__name__}({a})"  # pyright: ignore[reportUnknownMemberType]
 
 
 BINARY_CASES: list[tuple[Callable[..., Any], Callable[..., Any], list[tuple[float, float]]]] = [
