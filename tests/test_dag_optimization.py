@@ -5,6 +5,7 @@ import copapy.backend as cpb
 import math
 import pytest
 from typing import Any
+from runner_helpers import trig_tol
 
 
 def show_dag(val: value[Any]):
@@ -150,7 +151,7 @@ def test_int_to_float_conversion():
                   cp.pow(i, 2), cp.atan2(i, x), cp.minimum(i, x), cp.sqrt(value(9)), i + j)
     expected = [math.sin(3), 5.5, 5.5, 7.5, -1.5, 1.0, 0, 1, 9.0, math.atan2(3, 2.5), 2.5, 3.0, 1]
     for r, e in zip(results, expected):
-        assert r == pytest.approx(e, rel=1e-6)
+        assert r == pytest.approx(e, rel=trig_tol(1e-6))
     assert isinstance(results[-1], int)
     assert isinstance(results[4], float)
 

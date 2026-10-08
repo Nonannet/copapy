@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 import copapy as cp
+from runner_helpers import trig_tol
 
 
 def evaluate(*exprs: Any) -> list[Any]:
@@ -213,9 +214,9 @@ def test_rotation_matrix():
 
     combined, direct, ortho, rotated = evaluate(rot(a) @ rot(b), rot(a + b), rot(a).T @ rot(a), rot(a + b) @ p)
 
-    assert combined.values == pytest.approx(direct.values, abs=1e-6)  # pyright: ignore[reportUnknownMemberType]
-    assert ortho.values == pytest.approx((1, 0, 0, 1), abs=1e-6)  # pyright: ignore[reportUnknownMemberType]
-    assert rotated.values == pytest.approx((math.cos(1.4), math.sin(1.4)), abs=1e-6)  # pyright: ignore[reportUnknownMemberType]
+    assert combined.values == pytest.approx(direct.values, abs=trig_tol(1e-6))  # pyright: ignore[reportUnknownMemberType]
+    assert ortho.values == pytest.approx((1, 0, 0, 1), abs=trig_tol(1e-6))  # pyright: ignore[reportUnknownMemberType]
+    assert rotated.values == pytest.approx((math.cos(1.4), math.sin(1.4)), abs=trig_tol(1e-6))  # pyright: ignore[reportUnknownMemberType]
 
 
 def test_compiled_matrix_expression():

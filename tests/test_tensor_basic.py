@@ -8,6 +8,7 @@ from typing import Any, Callable
 import pytest
 
 import copapy as cp
+from runner_helpers import trig_tol
 
 
 def evaluate(*exprs: Any) -> list[Any]:
@@ -292,7 +293,7 @@ def test_elementwise_math_functions():
         ref = [ref_f(x) for x in flat(data)]
         assert f(t).shape == (2, 2)
         assert f(t).values == pytest.approx(ref)  # pyright: ignore[reportUnknownMemberType]
-        assert res.values == pytest.approx(ref, rel=1e-5)  # pyright: ignore[reportUnknownMemberType]
+        assert res.values == pytest.approx(ref, rel=trig_tol())  # pyright: ignore[reportUnknownMemberType]
 
 
 def test_map():

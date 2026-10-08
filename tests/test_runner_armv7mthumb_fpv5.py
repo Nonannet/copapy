@@ -2,9 +2,9 @@ import pytest
 
 from runner_helpers import qemu_command, run_runner_test
 
-ARCH = 'armv7mthumb'
+ARCH = 'armv7mthumb_fpv5'
 RUNNER = 'build/runner/coparun-armv7'  # Cortex-M Thumb code runs on the ARMv7 runner
-QEMU = qemu_command('qemu-arm', guest_base=True)
+QEMU = qemu_command('qemu-arm', guest_base=True) + ['-cpu', 'max']  # FPv5 instructions (e.g. vrintm)
 TOL = 5e-5  # sin and cos of CMSIS-DSP are based on a table with linear interpolation
 
 

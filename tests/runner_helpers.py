@@ -21,6 +21,18 @@ from copapy.backend import Store, add_read_value_remote, compile_to_dag
 NATIVE_RUNNER = os.path.normpath('build/runner/coparun')
 
 
+def trig_tol(tol: float = 1e-5) -> float:
+    """Tolerance for results depending on sin or cos. The Cortex-M stencils use
+    the CMSIS-DSP functions: a table with linear interpolation, error up to 2e-5.
+
+    Arguments:
+        tol: tolerance for all other targets
+    """
+    if os.environ.get('CP_TARGET_ARCH', '').startswith('armv7mthumb'):
+        return max(tol, 5e-5)
+    return tol
+
+
 def qemu_command(qemu: str, guest_base: bool = False) -> list[str]:
     """Command prefix for running a runner of a foreign architecture with qemu-user.
 
@@ -401,7 +413,7 @@ TEST_PROGRAMS = {
 }
 
 
-def run_runner_test(name: str, arch: str, runner: str, qemu: Sequence[str] = ()) -> None:
+def run_runner_test(name: str, arch: str, runner: str, qemu: Sequence[str] = (), tol: float = 1e-5) -> None:
     """Compile the test program name ('ops', 'math' or 'vector') for arch,
     run it on the runner and compare the results with the Python reference
 
@@ -410,6 +422,7 @@ def run_runner_test(name: str, arch: str, runner: str, qemu: Sequence[str] = ())
         arch: stencil architecture, 'native' for the stencils of this machine
         runner: path of the runner executable
         qemu: command prefix for running a runner of a foreign architecture
+        tol: relative and absolute tolerance of the results
     """
     ret_test, ret_ref = TEST_PROGRAMS[name]()
     assert len(ret_test) == len(ret_ref)
@@ -420,4 +433,4 @@ def run_runner_test(name: str, arch: str, runner: str, qemu: Sequence[str] = ())
 
     result = run_program(runner, path, qemu)
     if result is not None:
-        check_results(result, ret_test, ret_ref, variables, sdb, rel=1e-5, abs_tol=1e-5)
+        check_results(result, ret_test, ret_ref, variables, sdb, rel=tol, abs_tol=tol)

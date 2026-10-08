@@ -1,7 +1,7 @@
 import pytest
 
 import copapy as cp
-from runner_helpers import NATIVE_RUNNER, TEST_PROGRAMS, run_runner_test
+from runner_helpers import NATIVE_RUNNER, TEST_PROGRAMS, run_runner_test, trig_tol
 
 ARCH = 'native'
 
@@ -41,7 +41,7 @@ def test_target(name: str) -> None:
         print('+', val, ref, test.dtype)
         for t in (int, float, bool):
             assert isinstance(val, t) == isinstance(ref, t), f"Result type does not match for {val} and {ref}"
-        assert val == pytest.approx(ref, 1e-5, 1e-5), f"Result does not match: {val} and reference: {ref}"  # pyright: ignore[reportUnknownMemberType]
+        assert val == pytest.approx(ref, trig_tol(), trig_tol()), f"Result does not match: {val} and reference: {ref}"  # pyright: ignore[reportUnknownMemberType]
 
 
 if __name__ == "__main__":

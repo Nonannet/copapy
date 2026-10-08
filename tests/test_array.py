@@ -7,6 +7,7 @@ from typing import Any, Callable
 import pytest
 
 import copapy as cp
+from runner_helpers import trig_tol
 
 
 def evaluate(*exprs: Any) -> list[Any]:
@@ -102,8 +103,8 @@ def test_unary_functions(name: str) -> None:
 
     assert isinstance(res_f, cp.array) and res_f.shape == (len(vals),)
     assert res_f.dtype == 'float' and res_i.dtype == ('int' if name == 'abs' else 'float')
-    assert out_f == pytest.approx([ref_func(v) for v in vals], rel=1e-5, abs=1e-6)
-    assert out_i == pytest.approx([ref_func(v) for v in ints], rel=1e-5, abs=1e-6)
+    assert out_f == pytest.approx([ref_func(v) for v in vals], rel=1e-5, abs=trig_tol(1e-6))
+    assert out_i == pytest.approx([ref_func(v) for v in ints], rel=1e-5, abs=trig_tol(1e-6))
 
 
 @pytest.mark.parametrize('t1,t2', [('int', 'int'), ('int', 'float'), ('float', 'int'), ('float', 'float')])
@@ -321,13 +322,13 @@ def test_pack_values() -> None:
     qq = q @ q
     tg.compile(p, r, qq)
     tg.run()
-    assert tg.read_value(p) == pytest.approx([2.0, 6.0, 1.5, math.sin(3) + 2, 3.0])
-    assert tg.read_value(r) == pytest.approx(2 * (2 + 6 + 1.5 + math.sin(3) + 2 + 3) + 6)
+    assert tg.read_value(p) == pytest.approx([2.0, 6.0, 1.5, math.sin(3) + 2, 3.0], rel=trig_tol(1e-6))
+    assert tg.read_value(r) == pytest.approx(2 * (2 + 6 + 1.5 + math.sin(3) + 2 + 3) + 6, rel=trig_tol(1e-6))
     assert tg.read_value(qq) == [[7, 10], [15, 22]]
 
     tg.write_value(x, 1.0)
     tg.run()
-    assert tg.read_value(p) == pytest.approx([1.0, 3.0, 1.5, math.sin(3) + 1, 3.0])
+    assert tg.read_value(p) == pytest.approx([1.0, 3.0, 1.5, math.sin(3) + 1, 3.0], rel=trig_tol(1e-6))
 
 
 def hybrid_program(t1: Any, t2: Any, w: Any, s: Any) -> list[Any]:
