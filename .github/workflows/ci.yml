@@ -165,7 +165,6 @@ jobs:
   build-arm64:
     needs: [build_stencils]
     runs-on: ubuntu-24.04-arm
-    continue-on-error: true
     steps:
     - uses: actions/checkout@v7
     - uses: actions/download-artifact@v8
@@ -176,7 +175,7 @@ jobs:
       with:
         python-version: "3.11"
     - name: Install Python dependencies
-      run: python -m pip install .[mindev]
+      run: python -m pip install .[dev]
     - name: Compile coparun
       run: |
         mkdir -p build/runner
@@ -196,7 +195,6 @@ jobs:
   build-arm32:
     needs: [build_stencils]
     runs-on: ubuntu-24.04-arm
-    continue-on-error: true
     steps:
     - uses: actions/checkout@v7
     - uses: actions/download-artifact@v8
@@ -250,7 +248,6 @@ jobs:
     # the stencils most directly are run instead of the full test suite
     needs: [build_stencils]
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
     - uses: actions/checkout@v7
     - uses: actions/download-artifact@v8
@@ -287,7 +284,6 @@ jobs:
     # only the runner is tested with qemu-user instead of the full test suite
     needs: [build_stencils]
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
     - uses: actions/checkout@v7
     - uses: actions/download-artifact@v8
@@ -333,7 +329,6 @@ jobs:
     # the 32 bit ARM job, therefore only the runner is tested with qemu-user
     needs: [build_stencils]
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
     - uses: actions/checkout@v7
     - uses: actions/download-artifact@v8
