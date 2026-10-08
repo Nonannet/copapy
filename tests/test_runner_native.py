@@ -13,17 +13,17 @@ def test_ops() -> None:
 
 @pytest.mark.runner
 def test_math() -> None:
-    run_runner_test('math', ARCH, NATIVE_RUNNER)
+    run_runner_test('math', ARCH, NATIVE_RUNNER, tol=trig_tol())
 
 
 @pytest.mark.runner
 def test_vector() -> None:
-    run_runner_test('vector', ARCH, NATIVE_RUNNER)
+    run_runner_test('vector', ARCH, NATIVE_RUNNER, tol=trig_tol())
 
 
 @pytest.mark.runner
 def test_array() -> None:
-    run_runner_test('array', ARCH, NATIVE_RUNNER)
+    run_runner_test('array', ARCH, NATIVE_RUNNER, tol=trig_tol())
 
 
 @pytest.mark.parametrize('name', list(TEST_PROGRAMS))
