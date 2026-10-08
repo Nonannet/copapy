@@ -4,10 +4,10 @@ set -eu
 ARCH=${1:-x86_64}
 
 case "$ARCH" in
-    (x86_64|x86|arm64|arm-v6|arm-v7|arm-v7-thumb|arm-v7m-thumb|arm-v7m-thumb-fpv5|all)
+    (x86_64|x86|arm64|arm-v6|arm-v7|arm-v7-thumb|arm-v7m-thumb|arm-v7m-thumb-fpv5|arm-v81m-thumb|all)
         ;;
     (*)
-        echo "Usage: $0 [x86_64|x86|arm64|arm-v6|arm-v7|arm-v7-thumb|arm-v7m-thumb|arm-v7m-thumb-fpv5|all]"
+        echo "Usage: $0 [x86_64|x86|arm64|arm-v6|arm-v7|arm-v7-thumb|arm-v7m-thumb|arm-v7m-thumb-fpv5|arm-v81m-thumb|all]"
         exit 1
         ;;
 esac
@@ -284,4 +284,28 @@ if [[ "$ARCH" == "arm-v7m-thumb-fpv5" || "$ARCH" == "all" ]]; then
     arm-none-eabi-objdump -d -x \
         $DEST/stencils_armv7mthumb_fpv5_O3.o \
         > build/stencils/stencils_armv7mthumb_fpv5_O3.asm
+fi
+
+#######################################
+# ARM v8.1-M thumb Cortex-M55 and Cortex-M85 (Helium)
+#######################################
+if [[ "$ARCH" == "arm-v81m-thumb" || "$ARCH" == "all" ]]; then
+    echo "--------------arm-v81m-thumb 32 bit----------------"
+
+    ARM_FLAGS="-mcpu=cortex-m55 -mfloat-abi=hard -mthumb"
+    LIBGCC=$(arm-none-eabi-gcc $ARM_FLAGS -print-libgcc-file-name)
+
+    arm-none-eabi-gcc -fno-pic -ffunction-sections \
+        $ARM_FLAGS \
+        -c $SRC -O3 -o build/stencils/stencils.o
+
+    arm-none-eabi-ld -r \
+        build/stencils/stencils.o \
+        build/musl/musl_objects_armv81mthumb.o \
+        $LIBGCC \
+        -o $DEST/stencils_armv81mthumb_O3.o
+
+    arm-none-eabi-objdump -d -x \
+        $DEST/stencils_armv81mthumb_O3.o \
+        > build/stencils/stencils_armv81mthumb_O3.asm
 fi

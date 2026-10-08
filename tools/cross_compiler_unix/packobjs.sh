@@ -7,9 +7,10 @@ CC_NAME=$1
 LD_NAME=$2
 DEST_FILE=$3
 OPT_FLAGS=$4
+CONFIG_FLAGS=$5
 
 echo "- Config musl"
-./configure CFLAGS="-O2 -fno-stack-protector $OPT_FLAGS" CC=$CC_NAME
+./configure CFLAGS="-O2 -fno-stack-protector $OPT_FLAGS" CC=$CC_NAME $CONFIG_FLAGS
 
 echo "- Build musl"
 make clean

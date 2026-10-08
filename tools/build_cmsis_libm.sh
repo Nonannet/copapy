@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Builds the math functions for Cortex-M stencils: the CMSIS-DSP based functions
-# of stencils/cmsis_libm.c and the remaining functions (tanf, sqrtf, floorf, ...)
+# of stencils/cmsis_libm.c and the remaining functions (sqrtf, floorf, ...)
 # from the precompiled MUSL objects.
 #
 # Usage: build_cmsis_libm.sh <CMSIS-DSP path> <MUSL object file> <output file> <compiler flags>
@@ -13,7 +13,7 @@ MUSL_OBJ=$2
 DEST_FILE=$3
 ARCH_FLAGS=$4
 
-FUNCTIONS="sinf cosf atanf atan2f asinf acosf expf logf powf"
+FUNCTIONS="sinf cosf tanf atanf atan2f asinf acosf expf logf powf"
 
 SOURCES="stencils/cmsis_libm.c
     $CMSIS_DSP/Source/FastMathFunctions/arm_sin_f32.c

@@ -63,6 +63,12 @@ LIBGCC=$(arm-none-eabi-gcc $ARM_FLAGS -print-libgcc-file-name)
 bash tools/build_cmsis_libm.sh $CMSIS_DSP /object_files/musl_objects_armv7mthumb.o $MTMP "$ARM_FLAGS"
 arm-none-eabi-ld -r $STMP $MTMP $LIBGCC -o $DEST/stencils_armv7mthumb_fpv5_$OPT.o
 
+# Armv8.1-M Thumb for Cortex-M55 and Cortex-M85 with Helium (MVE) and double precision FPU
+ARM_FLAGS="-mcpu=cortex-m55 -mfloat-abi=hard -mthumb"
+arm-none-eabi-gcc $ARM_FLAGS $FLAGS -$OPT -c $SRC -o $STMP
+LIBGCC=$(arm-none-eabi-gcc $ARM_FLAGS -print-libgcc-file-name)
+arm-none-eabi-ld -r $STMP /object_files/musl_objects_armv81mthumb.o $LIBGCC -o $DEST/stencils_armv81mthumb_$OPT.o
+
 # PowerPC64LE
 # powerpc64le-linux-gnu-gcc-13 $FLAGS -$OPT -c $SRC -o $DEST/stencils_ppc64le_$OPT.o
 
