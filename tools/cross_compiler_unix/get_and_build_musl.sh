@@ -32,6 +32,9 @@ sh ../packobjs.sh arm-none-eabi-gcc arm-none-eabi-ld /object_files/musl_objects_
 # Armv7 Thumb for Cortex-M3..7
 sh ../packobjs.sh arm-none-eabi-gcc arm-none-eabi-ld /object_files/musl_objects_armv7mthumb.o "-march=armv7e-m -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb"
 
+# Armv8.1-M Thumb for Cortex-M55 and Cortex-M85 (the shared library does not link for this architecture)
+sh ../packobjs.sh arm-none-eabi-gcc arm-none-eabi-ld /object_files/musl_objects_armv81mthumb.o "-mcpu=cortex-m55 -mfloat-abi=hard -mthumb" --disable-shared
+
 # RISC-V 32-bit
 sh ../packobjs.sh riscv32-unknown-linux-musl-gcc riscv32-unknown-linux-musl-ld /object_files/musl_objects_riscv32.o
 

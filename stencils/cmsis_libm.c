@@ -5,6 +5,24 @@
 // sin, cos and atan2 are CMSIS-DSP functions (Apache-2.0), exp and log are
 // scalar versions of vexpq_f32 and vlogq_f32 from the ComputeLibrary part of
 // CMSIS-DSP (NEMath.h, Copyright (c) 2016, 2019 ARM Limited, MIT license).
+// tan uses the polynomial of tanf from the Cephes Math Library (Copyright
+// 1984, 1987, 1989, 1992 by Stephen L. Moshier).
+//
+// Math functions of the Cortex-M stencils (errors measured by test.c):
+//
+//   Function        Implementation                              Max. error
+//   --------------  ------------------------------------------  ------------------
+//   sinf, cosf      arm_sin_f32, arm_cos_f32 (table with        2e-5 absolute
+//                   linear interpolation)
+//   atanf, atan2f   arm_atan2_f32 (polynomial)                  3e-7 absolute
+//   asinf, acosf    arm_atan2_f32 and sqrtf                     3e-7 absolute
+//   expf            polynomial of vexpq_f32                     4e-6 relative
+//   logf            polynomial of vlogq_f32                     6e-6 absolute
+//   powf            expf(y * logf(x))                           3e-5 relative
+//                                                               (for |y| <= 6)
+//   tanf            polynomial of the Cephes tanf               3e-7 relative
+//                                                               (for |x| <= 2000)
+//   sqrtf, floorf   MUSL, single precision only                 exact
 
 #include <stdint.h>
 #include <math.h>
@@ -63,6 +81,21 @@ float CM_NAME(sinf)(float x) {
 float CM_NAME(cosf)(float x) {
     if (!(fabsf(x) < CM_TRIG_MAX)) return x - x;
     return arm_cos_f32(cm_reduce_2pi(x));
+}
+
+// Reduction to [-pi/4, pi/4] with pi/2 split into three parts, polynomial of
+// the Cephes tanf and -1/tan(r) for the odd multiples of pi/2. The reduction
+// is accurate for |x| < 2000, for larger arguments the error increases close
+// to the poles.
+float CM_NAME(tanf)(float x) {
+    if (!(fabsf(x) < CM_TRIG_MAX)) return x - x;
+    int32_t n = (int32_t)(x * 0.636619772367581f + (x < 0.0f ? -0.5f : 0.5f));
+    float fn = (float)n;
+    float r = ((x - fn * 1.5703125f) - fn * 4.837512969970703125e-4f) - fn * 7.54978995489188216e-8f;
+    float z = r * r;
+    float y = r + r * z * (3.33331568548e-1f + z * (1.33387994085e-1f + z * (5.34112807005e-2f +
+              z * (2.44301354525e-2f + z * (3.11992232697e-3f + z * 9.38540185543e-3f)))));
+    return n & 1 ? -1.0f / y : y;
 }
 
 float CM_NAME(atan2f)(float y, float x) {
