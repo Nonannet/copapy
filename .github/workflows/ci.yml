@@ -191,7 +191,9 @@ jobs:
         name: runner-linux-arm64
         path: build/runner/*
 
-  build-armv6:
+  # All 32 bit ARM variants are tested sequentially in one job. The ARM64 host
+  # executes the 32 bit code natively, including the Thumb code for Cortex-M.
+  build-arm32:
     needs: [build_stencils]
     runs-on: ubuntu-24.04-arm
     continue-on-error: true
@@ -201,149 +203,47 @@ jobs:
       with:
         name: stencil-object-files
         path: src/copapy/obj
-    - name: Use ARMv6 container
+    # One runner for all variants, compiled with the default target of the
+    # ARMv6 container: it runs on ARMv6 and ARMv7 and can call the Thumb code
+    # of the other variants
+    - name: Test ARMv6 and ARMv7 variants in ARMv6 container
       run: |
         docker run --rm -v $PWD:/app -w /app --platform linux/arm/v6 ghcr.io/nonannet/armv6_test:1 \
         bash -lc "set -x && \
                   pip install .[mindev] && \
                   mkdir -p build/runner && \
-                  gcc -O3 -static -DENABLE_LOGGING -o build/runner/coparun src/coparun/runmem.c \
+                  gcc -O3 -static -DENABLE_LOGGING \
+                  -Wall -Wextra -Wconversion -Wsign-conversion \
+                  -Wshadow -Wstrict-overflow \
+                  -o build/runner/coparun src/coparun/runmem.c \
                   src/coparun/coparun.c src/coparun/mem_man.c && \
-                  export CP_TARGET_ARCH=armv6 && \
-                  pytest && \
-                  bash tools/create_asm.sh"
+                  bash tools/test_stencil_variants.sh armv6 armv7 armv7thumb armv7mthumb armv7mthumb_fpv5"
 
     - uses: actions/upload-artifact@v7
+      if: always()
       with:
         name: runner-linux-armv6
-        path: build/runner/*
-
-  build-armv7:
-    needs: [build_stencils]
-    runs-on: ubuntu-24.04-arm
-    continue-on-error: true
-    steps:
-    - uses: actions/checkout@v7
-    - uses: actions/download-artifact@v8
-      with:
-        name: stencil-object-files
-        path: src/copapy/obj
-    - name: Use ARMv7 container
-      run: |
-        docker run --rm -v $PWD:/app -w /app --platform linux/arm/v7 ghcr.io/nonannet/armv7_test:1 \
-        bash -lc "set -x && \
-                  pip install .[mindev] && \
-                  mkdir -p build/runner && \
-                  gcc -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -marm -static \
-                  -Wall -Wextra -Wconversion -Wsign-conversion \
-                  -Wshadow -Wstrict-overflow -O3 \
-                  -DENABLE_LOGGING \
-                  -o build/runner/coparun src/coparun/runmem.c \
-                  src/coparun/coparun.c src/coparun/mem_man.c && \
-                  pytest && \
-                  bash tools/create_asm.sh"
-
+        path: build/artifacts/runner-linux-armv6/*
     - uses: actions/upload-artifact@v7
+      if: always()
       with:
         name: runner-linux-armv7
-        path: build/runner/*
-
-  build-armv7thumb:
-    needs: [build_stencils]
-    runs-on: ubuntu-24.04-arm
-    continue-on-error: true
-    steps:
-    - uses: actions/checkout@v7
-    - uses: actions/download-artifact@v8
-      with:
-        name: stencil-object-files
-        path: src/copapy/obj
-    - name: Use ARMv7 container
-      run: |
-        docker run --rm -v $PWD:/app -w /app --platform linux/arm/v7 ghcr.io/nonannet/armv7_test:1 \
-        bash -lc "set -x && \
-                  pip install .[mindev] && \
-                  mkdir -p build/runner && \
-                  gcc -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -marm -static \
-                  -Wall -Wextra -Wconversion -Wsign-conversion \
-                  -Wshadow -Wstrict-overflow -O3 \
-                  -DENABLE_LOGGING \
-                  -o build/runner/coparun src/coparun/runmem.c \
-                  src/coparun/coparun.c src/coparun/mem_man.c && \
-                  export CP_TARGET_ARCH=armv7thumb && \
-                  pytest && \
-                  bash tools/create_asm.sh"
-
+        path: build/artifacts/runner-linux-armv7/*
     - uses: actions/upload-artifact@v7
+      if: always()
       with:
         name: runner-linux-armv7thumb
-        path: build/runner/*
-
-  build-armv7mthumb:
-    needs: [build_stencils]
-    runs-on: ubuntu-24.04-arm
-    continue-on-error: true
-    steps:
-    - uses: actions/checkout@v7
-    - uses: actions/download-artifact@v8
-      with:
-        name: stencil-object-files
-        path: src/copapy/obj
-    - name: Use ARMv7 container
-      run: |
-        docker run --rm -v $PWD:/app -w /app --platform linux/arm/v7 ghcr.io/nonannet/armv7_test:1 \
-        bash -lc "set -x && \
-                  pip install .[mindev] && \
-                  mkdir -p build/runner && \
-                  gcc -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -marm -static \
-                  -Wall -Wextra -Wconversion -Wsign-conversion \
-                  -Wshadow -Wstrict-overflow -O3 \
-                  -DENABLE_LOGGING \
-                  -o build/runner/coparun src/coparun/runmem.c \
-                  src/coparun/coparun.c src/coparun/mem_man.c && \
-                  export CP_TARGET_ARCH=armv7mthumb && \
-                  pytest && \
-                  bash tools/create_asm.sh"
-
+        path: build/artifacts/runner-linux-armv7thumb/*
     - uses: actions/upload-artifact@v7
+      if: always()
       with:
         name: runner-linux-armv7mthumb
-        path: build/runner/*
-
-  build-armv7mthumb-fpv5:
-    needs: [build_stencils]
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-    - uses: actions/checkout@v7
-    - uses: actions/download-artifact@v8
-      with:
-        name: stencil-object-files
-        path: src/copapy/obj
-    - name: Set up QEMU for ARMv7
-      uses: docker/setup-qemu-action@v4
-      with:
-        platforms: linux/arm/v7
-    - name: Use ARMv7 container
-      run: |
-        docker run --rm -v $PWD:/app -w /app --platform linux/arm/v7 ghcr.io/nonannet/armv7_test:1 \
-        bash -lc "set -x && \
-                  pip install .[mindev] && \
-                  mkdir -p build/runner && \
-                  gcc -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -marm -static \
-                  -Wall -Wextra -Wconversion -Wsign-conversion \
-                  -Wshadow -Wstrict-overflow -O3 \
-                  -DENABLE_LOGGING \
-                  -o build/runner/coparun src/coparun/runmem.c \
-                  src/coparun/coparun.c src/coparun/mem_man.c && \
-                  export CP_TARGET_ARCH=armv7mthumb_fpv5 && \
-                  pytest && \
-                  bash tools/create_asm.sh"
-
+        path: build/artifacts/runner-linux-armv7mthumb/*
     - uses: actions/upload-artifact@v7
+      if: always()
       with:
-        name: runner-linux-armv7mthumb-fpv5
-        path: build/runner/*
+        name: runner-linux-armv7mthumb_fpv5
+        path: build/artifacts/runner-linux-armv7mthumb_fpv5/*
 
   build-riscv64:
     needs: [build_stencils]
@@ -473,7 +373,7 @@ jobs:
         path: build/runner/*
 
   release-stencils:
-    needs: [build_stencils, build-ubuntu, build-ubuntu32, build-windows, build-arm64, build-armv6, build-armv7, build-armv7thumb, build-armv7mthumb, build-armv7mthumb-fpv5, build-riscv64, build-riscv32]
+    needs: [build_stencils, build-ubuntu, build-ubuntu32, build-windows, build-arm64, build-arm32, build-riscv64, build-riscv32]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
@@ -527,7 +427,7 @@ jobs:
           fi
 
   build-docs:
-    needs: [build_stencils, build-ubuntu, build-ubuntu32, build-windows, build-arm64, build-armv6, build-armv7, build-armv7thumb, build-armv7mthumb, build-armv7mthumb-fpv5, build-riscv64, build-riscv32]
+    needs: [build_stencils, build-ubuntu, build-ubuntu32, build-windows, build-arm64, build-arm32, build-riscv64, build-riscv32]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
