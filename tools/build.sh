@@ -4,10 +4,10 @@ set -eu
 ARCH=${1:-x86_64}
 
 case "$ARCH" in
-    (x86_64|x86|arm64|arm-v6|arm-v7|arm-v7-thumb|arm-v7m-thumb|all)
+    (x86_64|x86|arm64|arm-v6|arm-v7|arm-v7-thumb|arm-v7m-thumb|arm-v7m-thumb-fpv5|all)
         ;;
     (*)
-        echo "Usage: $0 [x86_64|x86|arm64|arm-v6|arm-v7|arm-v7-thumb|arm-v7m-thumb|all]"
+        echo "Usage: $0 [x86_64|x86|arm64|arm-v6|arm-v7|arm-v7-thumb|arm-v7m-thumb|arm-v7m-thumb-fpv5|all]"
         exit 1
         ;;
 esac
@@ -17,6 +17,7 @@ mkdir -p build/runner
 
 SRC=build/stencils/stencils.c
 DEST=src/copapy/obj
+CMSIS_DSP=${CMSIS_DSP:-../CMSIS-DSP}
 python3 stencils/generate_stencils.py $SRC
 mkdir -p $DEST
 
@@ -216,20 +217,26 @@ if [[ "$ARCH" == "arm-v7-thumb" || "$ARCH" == "all" ]]; then
 fi
 
 #######################################
-# ARM v7 thumb Cortex-M
+# ARM v7 thumb Cortex-M4 (FPv4-SP)
 #######################################
 if [[ "$ARCH" == "arm-v7m-thumb" || "$ARCH" == "all" ]]; then
     echo "--------------arm-v7m-thumb 32 bit----------------"
 
-    LIBGCC=$(arm-none-eabi-gcc -march=armv7e-m -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -print-libgcc-file-name)
+    ARM_FLAGS="-march=armv7e-m -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb"
+    LIBGCC=$(arm-none-eabi-gcc $ARM_FLAGS -print-libgcc-file-name)
 
     arm-none-eabi-gcc -fno-pic -ffunction-sections \
-        -march=armv7e-m -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb \
+        $ARM_FLAGS \
         -c $SRC -O3 -o build/stencils/stencils.o
+
+    # Math functions based on CMSIS-DSP, remaining functions from MUSL
+    bash tools/build_cmsis_libm.sh $CMSIS_DSP \
+        build/musl/musl_objects_armv7mthumb.o \
+        build/stencils/math.o "$ARM_FLAGS"
 
     arm-none-eabi-ld -r \
         build/stencils/stencils.o \
-        build/musl/musl_objects_armv7mthumb.o \
+        build/stencils/math.o \
         $LIBGCC \
         -o $DEST/stencils_armv7mthumb_O3.o
 
@@ -247,4 +254,34 @@ if [[ "$ARCH" == "arm-v7m-thumb" || "$ARCH" == "all" ]]; then
         src/coparun/coparun.c \
         src/coparun/mem_man.c \
         -o build/runner/coparun-armv7thumb
+fi
+
+#######################################
+# ARM v7 thumb Cortex-M7 (FPv5-SP)
+#######################################
+if [[ "$ARCH" == "arm-v7m-thumb-fpv5" || "$ARCH" == "all" ]]; then
+    echo "--------------arm-v7m-thumb-fpv5 32 bit----------------"
+
+    ARM_FLAGS="-mcpu=cortex-m7 -mfpu=fpv5-sp-d16 -mfloat-abi=hard -mthumb"
+    LIBGCC=$(arm-none-eabi-gcc $ARM_FLAGS -print-libgcc-file-name)
+
+    arm-none-eabi-gcc -fno-pic -ffunction-sections \
+        $ARM_FLAGS \
+        -c $SRC -O3 -o build/stencils/stencils.o
+
+    # Math functions based on CMSIS-DSP, remaining functions from MUSL
+    # (the MUSL objects for FPv4-SP are compatible with FPv5-SP)
+    bash tools/build_cmsis_libm.sh $CMSIS_DSP \
+        build/musl/musl_objects_armv7mthumb.o \
+        build/stencils/math.o "$ARM_FLAGS"
+
+    arm-none-eabi-ld -r \
+        build/stencils/stencils.o \
+        build/stencils/math.o \
+        $LIBGCC \
+        -o $DEST/stencils_armv7mthumb_fpv5_O3.o
+
+    arm-none-eabi-objdump -d -x \
+        $DEST/stencils_armv7mthumb_fpv5_O3.o \
+        > build/stencils/stencils_armv7mthumb_fpv5_O3.asm
 fi

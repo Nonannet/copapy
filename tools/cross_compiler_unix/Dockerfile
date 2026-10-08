@@ -26,4 +26,6 @@ ENV PATH=/home/riscv/bin:$PATH
 
 COPY *.sh ./
 
-RUN sh build_musl.sh
+RUN sh get_and_build_musl.sh
+
+RUN sh get_cmsis_dsp.sh
