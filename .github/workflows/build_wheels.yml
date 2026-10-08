@@ -10,7 +10,7 @@ jobs:
   build_stencils:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/nonannet/cross_compiler_unix:3
+      image: ghcr.io/nonannet/cross_compiler_unix:4
     steps:
       - uses: actions/checkout@v7
 
@@ -52,10 +52,13 @@ jobs:
           name: musl-object-files
           path: /tmp/musl-object-files
 
-      # Separate untracked file: modifying the tracked LICENSE would mark the
+      # Separate untracked files: modifying the tracked LICENSE would mark the
       # tree as dirty and turn the release version into a dev version
-      - name: Add musl copyright notice as license file
-        run: cp /tmp/musl-object-files/COPYRIGHT LICENSE-MUSL.txt
+      - name: Add musl and CMSIS-DSP copyright notices as license files
+        run: |
+          cp /tmp/musl-object-files/COPYRIGHT LICENSE-MUSL.txt
+          cp /tmp/musl-object-files/CMSIS-DSP-LICENSE LICENSE-CMSIS-DSP.txt
+          cp /tmp/musl-object-files/CMSIS-DSP-ComputeLibrary-LICENSE LICENSE-CMSIS-DSP-ComputeLibrary.txt
 
       - name: Set up Python
         uses: actions/setup-python@v7

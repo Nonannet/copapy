@@ -225,7 +225,7 @@ For more complex operations - where inlining is less useful - stencils call a no
             e: R_X86_64_PLT32    result_float-0x4
 ```
 
-Unlike stencils, non-stencil functions like `sinf` are not stripped and do not need to be tail-call-optimizable. These functions can be provided as C code and compiled together with the stencils or can be object files like in the case of `sinf` compiled from C and assembly code and merged into the stencil object files. Math functions like `sinf` are currently provided by the MUSL C library, with architecture-specific optimizations. 
+Unlike stencils, non-stencil functions like `sinf` are not stripped and do not need to be tail-call-optimizable. These functions can be provided as C code and compiled together with the stencils or can be object files like in the case of `sinf` compiled from C and assembly code and merged into the stencil object files. Math functions like `sinf` are currently provided by the MUSL C library, with architecture-specific optimizations. For the Cortex-M targets with a single precision FPU most math functions are based on CMSIS-DSP instead, which avoids the software emulated double precision arithmetic of the MUSL functions. 
 
 Array operations use the same mechanism. Instead of passing operands in registers, an array stencil accesses its operands and its result in heap memory through placeholder symbols, which are patched to the actual addresses. The loop over the elements is in a non-stencil function shared by all stencils of that operation:
 
@@ -302,4 +302,4 @@ This project is licensed under the MIT license - see the [LICENSE](LICENSE) file
 
 [^2]: The compiler must support tail-call optimization (TCO). Currently, GCC is supported. Porting to a new architecture requires implementing a subset of relocation types used by that architecture.
 
-[^3]: Supported architectures: x86_64, x86 (32 Bit), AArch64, ARMv6/7 (non-Thumb), ARMv7 Thumb for Cortex-A and Cortex-M and RISC-V (RV32/RV64 with hardware floating point).
+[^3]: Supported architectures: x86_64, x86 (32 Bit), AArch64, ARMv6/7 (non-Thumb), ARMv7 Thumb for Cortex-A and Cortex-M (M4 and M7) and RISC-V (RV32/RV64 with hardware floating point).
