@@ -6,7 +6,7 @@ from typing import Any, Sequence, overload
 import copapy as cp
 from ._arrays import array
 from ._basic_types import Net, Node, unifloat, ArrayNet, ArrayConst, ArrayOp, ArrayPack, ArrayElement, HeadNode, add_op
-from ._linalg import _solve_arrays
+from ._linalg import _solve_arrays, inv
 
 # Operations with a derivative of 0 (integer results)
 _ZERO_GRAD_OPS = ('ge', 'gt', 'eq', 'ne', 'floordiv', 'bwand', 'bwor', 'bwxor', 'int', 'bool', 'sign', 'argsort', 'gtabs')
@@ -182,6 +182,12 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
             g_b = _solve_arrays(a.reshape(n, n).T, g.reshape(n, r))
             add_grad(b, g_b)
             add_grad(a, -g_b.matmul(sol.T))
+
+        elif opn == 'det':
+            # The gradient of det(a) is det(a) a^-T (not defined for a singular matrix)
+            (n,) = _const_ints(node.args[1])
+            assert out_net is not None
+            add_grad(a, inv(a.reshape(n, n).T) * (value(out_net) * g))
 
         elif opn in ('mask', 'masknot'):
             # The gradient passes where the value passes

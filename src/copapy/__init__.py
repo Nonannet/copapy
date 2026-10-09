@@ -40,7 +40,7 @@ from ._quaternion import quaternion
 from ._tensors import tensor, zeros, ones, arange, eye, identity, diagonal, concat
 from ._math import sqrt, abs, sign, sin, cos, tan, tanh, asin, acos, atan, atan2, log, exp, pow, get_42, clamp, minimum, maximum, min, max
 from ._casts import cast, to_float, to_int, to_bool
-from ._linalg import solve
+from ._linalg import solve, inv, det
 from ._autograd import grad
 from ._tensors import tensor as matrix
 from ._arrays import array
@@ -105,6 +105,8 @@ __all__ = [
     "quaternion",
     "grad",
     "solve",
+    "inv",
+    "det",
     "eye",
     "concat",
     "sort",

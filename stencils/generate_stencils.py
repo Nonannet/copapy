@@ -401,10 +401,16 @@ def get_arr_matmul_code(type1: str, type2: str) -> str:
 
 @norm_indent
 def get_arr_solve_code() -> str:
-    """Solution of a linear system, the kernel aux_arr_solve_float is in aux_functions.c"""
+    """Solution of a linear system and determinant, the kernels aux_arr_solve_float
+    and aux_arr_det_float are in aux_functions.c"""
     return """
     STENCIL void solve_floatarr_floatarr(void) {
         aux_arr_solve_float(REF(ref_arg0), REF(ref_arg1), REF(ref_out), REF(ref_arg3), REF(ref_arg2));
+        result_float_ref();
+    }
+
+    STENCIL void det_floatarr(void) {
+        *(float *)REF(ref_out) = aux_arr_det_float(REF(ref_arg0), REF(ref_arg2), *(int *)REF(ref_arg1));
         result_float_ref();
     }
     """

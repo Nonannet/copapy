@@ -127,3 +127,33 @@ KERNEL void aux_arr_solve_float(const float *restrict a, const float *restrict b
         for (int j = 0; j < r; j++) xi[j] *= inv;
     }
 }
+
+// Determinant of a row-major n x n matrix a by Gaussian elimination with partial
+// pivoting on a copy of a in the work array w (n x n): the product of the pivots
+// with the sign flipped for each swap of two different rows. The pivot row is
+// selected and the sign is flipped without data dependent branches. A pivot of
+// zero (singular matrix) is replaced by 1 as divisor: the elements below it are
+// zero as well, the result is 0 instead of nan.
+KERNEL float aux_arr_det_float(const float *restrict a, float *restrict w, int n) {
+    union { float f; unsigned int u; } det = {1.0f};
+    for (int i = 0; i < n * n; i++) w[i] = a[i];
+    for (int k = 0; k < n; k++) {
+        int pv = k;
+        for (int i = k + 1; i < n; i++) {
+            int m = -(fabsf(w[i * n + k]) > fabsf(w[pv * n + k])); VALUE_BARRIER(m);
+            pv = (i & m) | (pv & ~m);
+        }
+        float *wk = w + k * n, *wp = w + pv * n;
+        for (int j = k; j < n; j++) { float t = wk[j]; wk[j] = wp[j]; wp[j] = t; }
+        det.u ^= (unsigned int)(pv != k) << 31;
+        float pivot = wk[k];
+        det.f *= pivot;
+        float inv = 1.0f / (pivot + (float)(pivot == 0.0f));
+        for (int i = k + 1; i < n; i++) {
+            float *restrict wi = w + i * n;
+            float f = wi[k] * inv;
+            for (int j = k + 1; j < n; j++) wi[j] -= f * wk[j];
+        }
+    }
+    return det.f;
+}

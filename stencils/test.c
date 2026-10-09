@@ -142,6 +142,22 @@ int main() {
         }
     }
 
+    // aux_arr_det_float: one row swap, no swap, singular with a zero column and 1 x 1
+    const float da[4][9] = {
+        {0.0f, 2.0f, 1.0f, 1.0f, 1.0f, 0.5f, 4.0f, -1.0f, 3.0f},
+        {4.0f, 1.0f, 0.0f, 1.0f, 3.0f, 1.0f, 0.0f, 1.0f, 2.0f},
+        {1.0f, 0.0f, 2.0f, 3.0f, 0.0f, 1.0f, -2.0f, 0.0f, 5.0f},
+        {-2.5f}};
+    const int dn[4] = {3, 3, 3, 1};
+    const float dref[4] = {-7.0f, 18.0f, 0.0f, -2.5f};
+    for (int t = 0; t < 4; t++) {
+        float res = aux_arr_det_float(da[t], sw, dn[t]);
+        if (!(fabsf(res - dref[t]) <= 1e-5f)) {
+            printf("aux_arr_det_float: test %d = %.9f, expected %.9f\n", t, res, dref[t]);
+            errors++;
+        }
+    }
+
 #ifdef TEST_CMSIS_LIBM
     test_cmsis_libm();
 #endif
