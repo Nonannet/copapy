@@ -5,10 +5,11 @@ import copapy.backend as cpb
 from typing import Any, Sequence, overload
 import copapy as cp
 from ._arrays import array
-from ._basic_types import Net, Node, unifloat, ArrayNet, ArrayConst, ArrayOp, ArrayPack, ArrayElement, HeadNode
+from ._basic_types import Net, Node, unifloat, ArrayNet, ArrayConst, ArrayOp, ArrayPack, ArrayElement, HeadNode, add_op
+from ._linalg import _solve_arrays
 
 # Operations with a derivative of 0 (integer results)
-_ZERO_GRAD_OPS = ('ge', 'gt', 'eq', 'ne', 'floordiv', 'bwand', 'bwor', 'bwxor', 'int', 'bool', 'sign', 'argsort')
+_ZERO_GRAD_OPS = ('ge', 'gt', 'eq', 'ne', 'floordiv', 'bwand', 'bwor', 'bwxor', 'int', 'bool', 'sign', 'argsort', 'gtabs')
 
 # Array operations without a derivative rule
 _UNSUPPORTED_ARRAY_OPS = ('copy', 'sort', 'conv2d', 'maxpool2d', 'avgpool2d')
@@ -172,6 +173,19 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
             m, k, n = _const_ints(node.args[2])
             add_grad(a, g.reshape(m, n).matmul(b.reshape(k, n).T))
             add_grad(b, a.reshape(m, k).T.matmul(g.reshape(m, n)))
+
+        elif opn == 'solve':
+            # x = a^-1 b: the gradient of b is a^-T g, the gradient of a is -(a^-T g) x^T
+            n, r = _const_ints(node.args[2])
+            assert isinstance(out_net, ArrayNet)
+            sol: array[Any] = array._from_net(out_net, (n, r))
+            g_b = _solve_arrays(a.reshape(n, n).T, g.reshape(n, r))
+            add_grad(b, g_b)
+            add_grad(a, -g_b.matmul(sol.T))
+
+        elif opn in ('mask', 'masknot'):
+            # The gradient passes where the value passes
+            add_grad(a, add_op(opn, [g if isinstance(g, value) else float(g), b]))
 
         elif opn in ('min', 'max') and reduction:
             # The derivative is 1 for the elements equal to the result

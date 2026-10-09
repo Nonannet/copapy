@@ -128,6 +128,20 @@ int main() {
         }
     }
 
+    // aux_arr_solve_float: a zero on the diagonal requires pivoting, two right-hand sides
+    const float sa[9] = {0.0f, 2.0f, 1.0f, 1.0f, 1.0f, 0.5f, 4.0f, -1.0f, 3.0f};
+    const float sb[6] = {1.0f, 3.0f, 2.0f, 2.5f, 3.0f, 6.0f};
+    const float sref[6] = {1.5f, 1.0f, 6.0f / 7.0f, 1.0f, -5.0f / 7.0f, 1.0f};
+    const int sdims[2] = {3, 2};
+    float sx[6], sw[9];
+    aux_arr_solve_float(sa, sb, sx, sw, sdims);
+    for (int i = 0; i < 6; i++) {
+        if (fabsf(sx[i] - sref[i]) > 1e-5f) {
+            printf("aux_arr_solve_float: x[%d] = %.9f, expected %.9f\n", i, sx[i], sref[i]);
+            errors++;
+        }
+    }
+
 #ifdef TEST_CMSIS_LIBM
     test_cmsis_libm();
 #endif

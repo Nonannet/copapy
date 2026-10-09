@@ -400,6 +400,17 @@ def get_arr_matmul_code(type1: str, type2: str) -> str:
 
 
 @norm_indent
+def get_arr_solve_code() -> str:
+    """Solution of a linear system, the kernel aux_arr_solve_float is in aux_functions.c"""
+    return """
+    STENCIL void solve_floatarr_floatarr(void) {
+        aux_arr_solve_float(REF(ref_arg0), REF(ref_arg1), REF(ref_out), REF(ref_arg3), REF(ref_arg2));
+        result_float_ref();
+    }
+    """
+
+
+@norm_indent
 def get_arr_func1_code(name: str, func: str, type1: str, type_out: str = 'float') -> str:
     """Element-wise function of one array"""
     kernel = f"aux_arr_{name}_{type1}"
@@ -433,22 +444,8 @@ def get_arr_cast_code(name: str, type1: str, expr: str, type_out: str) -> str:
 
 @norm_indent
 def get_arr_copy_code() -> str:
-    """Strided copy of 32 bit elements for transposing, slicing and broadcasting.
-    Parameters as int array: [offset, n0, n1, n2, n3, s0, s1, s2, s3] with the
-    sizes n and the source strides s (in elements) of up to 4 dimensions."""
+    """Strided copy of 32 bit elements, the kernel aux_arr_copy32 is in aux_functions.c"""
     return """
-    KERNEL void aux_arr_copy32(const int *restrict a, int *restrict o, const int *restrict p) {
-        const int *s = a + p[0];
-        int n0 = p[1], n1 = p[2], n2 = p[3], n3 = p[4];
-        int s0 = p[5], s1 = p[6], s2 = p[7], s3 = p[8];
-        for (int i0 = 0; i0 < n0; i0++)
-            for (int i1 = 0; i1 < n1; i1++)
-                for (int i2 = 0; i2 < n2; i2++) {
-                    const int *r = s + i0 * s0 + i1 * s1 + i2 * s2;
-                    for (int i3 = 0; i3 < n3; i3++) *o++ = r[i3 * s3];
-                }
-    }
-
     STENCIL void copy_arr(void) {
         aux_arr_copy32(REF(ref_arg0), REF(ref_out), REF(ref_arg1));
         result_void();
@@ -458,48 +455,8 @@ def get_arr_copy_code() -> str:
 
 @norm_indent
 def get_arr_conv_code() -> str:
-    """2D convolution (cross-correlation) of a float input [n, ci, h, w] with the
-    weights [co, ci, kh, kw] and a bias [co]. Parameters as int array:
-    [n, ci, h, w, co, kh, kw, oh, ow, sh, sw, ph, pw, dh, dw] with the output
-    size o, the strides s, the zero padding p and the dilation d. Each weight is
-    accumulated over the output rows, which keeps the inner loop contiguous for
-    vectorization without reassociation of floats. The loop bounds exclude the
-    padding, the input is not copied."""
+    """2D convolution, the kernel aux_arr_conv2d is in aux_functions.c"""
     return """
-    KERNEL void aux_arr_conv2d(const float *restrict x, const float *restrict wt, const float *restrict bias, float *restrict o, const int *restrict p) {
-        int nb = p[0], ci = p[1], h = p[2], w = p[3], co = p[4], kh = p[5], kw = p[6], oh = p[7], ow = p[8];
-        int sh = p[9], sw = p[10], ph = p[11], pw = p[12], dh = p[13], dw = p[14];
-        for (int b = 0; b < nb; b++)
-            for (int c = 0; c < co; c++) {
-                float *restrict oc = o + (b * co + c) * oh * ow;
-                float bv = bias[c];
-                for (int i = 0; i < oh * ow; i++) oc[i] = bv;
-                for (int q = 0; q < ci; q++) {
-                    const float *xq = x + (b * ci + q) * h * w;
-                    const float *wq = wt + (c * ci + q) * kh * kw;
-                    for (int ky = 0; ky < kh; ky++) {
-                        // Input row of output row oy: oy * sh - ty, must be in [0, h)
-                        int ty = ph - ky * dh;
-                        int y0 = ty > 0 ? (ty + sh - 1) / sh : 0;
-                        int y1 = h + ty > 0 ? (h + ty - 1) / sh + 1 : 0;
-                        if (y1 > oh) y1 = oh;
-                        for (int kx = 0; kx < kw; kx++) {
-                            int tx = pw - kx * dw;
-                            int x0 = tx > 0 ? (tx + sw - 1) / sw : 0;
-                            int x1 = w + tx > 0 ? (w + tx - 1) / sw + 1 : 0;
-                            if (x1 > ow) x1 = ow;
-                            float wv = wq[ky * kw + kx];
-                            for (int oy = y0; oy < y1; oy++) {
-                                const float *xr = xq + (oy * sh - ty) * w;
-                                float *restrict r = oc + oy * ow;
-                                for (int ox = x0; ox < x1; ox++) r[ox] += wv * xr[ox * sw - tx];
-                            }
-                        }
-                    }
-                }
-            }
-    }
-
     STENCIL void conv2d_floatarr_floatarr(void) {
         aux_arr_conv2d(REF(ref_arg0), REF(ref_arg1), REF(ref_arg2), REF(ref_out), REF(ref_arg3));
         result_float_ref();
@@ -720,6 +677,15 @@ if __name__ == "__main__":
     for fn in ['atan2', 'pow']:
         code += get_math_func2(fn, 'float', 'float')
 
+    # Branch-free selection: gtabs returns the int mask -1 if |arg1| > |arg2| else 0,
+    # mask and masknot keep a float where the mask is set / not set, otherwise 0.0
+    code += get_custom_stencil('gtabs_float_float(float arg1, float arg2)',
+                               'result_int_float(-(fabsf(arg1) > fabsf(arg2)), arg2);')
+    code += get_custom_stencil('mask_float_int(float arg1, int arg2)',
+                               'union { float f; int i; } x = {arg1}; x.i &= arg2; result_float_int(x.f, arg2);')
+    code += get_custom_stencil('masknot_float_int(float arg1, int arg2)',
+                               'union { float f; int i; } x = {arg1}; x.i &= ~arg2; result_float_int(x.f, arg2);')
+
     for t in types:
         code += get_min(t, t)
         code += get_max(t, t)
@@ -776,6 +742,8 @@ if __name__ == "__main__":
     for t1, t2 in permutate(types, types):
         code += get_arr_dot_code(t1, t2)
         code += get_arr_matmul_code(t1, t2)
+
+    code += get_arr_solve_code()
 
     code += get_arr_cast_code('float', 'int', '(float)a[i]', 'float')
     code += get_arr_cast_code('int', 'float', '(int)a[i]', 'int')
