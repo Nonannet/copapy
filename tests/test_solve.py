@@ -107,7 +107,7 @@ def test_array_and_tensor_operands() -> None:
     assert res[1] == pytest.approx(ref, rel=1e-4)
 
 
-@pytest.mark.parametrize('n', [1, 2, 3, 5])
+@pytest.mark.parametrize('n', [1, 2, 3, 4])
 @pytest.mark.parametrize('pivot', [True, False])
 def test_unrolled_solve(n: int, pivot: bool) -> None:
     a, b = sample_matrix(n), sample_rhs(n, 1)
@@ -186,6 +186,31 @@ def test_packed_tensor_uses_array_stencil() -> None:
     assert isinstance(x, cp.vector)
     assert get_dag_stats([v.net for v in x.values]).get('solve_floatarr_floatarr') == 1  # type: ignore[union-attr]
     assert evaluate(*x.values) == pytest.approx(column(solve_ref(a, b)), rel=1e-3)
+
+
+def uses_array_stencil(x: Any) -> bool:
+    return 'solve_floatarr_floatarr' in get_dag_stats([v.net for v in x.values if isinstance(v, cp.value)])
+
+
+def test_unroll_threshold() -> None:
+    """The array stencil is used for more than 16 copapy values in the matrix"""
+    def rhs(n: int) -> Any:
+        return cp.vector(cp.value(v) for v in column(sample_rhs(n, 1)))
+
+    assert not uses_array_stencil(cp.solve(cp.tensor(values(sample_matrix(4))), rhs(4)))
+    assert uses_array_stencil(cp.solve(cp.tensor(values(sample_matrix(5))), rhs(5)))
+    assert uses_array_stencil(cp.solve(cp.tensor(values(sample_matrix(5))), rhs(5), pivot=False))
+
+    # Constants in the matrix and the elements of the right-hand side are not counted
+    assert not uses_array_stencil(cp.solve(cp.tensor(sample_matrix(6)), rhs(6)))
+    a = sample_matrix(5)
+    mixed = [[cp.value(v) if i < 3 else v for v in row] for i, row in enumerate(a)]  # 15 values
+    assert not uses_array_stencil(cp.solve(cp.tensor(mixed), rhs(5)))
+
+    # packed=False always unrolls
+    x = cp.solve(cp.tensor(values(a), packed=False), rhs(5))
+    assert not uses_array_stencil(x)
+    assert evaluate(*x.values) == pytest.approx(column(solve_ref(a, sample_rhs(5, 1))), rel=1e-3, abs=1e-4)
 
 
 def test_singular_constant_matrix() -> None:

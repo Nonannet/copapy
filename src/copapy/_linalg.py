@@ -5,6 +5,10 @@ from ._vectors import vector
 from ._tensors import tensor
 from ._casts import _cast_array
 
+unroll_threshold: int = 16
+"""Tensors are solved by the array stencil if more elements of the matrix than
+unroll_threshold are copapy values, otherwise by the unrolled elimination"""
+
 
 def _gtabs(x: Any, y: Any) -> Any:
     """Int mask with all bits set (-1) if |x| > |y|, otherwise 0"""
@@ -108,10 +112,13 @@ def solve(a: 'tensor[Any]', b: 'tensor[Any]', pivot: bool = True) -> tensor[floa
 def solve(a: Any, b: Any, pivot: bool = True) -> Any:
     """Solve the linear system a x = b for x (like numpy.linalg.solve).
 
-    Arrays and packed tensors are solved by a single array stencil: Gaussian
-    elimination with partial pivoting. Otherwise the elimination is unrolled
-    into scalar operations, where operations with constant zeros are eliminated
-    and pivot elements that are constants are selected without generating code.
+    Arrays and tensors with more than 16 copapy values in the matrix a are
+    solved by a single array stencil: Gaussian elimination with partial
+    pivoting. Otherwise the elimination is unrolled into scalar operations,
+    where operations with constant zeros are eliminated and pivot elements
+    that are constants are selected without generating code. A tensor created
+    with packed=True is always solved by the array stencil, a matrix created
+    with packed=False is always unrolled.
 
     In both cases the execution time only depends on the size of the system,
     not on the values. A singular matrix results in inf or nan values.
@@ -143,11 +150,11 @@ def solve(a: Any, b: Any, pivot: bool = True) -> Any:
         return _solve_arrays(a if isinstance(a, array) else a._force_array(),
                              b if isinstance(b, array) else b._force_array())
 
-    if not (a._is_constant() and b._is_constant()):
-        arr_a, arr_b = a._get_array(), b._get_array()
-        if arr_a is not None or arr_b is not None:
-            packed = _solve_arrays(arr_a if arr_a is not None else a._force_array(),
-                                   arr_b if arr_b is not None else b._force_array())
+    if not (a._is_constant() and b._is_constant()) and a._packed is not False:
+        # The size of the unrolled elimination depends on the elements of the
+        # matrix that are not known at trace time
+        if a._packed or b._packed or sum(1 for v in a.values if isinstance(v, value)) > unroll_threshold:
+            packed = _solve_arrays(a._force_array(), b._force_array())
             return vector._from_array(packed) if isinstance(b, vector) else tensor._from_array(packed)
 
     values = _solve_values(a.values, b.values, n, len(b.values) // n, pivot)
