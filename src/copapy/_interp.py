@@ -1,16 +1,58 @@
-from typing import Any, Sequence, overload
+from typing import Any, Sequence, TypeVar, overload
 import math
-from ._basic_types import value, ArrayNet, to_float, value_from_number
+from ._basic_types import value, ArrayNet, to_float, value_from_number, unifloat
 from ._arrays import array, ArrayType, _add_array_op
 from ._vectors import vector
 from ._tensors import tensor
 from ._casts import cast, _cast_array
 from ._math import minimum, maximum
 
+U = TypeVar("U", int, float)
+
 _METHODS = ('linear', 'previous', 'nearest')
 
 # Relative deviation of the step sizes up to which a grid is uniform
 _UNIFORM_TOLERANCE = 1e-6
+
+
+@overload
+def lerp(v1: value[U], v2: U | value[U], t: unifloat) -> value[float]: ...
+@overload
+def lerp(v1: U | value[U], v2: value[U], t: unifloat) -> value[float]: ...
+@overload
+def lerp(v1: U | value[U], v2: U | value[U], t: value[float]) -> value[float]: ...
+@overload
+def lerp(v1: U, v2: U, t: float) -> float: ...
+@overload
+def lerp(v1: vector[Any], v2: vector[Any], t: unifloat) -> vector[float]: ...
+@overload
+def lerp(v1: tensor[Any], v2: tensor[Any], t: unifloat) -> tensor[float]: ...
+@overload
+def lerp(v1: array[Any], v2: array[Any], t: unifloat) -> array[float]: ...
+def lerp(v1: Any, v2: Any, t: Any) -> Any:
+    """Linearly interpolate between v1 and v2 by a factor t.
+
+    Arrays and packed vectors or tensors are interpolated by array stencils,
+    otherwise one scalar operation per element is used.
+
+    Arguments:
+        v1: First value, vector, tensor or array (result for t = 0)
+        v2: Second value, vector, tensor or array (result for t = 1)
+        t: Interpolation factor (0.0 to 1.0): a number or value, or one
+            factor per element with the type of v1 and v2
+
+    Returns:
+        Interpolated value, vector, tensor or array
+    """
+    for cls in (vector, tensor, array):
+        if isinstance(v1, cls) or isinstance(v2, cls):
+            assert isinstance(v1, cls) and isinstance(v2, cls), f"v1 and v2 must both be of type {cls.__name__}."
+            assert v1.shape == v2.shape, "v1 and v2 must have the same shape."
+            break
+    else:
+        assert isinstance(v1, int | float | value) and isinstance(v2, int | float | value), \
+            "v1 and v2 must be of the same type."
+    return v1 + (v2 - v1) * t
 
 
 def _index_op(op: str, table: array[Any], pos: Any) -> Any:
@@ -26,7 +68,7 @@ def _index_op(op: str, table: array[Any], pos: Any) -> Any:
     return value(_add_array_op(f"{op}_floatarr_float", [table.net, scalar.net, n]).result)
 
 
-def _lerp(table: array[Any], t: Any) -> Any:
+def _lerp_table(table: array[Any], t: Any) -> Any:
     """Element of a 1D float array at the fractional index t (value, array or
     number) by linear interpolation, t is clamped to the array"""
     return _index_op('lerp', table, t)
@@ -60,7 +102,7 @@ def get_table_delta(table: array[Any], t: Any) -> tuple[Any, Any]:
     """
     n = table.size
     lower = minimum(_floor_index(t, n), n - 2.0)
-    diff = _lerp(table, lower + 1.0) - _lerp(table, lower)
+    diff = _lerp_table(table, lower + 1.0) - _lerp_table(table, lower)
     return diff, (t > 0.0) * (t < n - 1.0)
 
 
@@ -178,7 +220,7 @@ def interp(x: Any, xp: Any, fp: Any, method: str = 'linear') -> Any:
             t = _floor_index(t + 0.5, n)
         if table is None:
             table = array(table_numbers, 'float')  # type: ignore[arg-type]
-        return _lerp(table, t)
+        return _lerp_table(table, t)
 
     if isinstance(x, array):
         return evaluate(x)

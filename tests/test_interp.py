@@ -6,6 +6,7 @@ import pytest
 
 import copapy as cp
 from copapy.backend import get_dag_stats
+from copapy._interp import lerp
 
 
 def evaluate(*exprs: Any) -> list[Any]:
@@ -220,3 +221,52 @@ def test_grad_to_table_is_not_supported() -> None:
     result = cp.interp(cp.value(0.1), GRID, table)
     with pytest.raises(NotImplementedError):
         cp.grad(result, table[2])
+
+
+def test_lerp_scalar() -> None:
+    assert lerp(1.0, 3.0, 0.25) == pytest.approx(1.5)
+    assert lerp(2, 4, 0.5) == pytest.approx(3.0)
+    results = [lerp(cp.value(1.0), 3.0, 0.25), lerp(1.0, cp.value(3.0), cp.value(0.25)), lerp(cp.value(2), 4, 0.5)]
+    assert all(isinstance(r, cp.value) and r.dtype == 'float' for r in results)
+    assert evaluate(*results) == pytest.approx([1.5, 1.5, 3.0])
+
+
+def test_lerp_array() -> None:
+    a, b = [0.0, 1.0, -2.0, 4.0], [2.0, 1.0, 6.0, -4.0]
+    factors = [0.0, 0.5, 0.25, 1.0]
+    result = lerp(cp.array(a), cp.array(b), cp.value(0.25))
+    per_element = lerp(cp.array(a), cp.array(b), cp.array(factors))
+    assert isinstance(result, cp.array) and isinstance(per_element, cp.array)
+    assert all('arr' in n for n in get_dag_stats([result.net, per_element.net]) if not n.startswith('const'))
+    res = evaluate(result, per_element)
+    assert res[0] == pytest.approx([p + (q - p) * 0.25 for p, q in zip(a, b)])
+    assert res[1] == pytest.approx([p + (q - p) * f for p, q, f in zip(a, b, factors)])
+
+
+def test_lerp_vector_and_tensor() -> None:
+    a, b = [0.0, 1.0, -2.0, 4.0], [2.0, 1.0, 6.0, -4.0]
+    ref = [p + (q - p) * 0.25 for p, q in zip(a, b)]
+    t = cp.value(0.25)
+    vec = lerp(cp.vector(cp.value(v) for v in a), cp.vector(b), t)
+    packed = lerp(cp.vector((cp.value(v) for v in a), packed=True), cp.vector((cp.value(v) for v in b), packed=True), t)
+    ten = lerp(cp.tensor([cp.value(v) for v in a], (2, 2)), cp.tensor(b, (2, 2)), t)
+    assert isinstance(vec, cp.vector) and isinstance(packed, cp.vector)
+    assert isinstance(ten, cp.tensor) and ten.shape == (2, 2)
+    assert any('arr' in name for name in get_dag_stats([v.net for v in packed.values if isinstance(v, cp.value)]))
+    for result in (vec, packed, ten):
+        assert evaluate(*result.values) == pytest.approx(ref)
+    assert lerp(cp.vector(a), cp.vector(b), 0.25).values == pytest.approx(ref)
+
+
+def test_lerp_grad() -> None:
+    a, b = [0.0, 1.0, -2.0, 4.0], [2.0, 1.0, 6.0, -4.0]
+    t = cp.value(0.25)
+    g = cp.grad(lerp(cp.array(a), cp.array(b), t).sum(), t)
+    assert evaluate(g)[0] == pytest.approx(sum(q - p for p, q in zip(a, b)))
+
+
+def test_lerp_type_mismatch() -> None:
+    with pytest.raises(AssertionError):
+        lerp(cp.vector([1.0, 2.0]), cp.array([1.0, 2.0]), 0.5)  # type: ignore[call-overload]
+    with pytest.raises(AssertionError):
+        lerp(cp.array([1.0, 2.0]), cp.array([1.0, 2.0, 3.0]), 0.5)

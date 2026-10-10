@@ -5,7 +5,7 @@ from ._tensors import TensorNumLike
 from ._arrays import array, ArrayType
 from . import value, NumLike
 from typing import TypeVar, Any, overload, Callable
-from ._basic_types import add_op, unifloat
+from ._basic_types import add_op
 from functools import reduce
 import builtins
 import math
@@ -593,41 +593,6 @@ def _min_max(x: Any, op: str) -> Any:
     start: list[Any] = [getattr(builtins, op)(constants)] if constants else []
     func = lambda x, y: add_op(op, [x, y])
     return reduce(func, start + [v for v in x.values if isinstance(v, value)])
-
-
-@overload
-def lerp(v1: value[U], v2: U | value[U], t: unifloat) -> value[float]: ...
-@overload
-def lerp(v1: U | value[U], v2: value[U], t: unifloat) -> value[float]: ...
-@overload
-def lerp(v1: U | value[U], v2: U | value[U], t: value[float]) -> value[float]: ...
-@overload
-def lerp(v1: U, v2: U, t: float) -> float: ...
-@overload
-def lerp(v1: vector[U], v2: vector[U], t: unifloat) -> vector[U]: ...
-@overload
-def lerp(v1: tensor[U], v2: tensor[U], t: unifloat) -> tensor[U]: ...
-def lerp(v1: TensorNumLike, v2: TensorNumLike, t:  unifloat) -> Any:
-    """Linearly interpolate between two values or vectors v1 and v2 by a factor t.
-
-    Arguments:
-        v1: First value, vector or tensor
-        v2: Second value, vector or tensor
-        t: Interpolation factor (0.0 to 1.0)
-
-    Returns:
-        Interpolated value or vector
-    """
-    if isinstance(v1, vector):
-        assert isinstance(v2, vector), "v1 and v2 must both be vectors."
-        assert v1.shape == v2.shape, "v1 and v2 must have the same shape."
-        return vector(lerp(vv1, vv2, t) for vv1, vv2 in zip(v1.values, v2.values))
-    if isinstance(v1, tensor):
-        assert isinstance(v2, tensor), "v1 and v2 must both be tensors."
-        assert v1.shape == v2.shape, "v1 and v2 must have the same shape."
-        return tensor([lerp(vv1, vv2, t) for vv1, vv2 in zip(v1.values, v2.values)], v1.shape)
-    assert isinstance(v2, (int, float, value)), "v1 and v2 must be of the same type."
-    return v1 * (1 - t) + v2 * t
 
 
 def _map2_vector(self: VecNumLike, other: VecNumLike, func: Callable[[Any, Any], value[U] | U]) -> vector[U]:
