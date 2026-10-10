@@ -1,6 +1,6 @@
 from copapy._basic_types import NumLike, value_from_number
 from . import value
-from ._arrays import ArrayType
+from ._arrays import array, ArrayType
 from ._vectors import vector, VecFloatLike, VecIntLike, VecNumLike
 from ._mixed import mixed_sum
 from typing import TypeVar, Any, overload, TypeAlias, Callable, Iterator, Sequence, Iterable, Literal, cast
@@ -396,27 +396,27 @@ class tensor(ArrayType[TNum]):
 
     def __gt__(self, other: TensorNumLike) -> 'tensor[int]':
         """Element-wise greater than."""
-        return self._binary_op(other, lambda a, b: a > b)
+        return self._binary_op(other, lambda a, b: a > b, 'gt')
 
     def __lt__(self, other: TensorNumLike) -> 'tensor[int]':
         """Element-wise less than."""
-        return self._binary_op(other, lambda a, b: a < b)
+        return self._binary_op(other, lambda a, b: a < b, 'gt', reverse=True)
 
     def __ge__(self, other: TensorNumLike) -> 'tensor[int]':
         """Element-wise greater than or equal."""
-        return self._binary_op(other, lambda a, b: a >= b)
+        return self._binary_op(other, lambda a, b: a >= b, 'ge')
 
     def __le__(self, other: TensorNumLike) -> 'tensor[int]':
         """Element-wise less than or equal."""
-        return self._binary_op(other, lambda a, b: a <= b)
+        return self._binary_op(other, lambda a, b: a <= b, 'ge', reverse=True)
 
     def __eq__(self, other: TensorNumLike) -> 'tensor[int]':  # type: ignore
         """Element-wise equality."""
-        return self._binary_op(other, lambda a, b: a == b)
+        return self._binary_op(other, lambda a, b: a == b, 'eq')
 
     def __ne__(self, other: TensorNumLike) -> 'tensor[int]':  # type: ignore
         """Element-wise inequality."""
-        return self._binary_op(other, lambda a, b: a != b)
+        return self._binary_op(other, lambda a, b: a != b, 'ne')
 
     def _binary_op(self, other: TensorNumLike, op: Callable[[Any, Any], Any],
                    array_op: str | None = None, reverse: bool = False) -> 'tensor[Any]':
@@ -426,7 +426,8 @@ class tensor(ArrayType[TNum]):
             other: Second operand.
             op: Element-wise operation, called with an element of self as
                 first and an element of other as second argument.
-            array_op: Name of the equivalent array stencil operation (add, sub, mul, div, pow)
+            array_op: Name of the equivalent array stencil operation (add, sub, mul, div, pow,
+                gt, ge, eq, ne)
             reverse: The array operation computes other (op) self
         """
         if array_op:
@@ -807,6 +808,11 @@ class tensor(ArrayType[TNum]):
 
         # Sort axes in descending order for easier dimension removal
         normalized_axes = sorted(set(normalized_axes), reverse=True)
+
+        arr = None if self._is_constant() else self._get_array()
+        if arr is not None:
+            total = arr.sum(normalized_axes, keepdims)
+            return tensor._from_array(total) if isinstance(total, array) else total
 
         # Sum along specified axes
         new_shape = list(self.shape)

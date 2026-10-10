@@ -162,6 +162,11 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
         elif opn == 'sum':
             add_grad(a, g)
 
+        elif opn == 'sumaxis':
+            # Each element of the summed axis gets the gradient of its sum
+            m, k, n = _const_ints(node.args[1])
+            add_grad(a, g.reshape(m, 1, n).broadcast_to((m, k, n)))
+
         elif opn == 'dot':
             add_grad(a, b * g)
             add_grad(b, a * g)

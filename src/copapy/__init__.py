@@ -34,7 +34,7 @@ Example usage:
 """
 
 from ._target import Target, jit
-from ._basic_types import NumLike, value, generic_sdb, iif
+from ._basic_types import NumLike, value, generic_sdb
 from ._vectors import vector, distance, scalar_projection, angle_between, rotate_vector, vector_projection
 from ._quaternion import quaternion
 from ._tensors import tensor, zeros, ones, arange, eye, identity, diagonal, concat
@@ -45,6 +45,7 @@ from ._interp import interp
 from ._autograd import grad
 from ._tensors import tensor as matrix
 from ._arrays import array
+from ._flow import iif
 from ._sorting import sort, argsort
 from . import nn
 from . import filters

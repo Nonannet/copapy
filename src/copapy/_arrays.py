@@ -109,6 +109,9 @@ def broadcast_shapes(shape1: tuple[int, ...], shape2: tuple[int, ...]) -> tuple[
 # Number of dimensions supported by the strided copy stencil
 COPY_DIMS = 4
 
+# Array operations with a bool result (stored as int)
+COMPARISONS = ('gt', 'ge', 'eq', 'ne')
+
 
 def _add_array_op(typed_op: str, args: list[Net], length: int | None = None, dtype: str | None = None) -> ArrayOp:
     """Add an array stencil, the result is an array of the given length or a scalar.
@@ -407,6 +410,14 @@ class array(Generic[TNum]):
     def __le__(self, other: 'array[Any] | NumLike') -> 'array[int]':
         return self._binary_op('ge', other, reverse=True)
 
+    def __eq__(self, other: 'array[Any] | NumLike') -> 'array[int]':  # type: ignore[override]
+        return self._binary_op('eq', other)
+
+    def __ne__(self, other: 'array[Any] | NumLike') -> 'array[int]':  # type: ignore[override]
+        return self._binary_op('ne', other)
+
+    __hash__ = object.__hash__
+
     def __abs__(self) -> 'array[TNum]':
         return self._unary_op('abs')
 
@@ -418,11 +429,57 @@ class array(Generic[TNum]):
         assert isinstance(node.result, ArrayNet)
         return array._from_net(node.result, self.shape)
 
-    def sum(self) -> value[TNum]:
-        """Sum of all elements."""
-        n = value_from_number(self.size).net
-        node = _add_array_op(f"sum_{self.net.dtype}arr", [self.net, n])
-        return value(node.result)
+    @overload
+    def sum(self, axis: None = None, keepdims: bool = False) -> value[TNum]: ...
+    @overload
+    def sum(self, axis: int | Sequence[int], keepdims: bool = False) -> 'value[TNum] | array[TNum]': ...
+    def sum(self, axis: int | Sequence[int] | None = None, keepdims: bool = False) -> Any:
+        """Sum of all elements or along the given axis or axes.
+
+        Arguments:
+            axis: Axis or axes to sum along, all elements are summed if None.
+            keepdims: Keep the summed dimensions with size 1 (only with axis).
+
+        Returns:
+            Value if all axes are summed, otherwise an array with reduced dimensions.
+        """
+        if axis is None:
+            n = value_from_number(self.size).net
+            node = _add_array_op(f"sum_{self.net.dtype}arr", [self.net, n])
+            return value(node.result)
+
+        axes: list[int] = []
+        for ax in ((axis,) if isinstance(axis, int) else axis):
+            if not -self.ndim <= ax < self.ndim:
+                raise ValueError(f"Axis {ax} is out of bounds for array of rank {self.ndim}")
+            if ax % self.ndim not in axes:
+                axes.append(ax % self.ndim)
+        axes.sort()
+        if len(axes) == self.ndim:
+            total = self.sum()
+            return array([total]).reshape(*((1,) * self.ndim)) if keepdims else total
+
+        # Axes next to each other are summed by a single stencil
+        groups: list[list[int]] = []
+        for ax in axes:
+            if groups and groups[-1][1] == ax - 1:
+                groups[-1][1] = ax
+            else:
+                groups.append([ax, ax])
+
+        net = self.net
+        shape = list(self.shape)
+        for first, last in reversed(groups):
+            m, k, n_inner = _size(shape[:first]), _size(shape[first:last + 1]), _size(shape[last + 1:])
+            shape[first:last + 1] = [1] * (last + 1 - first)
+            if k > 1:
+                dims = array([m, k, n_inner], 'int')
+                node = _add_array_op(f"sumaxis_{net.dtype}arr", [net, dims.net], m * n_inner)
+                assert isinstance(node.result, ArrayNet)
+                net = node.result
+        if not keepdims:
+            shape = [d for i, d in enumerate(shape) if i not in axes]
+        return array._from_net(net, tuple(shape))
 
     def min(self) -> value[TNum]:
         """Smallest element."""
@@ -664,11 +721,18 @@ class ArrayType(Generic[TNum]):
                 b = other._get_array(force=True)
             if a is None or b is None:
                 return None
-            return type(self)._from_array(a._binary_op(op, b, reverse))
+            return type(self)._from_array(_op_result(a._binary_op(op, b, reverse), op))
         if a is None or isinstance(other, bool) or not isinstance(other, value | int | float) or \
            (isinstance(other, value) and other.dtype == 'bool'):
             return None
         if not reverse and isinstance(other, int | float) and \
            ((op in ('add', 'sub') and other == 0) or (op == 'mul' and other == 1)):
             return self
-        return type(self)._from_array(a._binary_op(op, other, reverse))
+        return type(self)._from_array(_op_result(a._binary_op(op, other, reverse), op))
+
+
+def _op_result(arr: array[Any], op: str) -> array[Any]:
+    """Result of an array operation of a vector or tensor: like for the
+    scalar operations comparisons are bool"""
+    return array._from_net(arr.net, arr.shape, 'bool') if op in COMPARISONS else arr
+

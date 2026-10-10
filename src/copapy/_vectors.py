@@ -299,6 +299,9 @@ class vector(ArrayType[TNum]):
         ])
 
     def __gt__(self, other: VecNumLike) -> 'vector[int]':
+        ret: 'vector[Any] | None' = self._try_array_op(other, 'gt')
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a > b for a, b in zip(self.values, other.values))
@@ -308,6 +311,9 @@ class vector(ArrayType[TNum]):
         return vector(a > o if isinstance(a, value) else a > other for a in self.values)
 
     def __lt__(self, other: VecNumLike) -> 'vector[int]':
+        ret: 'vector[Any] | None' = self._try_array_op(other, 'gt', reverse=True)
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a < b for a, b in zip(self.values, other.values))
@@ -317,6 +323,9 @@ class vector(ArrayType[TNum]):
         return vector(a < o if isinstance(a, value) else a < other for a in self.values)
 
     def __ge__(self, other: VecNumLike) -> 'vector[int]':
+        ret: 'vector[Any] | None' = self._try_array_op(other, 'ge')
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a >= b for a, b in zip(self.values, other.values))
@@ -326,6 +335,9 @@ class vector(ArrayType[TNum]):
         return vector(a >= o if isinstance(a, value) else a >= other for a in self.values)
 
     def __le__(self, other: VecNumLike) -> 'vector[int]':
+        ret: 'vector[Any] | None' = self._try_array_op(other, 'ge', reverse=True)
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a <= b for a, b in zip(self.values, other.values))
@@ -335,6 +347,9 @@ class vector(ArrayType[TNum]):
         return vector(a <= o if isinstance(a, value) else a <= other for a in self.values)
 
     def __eq__(self, other: VecNumLike | Sequence[int | float]) -> 'vector[int]':  # type: ignore
+        ret: 'vector[Any] | None' = None if isinstance(other, Sequence) else self._try_array_op(other, 'eq')
+        if ret is not None:
+            return ret
         if isinstance(other, vector | Sequence):
             assert len(self) == len(other)
             return vector(a == b for a, b in zip(self.values, other))
@@ -344,6 +359,9 @@ class vector(ArrayType[TNum]):
         return vector(a == o if isinstance(a, value) else a == other for a in self.values)
 
     def __ne__(self, other: VecNumLike) -> 'vector[int]':  # type: ignore
+        ret: 'vector[Any] | None' = self._try_array_op(other, 'ne')
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a != b for a, b in zip(self.values, other.values))

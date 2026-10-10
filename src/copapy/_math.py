@@ -98,9 +98,9 @@ def pow(x: Any, y: Any) -> Any:
     if isinstance(y, array) or (isinstance(y, tensor) and not isinstance(x, vector)):
         return y.__rpow__(x)
     if isinstance(y, tensor):
-        return _map2_tensor(x, y, pow)
+        return _map2_tensor(x, y, pow, 'pow')
     if isinstance(x, vector) or isinstance(y, vector):
-        return _map2_vector(x, y, pow)
+        return _map2_vector(x, y, pow, 'pow')
     if isinstance(y, int) and 0 <= y < 8:
         if y == 0:
             return 1
@@ -281,7 +281,7 @@ def atan2(x: Any, y: Any) -> Any:
     if isinstance(x, tensor) or isinstance(y, tensor):
         return _map2_tensor(x, y, atan2, 'atan2')
     if isinstance(x, vector) or isinstance(y, vector):
-        return _map2_vector(x, y, atan2)
+        return _map2_vector(x, y, atan2, 'atan2')
     if isinstance(x, value) or isinstance(y, value):
         return add_op('atan2', [x, y])
     return math.atan2(x, y)
@@ -426,7 +426,9 @@ def sign(x: Any) -> Any:
     if isinstance(x, value):
         return add_op('sign', [x])
     if isinstance(x, vector | tensor):
-        return x.map(sign)
+        if x._is_constant() or x._get_array() is None:
+            return x.map(sign)
+        # Packed: by the array stencils of the comparisons
     return (x > 0) - (x < 0)
 
 
@@ -442,25 +444,24 @@ def clamp(x: U, min_value: U, max_value: U) -> U: ...
 def clamp(x: vector[U], min_value: U | value[U], max_value: U | value[U]) -> vector[U]: ...
 @overload
 def clamp(x: tensor[U], min_value: U | value[U], max_value: U | value[U]) -> tensor[U]: ...
-def clamp(x: U | value[U] | vector[U] | tensor[U], min_value: U | value[U], max_value: U | value[U]) -> Any:
+@overload
+def clamp(x: array[Any], min_value: Any, max_value: Any) -> array[Any]: ...
+def clamp(x: Any, min_value: Any, max_value: Any) -> Any:
     """Clamp function to limit a value between a minimum and maximum.
 
+    The elements of a vector, tensor or array are clamped by array stencils
+    for arrays and packed vectors or tensors. For x = nan the result is
+    min_value.
+
     Arguments:
-        x: Input value
+        x: Input value, vector, tensor or array
         min_value: Minimum limit
         max_value: Maximum limit
 
     Returns:
         Clamped value of x
     """
-    if isinstance(x, vector):
-        return vector(clamp(comp, min_value, max_value) for comp in x.values)
-    if isinstance(x, tensor):
-        return tensor((clamp(comp, min_value, max_value) for comp in x.values), x.shape)
-
-    return (x < min_value) * min_value + \
-          (x > max_value) * max_value + \
-          ((x >= min_value) & (x <= max_value)) * x
+    return minimum(maximum(x, min_value), max_value)
 
 
 @overload
@@ -498,7 +499,7 @@ def minimum(x: Any, y: Any) -> Any:
     if isinstance(x, tensor) or isinstance(y, tensor):
         return _map2_tensor(x, y, minimum, 'min')
     if isinstance(x, vector) or isinstance(y, vector):
-        return _map2_vector(x, y, minimum)
+        return _map2_vector(x, y, minimum, 'min')
     if isinstance(x, value) or isinstance(y, value):
         return add_op('min', [x, y])
     return x if x < y else y
@@ -539,7 +540,7 @@ def maximum(x: Any, y: Any) -> Any:
     if isinstance(x, tensor) or isinstance(y, tensor):
         return _map2_tensor(x, y, maximum, 'max')
     if isinstance(x, vector) or isinstance(y, vector):
-        return _map2_vector(x, y, maximum)
+        return _map2_vector(x, y, maximum, 'max')
     if isinstance(x, value) or isinstance(y, value):
         return add_op('max', [x, y])
     return x if x > y else y
@@ -595,8 +596,18 @@ def _min_max(x: Any, op: str) -> Any:
     return reduce(func, start + [v for v in x.values if isinstance(v, value)])
 
 
-def _map2_vector(self: VecNumLike, other: VecNumLike, func: Callable[[Any, Any], value[U] | U]) -> vector[U]:
-    """Applies a function to each element of the vector and a second vector or scalar."""
+def _map2_vector(self: VecNumLike, other: VecNumLike, func: Callable[[Any, Any], value[U] | U],
+                 array_op: str | None = None) -> vector[U]:
+    """Applies a function to each element of the vector and a second vector or scalar,
+    by the array stencil array_op for packed vectors."""
+    if array_op:
+        ret = None
+        if isinstance(self, vector):
+            ret = self._try_array_op(other, array_op)
+        elif isinstance(other, vector):
+            ret = other._try_array_op(self, array_op, reverse=True)
+        if ret is not None:
+            return ret
     if isinstance(self, vector) and isinstance(other, vector):
         return vector(func(x, y) for x, y in zip(self.values, other.values))
     elif isinstance(self, vector):
@@ -608,13 +619,12 @@ def _map2_vector(self: VecNumLike, other: VecNumLike, func: Callable[[Any, Any],
 
 
 def _map1(x: 'vector[Any] | tensor[Any] | array[Any]', func: Callable[[Any], Any], op: str) -> Any:
-    """Applies a function to each element, by an array stencil for arrays and packed tensors."""
+    """Applies a function to each element, by an array stencil for arrays and packed vectors or tensors."""
     if isinstance(x, array):
         return x._unary_op(op)
-    if isinstance(x, tensor):
-        arr = None if x._is_constant() else x._get_array()
-        if arr is not None:
-            return tensor._from_array(arr._unary_op(op))
+    arr = None if x._is_constant() else x._get_array()
+    if arr is not None:
+        return type(x)._from_array(arr._unary_op(op))
     return x.map(func)
 
 

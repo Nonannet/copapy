@@ -258,7 +258,7 @@ def arr_operand_type(op: str, type1: str, type2: str) -> str:
 def arr_out_type(op: str, type1: str, type2: str) -> str:
     """Element type of the result of an array operation: int for comparisons,
     otherwise the type of the casted operands"""
-    return 'int' if op in ('gt', 'ge') else arr_operand_type(op, type1, type2)
+    return 'int' if op in ('gt', 'ge', 'eq', 'ne') else arr_operand_type(op, type1, type2)
 
 
 def arr_casted_operand(type1: str, x: str, type_out: str) -> str:
@@ -269,7 +269,7 @@ def arr_casted_operand(type1: str, x: str, type_out: str) -> str:
 @norm_indent
 def get_arr_op_code(op: str, type1: str, type2: str, func: str = '') -> str:
     """Element-wise binary operation for the operand types type1 and type2:
-    an operator (add, sub, ...), a comparison (gt, ge), min, max or a C function
+    an operator (add, sub, ...), a comparison (gt, ge, eq, ne), min, max or a C function
     func(a, b). Three stencils are generated, each calling its own kernel:
 
         {op}_{type1}arr_{type2}arr    array  and array   (kernel _vv)
@@ -643,6 +643,32 @@ def get_arr_minmax_code(op: str, type1: str, lanes: int = 8) -> str:
     """
 
 
+@norm_indent
+def get_arr_sumaxis_code(type1: str) -> str:
+    """Sum along the middle axis of a row-major array [m, k, n], the dimensions
+    are passed as int array. The result is an array [m, n]. Like for the matrix
+    product the inner loop is contiguous, the first k step initializes the output."""
+    return f"""
+    KERNEL void aux_arr_sumaxis_{type1}(const {type1} *restrict a, {type1} *restrict o, const int *restrict p) {{
+        int m = p[0], k = p[1], n = p[2];
+        for (int i = 0; i < m; i++) {{
+            {type1} *restrict r = o + i * n;
+            const {type1} *ar = a + i * k * n;
+            for (int j = 0; j < n; j++) r[j] = ar[j];
+            for (int q = 1; q < k; q++) {{
+                const {type1} *aq = ar + q * n;
+                for (int j = 0; j < n; j++) r[j] += aq[j];
+            }}
+        }}
+    }}
+
+    STENCIL void sumaxis_{type1}arr(void) {{
+        aux_arr_sumaxis_{type1}(REF(ref_arg0), REF(ref_out), REF(ref_arg1));
+        result_{type1}_ref();
+    }}
+    """
+
+
 def permutate(*lists: list[str]) -> Generator[list[str], None, None]:
     if len(lists) == 0:
         yield []
@@ -752,7 +778,7 @@ if __name__ == "__main__":
     for op, t1, t2 in permutate(['add', 'sub', 'mul', 'div'], types, types):
         code += get_arr_op_code(op, t1, t2)
 
-    for op, t1, t2 in permutate(['min', 'max', 'gt', 'ge'], types, types):
+    for op, t1, t2 in permutate(['min', 'max', 'gt', 'ge', 'eq', 'ne'], types, types):
         code += get_arr_op_code(op, t1, t2)
 
     for fn, t1, t2 in permutate(['pow', 'atan2'], types, types):
@@ -787,6 +813,7 @@ if __name__ == "__main__":
 
     for t in types:
         code += get_arr_sum_code(t)
+        code += get_arr_sumaxis_code(t)
         code += get_arr_minmax_code('min', t)
         code += get_arr_minmax_code('max', t)
         code += get_arr_sort_code(t)
