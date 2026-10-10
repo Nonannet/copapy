@@ -435,7 +435,7 @@ class vector(ArrayType[TNum]):
         return vector(func(a, o) if isinstance(a, value) else func(a, other) for a in self.values)
 
 
-def cross_product(v1: vector[float], v2: vector[float]) -> vector[float]:
+def cross(v1: vector[float], v2: vector[float]) -> vector[float]:
     """Calculate the cross product of two 3D vectors.
 
     Arguments:
@@ -448,7 +448,7 @@ def cross_product(v1: vector[float], v2: vector[float]) -> vector[float]:
     return v1.cross(v2)
 
 
-def dot_product(v1: vector[float], v2: vector[float]) -> 'float | value[float]':
+def dot(v1: vector[float], v2: vector[float]) -> 'float | value[float]':
     """Calculate the dot product of two vectors.
 
     Arguments:

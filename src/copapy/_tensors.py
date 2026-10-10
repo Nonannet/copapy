@@ -1026,14 +1026,18 @@ def concat(tensors: Sequence[tensor[U] | vector[U]], axis: int = 0) -> tensor[U]
     return result_tensor
 
 
-def flatten(t: tensor[U]) -> tensor[U]:
-    """Flatten a tensor to a 1D tensor.
+@overload
+def ravel(t: tensor[U]) -> tensor[U]: ...
+@overload
+def ravel(t: array[U]) -> array[U]: ...
+def ravel(t: tensor[U] | array[U]) -> tensor[U] | array[U]:
+    """Flatten a tensor or array to one dimension.
 
     Arguments:
-        t: n-dimensional tensor.
+        t: n-dimensional tensor or array.
 
     Returns:
-        A 1D tensor containing all elements from the input tensor.
+        A 1D tensor or array containing all elements of the input.
     """
     return t.flatten()
 
