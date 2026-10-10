@@ -45,7 +45,7 @@ def test_vector_lookup_table() -> None:
     y = table[k] * 2.0
 
     ordered = compiler.stable_toposort(compiler.get_all_dag_edges([Store(y.net)]))
-    assert [n.name for n in ordered].count('copy_arr') == 1
+    assert [n.name for n in ordered].count('copy32_arr') == 1
     assert any(isinstance(n, compiler.ArrayConst) for n in ordered)  # the table is data
     pack_stores = [node for _, node in compiler.add_load_ops(ordered) if node.name == compiler.PACK_STORE]
     assert len(pack_stores) == 1  # only the offset of the copy is stored at runtime

@@ -61,6 +61,10 @@ def convert_element(v: Any, dtype: str) -> Any:
             return v if v.dtype == 'int' else value(v.net, 'int')
         assert not isinstance(v, float), "Float number in int array"
         return int(v)
+    if dtype == 'byte':
+        if isinstance(v, value) or not 0 <= v <= 255:
+            raise ValueError("Elements of a byte array must be numbers from 0 to 255")
+        return int(v)
     return v
 
 
@@ -116,7 +120,14 @@ COMPARISONS = ('gt', 'ge', 'eq', 'ne')
 def _add_array_op(typed_op: str, args: list[Net], length: int | None = None, dtype: str | None = None) -> ArrayOp:
     """Add an array stencil, the result is an array of the given length or a scalar.
     The type of the result is defined by the stencil, dtype is only required for
-    stencils independent of the element type."""
+    stencils independent of the element type.
+
+    Byte arrays are only stored: for operations without a stencil for bytes they
+    are converted to float if the operation has a float operand, otherwise to int."""
+    if typed_op not in generic_sdb.stencil_definitions and 'bytearr' in typed_op:
+        target = 'float' if 'float' in typed_op else 'int'
+        typed_op = typed_op.replace('bytearr', target + 'arr')
+        args = [_from_bytes(a, target) if isinstance(a, ArrayNet) and a.dtype == 'byte' else a for a in args]
     if typed_op not in generic_sdb.stencil_definitions:
         raise NotImplementedError(f"Array operation {typed_op} not available, stencils might need to be rebuilt")
     result_type = generic_sdb.stencil_definitions[typed_op].split('_')[0]
@@ -124,6 +135,13 @@ def _add_array_op(typed_op: str, args: list[Net], length: int | None = None, dty
         assert dtype, f"Result type of {typed_op} is not defined, stencils might need to be rebuilt"
         result_type = dtype
     return ArrayOp(typed_op, args, result_type, length)
+
+
+def _from_bytes(net: ArrayNet, dtype: str) -> ArrayNet:
+    """Byte array converted to an int or float array"""
+    node = _add_array_op(f"{dtype}_bytearr", [net, value_from_number(net.length).net], net.length)
+    assert isinstance(node.result, ArrayNet)
+    return node.result
 
 
 class array(Generic[TNum]):
@@ -134,7 +152,7 @@ class array(Generic[TNum]):
 
     Attributes:
         shape: Size of each dimension.
-        dtype: Element type ('int', 'float' or 'bool')
+        dtype: Element type ('int', 'float', 'bool' or 'byte')
         net: Underlying array net in the computation graph.
     """
     def __init__(self, values: 'Sequence[TNum] | Sequence[Sequence[TNum]] | Sequence[Any]', dtype: str | None = None):
@@ -147,9 +165,13 @@ class array(Generic[TNum]):
         is float, int elements are converted (int variables by a float_int stencil).
         An array of only bool elements is a bool array (stored as int).
 
+        A 'byte' array stores numbers from 0 to 255 in one byte per element, e.g.
+        image data written with Target.write_value. Bytes are only stored: operations
+        convert the array to float or int, its elements are read as int values.
+
         Arguments:
             values: Nested sequences of int or float numbers or copapy values.
-            dtype: Element type ('int', 'float' or 'bool'), inferred from values if omitted.
+            dtype: Element type ('int', 'float', 'bool' or 'byte'), inferred from values if omitted.
         """
         flat, shape = _flatten(values)
         if not shape:
@@ -159,9 +181,9 @@ class array(Generic[TNum]):
         inferred = element_dtype(flat)
         if dtype is None:
             dtype = inferred
-        if dtype not in ('int', 'float', 'bool'):
+        if dtype not in ('int', 'float', 'bool', 'byte'):
             raise ValueError(f"Unsupported array type {dtype}")
-        if (dtype == 'int' and inferred == 'float') or (dtype == 'bool' and inferred != 'bool'):
+        if (dtype in ('int', 'byte') and inferred == 'float') or (dtype == 'bool' and inferred != 'bool'):
             raise ValueError(f"{inferred} elements in a {dtype} array")
 
         stored = transl_type(dtype)  # Bool is stored as int
@@ -215,7 +237,10 @@ class array(Generic[TNum]):
 
     def element(self, flat_index: int) -> value[TNum]:
         """Element by its flat index. No code is generated, the element
-        is read directly from the array memory."""
+        is read directly from the array memory. An element of a byte array
+        is copied and converted to int."""
+        if self.net.dtype == 'byte':
+            return self._strided(flat_index, (1,), (1,))._computed().element(0)
         return value(Net(self.net.dtype, ArrayElement(self.net, flat_index)), self.dtype)
 
     def __getitem__(self, key: 'int | value[int] | slice | Sequence[int | value[int] | slice]') -> 'Any':
@@ -273,7 +298,8 @@ class array(Generic[TNum]):
 
         dims = [(1, 0)] * (COPY_DIMS - len(dims)) + dims
         params = array([offset] + [n for n, _ in dims] + [s for _, s in dims], 'int')
-        node = _add_array_op('copy_arr', [self.net, params.net], size, self.net.dtype)
+        copy_op = 'copy8_arr' if self.net.dtype == 'byte' else 'copy32_arr'
+        node = _add_array_op(copy_op, [self.net, params.net], size, self.net.dtype)
         assert isinstance(node.result, ArrayNet)
         return array._from_net(node.result, shape, self.dtype)
 
@@ -318,7 +344,10 @@ class array(Generic[TNum]):
         return self._strided(0, shape, tuple(0 if p == 1 else s for p, s in zip(padded, strides)))
 
     def _computed(self) -> 'array[Any]':
-        """The array with the type of computed results (bool as int), no code"""
+        """The array with the type of computed results: bool as int (no code),
+        byte converted to int"""
+        if self.net.dtype == 'byte':
+            return array._from_net(_from_bytes(self.net, 'int'), self.shape)
         return self if self.dtype == self.net.dtype else array._from_net(self.net, self.shape)
 
     def _binary_op(self, op: str, other: 'array[Any] | NumLike', reverse: bool = False) -> 'array[Any]':
@@ -490,6 +519,8 @@ class array(Generic[TNum]):
         return self._min_max('max')
 
     def _min_max(self, op: str) -> value[TNum]:
+        if self.net.dtype == 'byte':
+            return self._computed()._min_max(op)
         n = value_from_number(self.size).net
         node = _add_array_op(f"{op}_{self.net.dtype}arr", [self.net, n])
         return value(node.result, self.dtype)
@@ -498,6 +529,8 @@ class array(Generic[TNum]):
         """Sorted copy of a 1D array. A sorting network is used: the execution
         time only depends on the number of elements, not on the values."""
         self._check_1d('sort')
+        if self.net.dtype == 'byte':
+            return self._computed().sort()
         n = value_from_number(self.size).net
         node = _add_array_op(f"sort_{self.net.dtype}arr", [self.net, n], self.size)
         assert isinstance(node.result, ArrayNet)

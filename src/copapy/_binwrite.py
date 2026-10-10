@@ -6,8 +6,8 @@ ByteOrder = Literal['little', 'big']
 
 
 def array_format(dtype: str, length: int, byteorder: ByteOrder) -> str:
-    """struct format string for an array of 32 bit int or float values"""
-    return {'little': '<', 'big': '>'}[byteorder] + str(length) + ('f' if dtype == 'float' else 'i')
+    """struct format string for an array of 32 bit int or float values or of bytes"""
+    return {'little': '<', 'big': '>'}[byteorder] + str(length) + {'float': 'f', 'byte': 'B'}.get(dtype, 'i')
 
 
 def pack_array(values: 'tuple[int | float, ...] | list[int | float]', dtype: str, byteorder: ByteOrder) -> bytes:

@@ -17,6 +17,10 @@
 // patched by the compiler to the addresses of the node arguments (ref_arg<n>)
 // and the result (ref_out). All heap objects are at least 4 byte aligned.
 #define REF_OBJ(sym) extern char sym[] __attribute__((aligned(4)))
+
+// Element type of byte arrays (e.g. image data), bytes are only stored:
+// for operations the arrays are converted to int or float
+typedef unsigned char byte;
 REF_OBJ(ref_arg0);
 REF_OBJ(ref_arg1);
 REF_OBJ(ref_arg2);

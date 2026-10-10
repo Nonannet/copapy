@@ -82,9 +82,7 @@ def _float_array(x: Any, name: str) -> 'array[Any]':
         arr = array(x)
     else:
         raise TypeError(f"{name} must be an array, a tensor or a nested sequence, not {type(x).__name__}")
-    if arr.dtype != 'float':
-        arr = arr._binary_op('mul', 1.0)
-    return arr
+    return cp.to_float(arr)
 
 
 def _pair(x: int | Sequence[int], name: str, minimum: int) -> tuple[int, int]:

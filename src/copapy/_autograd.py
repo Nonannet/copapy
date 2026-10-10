@@ -10,10 +10,10 @@ from ._linalg import solve_arrays, inv
 from ._interp import get_table_delta
 
 # Operations with a derivative of 0 (integer results)
-_ZERO_GRAD_OPS = ('ge', 'gt', 'eq', 'ne', 'floordiv', 'bwand', 'bwor', 'bwxor', 'int', 'bool', 'sign', 'argsort', 'gtabs')
+_ZERO_GRAD_OPS = ('ge', 'gt', 'eq', 'ne', 'floordiv', 'bwand', 'bwor', 'bwxor', 'int', 'bool', 'byte', 'sign', 'argsort', 'gtabs')
 
 # Array operations without a derivative rule
-_UNSUPPORTED_ARRAY_OPS = ('copy', 'sort', 'conv2d', 'maxpool2d', 'avgpool2d')
+_UNSUPPORTED_ARRAY_OPS = ('copy32', 'copy8', 'sort', 'conv2d', 'maxpool2d', 'avgpool2d')
 
 
 def _resolve(net: Net) -> Net:

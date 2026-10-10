@@ -500,7 +500,7 @@ class stencil_database():
 
     def get_type_size(self, type_name: str) -> int:
         """Returns the size of a variable type in bytes."""
-        return {'int': 4, 'float': 4}[type_name]
+        return {'int': 4, 'float': 4, 'byte': 1}[type_name]
 
     def get_symbol_size(self, name: str) -> int:
         """Returns the size of a specified symbol name."""

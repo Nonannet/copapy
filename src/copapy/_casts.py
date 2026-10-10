@@ -79,8 +79,10 @@ def cast(x: Any, dtype: 'str | type') -> Any:
         x converted to dtype, x itself if it already has the type
     """
     name: str = _dtype_names.get(dtype, '') if isinstance(dtype, type) else dtype
+    if name == 'byte' and isinstance(x, array):
+        return _cast_array(x, name)
     if name not in _number_types:
-        raise ValueError(f"Unsupported type {dtype}, expected 'float', 'int' or 'bool'")
+        raise ValueError(f"Unsupported type {dtype}, expected 'float', 'int' or 'bool' ('byte' for arrays)")
     if isinstance(x, array):
         return _cast_array(x, name)
     if isinstance(x, ArrayType):
@@ -163,3 +165,18 @@ def to_bool(x: Any) -> Any:
         x as bool
     """
     return cast(x, 'bool')
+
+
+def to_bytes(x: array[Any]) -> array[int]:
+    """Convert the elements of an array to bytes, limited to the range 0 to
+    255. Floats are truncated towards zero, nan is converted to 0.
+
+    Arguments:
+        x: Array
+
+    Returns:
+        x as byte array
+    """
+    if not isinstance(x, array):
+        raise TypeError(f"Can not convert {type(x).__name__} to bytes, only arrays are supported")
+    return _cast_array(x, 'byte')

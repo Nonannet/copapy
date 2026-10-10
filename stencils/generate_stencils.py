@@ -471,10 +471,16 @@ def get_arr_cast_code(name: str, type1: str, expr: str, type_out: str) -> str:
 
 @norm_indent
 def get_arr_copy_code() -> str:
-    """Strided copy of 32 bit elements, the kernel aux_arr_copy32 is in aux_functions.c"""
+    """Strided copy of 32 bit elements and of bytes, the kernels aux_arr_copy32
+    and aux_arr_copy8 are in aux_functions.c"""
     return """
-    STENCIL void copy_arr(void) {
+    STENCIL void copy32_arr(void) {
         aux_arr_copy32(REF(ref_arg0), REF(ref_out), REF(ref_arg1));
+        result_void();
+    }
+
+    STENCIL void copy8_arr(void) {
+        aux_arr_copy8(REF(ref_arg0), REF(ref_out), REF(ref_arg1));
         result_void();
     }
     """
@@ -774,6 +780,7 @@ if __name__ == "__main__":
     code += get_result_stubs1('void').replace('void arg1', 'void')
     for t in types:
         code += f"void result_{t}_ref(void);\n"
+    code += "void result_byte_ref(void);\n"
 
     for op, t1, t2 in permutate(['add', 'sub', 'mul', 'div'], types, types):
         code += get_arr_op_code(op, t1, t2)
@@ -805,6 +812,13 @@ if __name__ == "__main__":
     code += get_arr_cast_code('int', 'float', '(int)a[i]', 'int')
     for t in types:
         code += get_arr_cast_code('bool', t, 'a[i] != 0', 'int')
+
+    # Byte arrays: converted to int or float for operations, the conversion
+    # to byte saturates (nan is converted to 0)
+    code += get_arr_cast_code('float', 'byte', '(float)a[i]', 'float')
+    code += get_arr_cast_code('int', 'byte', '(int)a[i]', 'int')
+    code += get_arr_cast_code('byte', 'int', '(byte)(a[i] > 255 ? 255 : a[i] > 0 ? a[i] : 0)', 'byte')
+    code += get_arr_cast_code('byte', 'float', '(byte)(a[i] > 255.0f ? 255.0f : a[i] > 0.0f ? a[i] : 0.0f)', 'byte')
 
     code += get_arr_copy_code()
     code += get_arr_conv_code()

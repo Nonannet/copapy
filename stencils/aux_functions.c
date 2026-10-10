@@ -43,6 +43,19 @@ KERNEL void aux_arr_copy32(const int *restrict a, int *restrict o, const int *re
             }
 }
 
+// Strided copy of byte elements, parameters like for aux_arr_copy32
+KERNEL void aux_arr_copy8(const byte *restrict a, byte *restrict o, const int *restrict p) {
+    const byte *s = a + p[0];
+    int n0 = p[1], n1 = p[2], n2 = p[3], n3 = p[4];
+    int s0 = p[5], s1 = p[6], s2 = p[7], s3 = p[8];
+    for (int i0 = 0; i0 < n0; i0++)
+        for (int i1 = 0; i1 < n1; i1++)
+            for (int i2 = 0; i2 < n2; i2++) {
+                const byte *r = s + i0 * s0 + i1 * s1 + i2 * s2;
+                for (int i3 = 0; i3 < n3; i3++) *o++ = r[i3 * s3];
+            }
+}
+
 // 2D convolution (cross-correlation) of a float input [n, ci, h, w] with the
 // weights [co, ci, kh, kw] and a bias [co]. Parameters as int array:
 // [n, ci, h, w, co, kh, kw, oh, ow, sh, sw, ph, pw, dh, dw] with the output
