@@ -417,6 +417,27 @@ def get_arr_solve_code() -> str:
 
 
 @norm_indent
+def get_arr_interp_code() -> str:
+    """Table lookup at a fractional index (lerp) and fractional index of a value in a
+    grid (bsearch) for a scalar and for an array of positions, the kernels are in
+    aux_functions.c"""
+    code = ''
+    for name in ('lerp', 'bsearch'):
+        code += f"""
+    STENCIL void {name}_floatarr_float(void) {{
+        *(float *)REF(ref_out) = aux_arr_{name}_float(REF(ref_arg0), *(float *)REF(ref_arg1), *(int *)REF(ref_arg2));
+        result_float_ref();
+    }}
+
+    STENCIL void {name}_floatarr_floatarr(void) {{
+        aux_arr_{name}_floatarr(REF(ref_arg0), REF(ref_arg1), REF(ref_out), *(int *)REF(ref_arg2), *(int *)REF(ref_arg3));
+        result_float_ref();
+    }}
+    """
+    return code
+
+
+@norm_indent
 def get_arr_func1_code(name: str, func: str, type1: str, type_out: str = 'float') -> str:
     """Element-wise function of one array"""
     kernel = f"aux_arr_{name}_{type1}"
@@ -752,6 +773,7 @@ if __name__ == "__main__":
         code += get_arr_matmul_code(t1, t2)
 
     code += get_arr_solve_code()
+    code += get_arr_interp_code()
 
     code += get_arr_cast_code('float', 'int', '(float)a[i]', 'float')
     code += get_arr_cast_code('int', 'float', '(int)a[i]', 'int')

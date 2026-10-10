@@ -157,3 +157,56 @@ KERNEL float aux_arr_det_float(const float *restrict a, float *restrict w, int n
     }
     return det.f;
 }
+
+// Value of the table fp (n >= 2 elements) at the fractional index t by linear
+// interpolation between the elements floor(t) and floor(t) + 1. The index is
+// clamped to the table: t <= 0 results in fp[0], t >= n - 1 in fp[n - 1]. No
+// element outside of the table is accessed for any t, nan results in nan.
+static inline float lerp_index(const float *fp, float t, int n) {
+    float last = (float)(n - 1);
+    float tn = t < 0.0f ? 0.0f : t;  // keeps nan
+    tn = tn > last ? last : tn;
+    float ts = t > 0.0f ? t : 0.0f;  // nan to 0 for the element index
+    ts = ts < last ? ts : last;
+    int i = (int)ts;
+    i = i < n - 2 ? i : n - 2;
+    float f = tn - (float)i;
+    return fp[i] * (1.0f - f) + fp[i + 1] * f;
+}
+
+KERNEL float aux_arr_lerp_float(const float *restrict fp, float t, int n) {
+    return lerp_index(fp, t, n);
+}
+
+KERNEL void aux_arr_lerp_floatarr(const float *restrict fp, const float *restrict t, float *restrict o, int n, int m) {
+    for (int j = 0; j < m; j++) o[j] = lerp_index(fp, t[j], n);
+}
+
+// Fractional index of x in the increasing grid xp (n >= 2 elements): the index i of
+// the interval xp[i] <= x < xp[i + 1] plus the position of x in the interval. The
+// result is clamped to [0, n - 1] for x outside of the grid, nan results in nan.
+// The interval is found by a binary search without data dependent branches, the
+// number of steps only depends on n.
+static inline float search_index(const float *xp, float x, int n) {
+    int lo = 0;
+    for (int len = n - 1; len > 1;) {
+        int half = len >> 1;
+        int m = -(xp[lo + half] <= x); VALUE_BARRIER(m);
+        lo += half & m;
+        len -= half;
+    }
+    // Position in the interval clamped to [0, 1] by masks, nan is kept
+    union { float f; int i; } u = {(x - xp[lo]) / (xp[lo + 1] - xp[lo])};
+    int below = -(u.f < 0.0f); VALUE_BARRIER(below);
+    u.i &= ~below;
+    float f = u.f > 1.0f ? 1.0f : u.f;
+    return (float)lo + f;
+}
+
+KERNEL float aux_arr_bsearch_float(const float *restrict xp, float x, int n) {
+    return search_index(xp, x, n);
+}
+
+KERNEL void aux_arr_bsearch_floatarr(const float *restrict xp, const float *restrict x, float *restrict o, int n, int m) {
+    for (int j = 0; j < m; j++) o[j] = search_index(xp, x[j], n);
+}

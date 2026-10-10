@@ -158,6 +158,65 @@ int main() {
         }
     }
 
+    // aux_arr_bsearch_float and aux_arr_lerp_float: fractional index in a non-uniform
+    // grid and lookup at this index, clamped outside of the grid, for all table sizes
+    // up to 9 (number of search steps)
+    const float gx[9] = {-2.0f, -1.5f, 0.0f, 0.25f, 1.0f, 3.0f, 3.5f, 7.0f, 8.0f};
+    const float gf[9] = {1.0f, -1.0f, 4.0f, 2.0f, 2.0f, 0.5f, 8.0f, -3.0f, 6.0f};
+    for (int n = 2; n <= 9; n++) {
+        for (int k = -30; k <= 90; k++) {
+            float x = (float)k * 0.125f;
+            float ref_t = 0.0f, ref_f = gf[0];
+            if (x >= gx[n - 1]) {
+                ref_t = (float)(n - 1);
+                ref_f = gf[n - 1];
+            } else {
+                for (int i = 0; i < n - 1; i++) {
+                    if (x >= gx[i] && x < gx[i + 1]) {
+                        float f = (x - gx[i]) / (gx[i + 1] - gx[i]);
+                        ref_t = (float)i + f;
+                        ref_f = gf[i] + f * (gf[i + 1] - gf[i]);
+                    }
+                }
+            }
+            float t = aux_arr_bsearch_float(gx, x, n);
+            float res = aux_arr_lerp_float(gf, t, n);
+            if (!(fabsf(t - ref_t) <= 1e-5f) || !(fabsf(res - ref_f) <= 1e-5f)) {
+                if (errors < 20) printf("interp n=%d x=%f: index %.7f (%.7f), value %.7f (%.7f)\n", n, x, t, ref_t, res, ref_f);
+                errors++;
+            }
+        }
+    }
+
+    // Exact table values at the grid points, nan and inf as position
+    const float ti[6] = {-1e30f, 0.0f, 3.0f, 8.0f, 1e30f, INFINITY};
+    const float tref[6] = {1.0f, 1.0f, 2.0f, 6.0f, 6.0f, 6.0f};
+    for (int k = 0; k < 6; k++) {
+        float res = aux_arr_lerp_float(gf, ti[k], 9);
+        if (res != tref[k]) {
+            printf("aux_arr_lerp_float(%g) = %.9f, expected %.9f\n", ti[k], res, tref[k]);
+            errors++;
+        }
+    }
+    float nan_res = aux_arr_lerp_float(gf, aux_arr_bsearch_float(gx, NAN, 9), 9);
+    if (nan_res == nan_res || aux_arr_lerp_float(gf, -INFINITY, 9) != 1.0f ||
+        aux_arr_bsearch_float(gx, INFINITY, 9) != 8.0f || aux_arr_bsearch_float(gx, -INFINITY, 9) != 0.0f) {
+        printf("interp: wrong result for nan or inf\n");
+        errors++;
+    }
+
+    // Array variants
+    const float ax[4] = {-3.0f, 0.125f, 3.25f, 9.0f};
+    float at[4], ar[4];
+    aux_arr_bsearch_floatarr(gx, ax, at, 9, 4);
+    aux_arr_lerp_floatarr(gf, at, ar, 9, 4);
+    for (int k = 0; k < 4; k++) {
+        if (at[k] != aux_arr_bsearch_float(gx, ax[k], 9) || ar[k] != aux_arr_lerp_float(gf, at[k], 9)) {
+            printf("interp: array kernel differs from scalar kernel at %d\n", k);
+            errors++;
+        }
+    }
+
 #ifdef TEST_CMSIS_LIBM
     test_cmsis_libm();
 #endif

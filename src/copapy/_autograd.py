@@ -6,7 +6,8 @@ from typing import Any, Sequence, overload
 import copapy as cp
 from ._arrays import array
 from ._basic_types import Net, Node, unifloat, ArrayNet, ArrayConst, ArrayOp, ArrayPack, ArrayElement, HeadNode, add_op
-from ._linalg import _solve_arrays, inv
+from ._linalg import solve_arrays, inv
+from ._interp import get_table_delta
 
 # Operations with a derivative of 0 (integer results)
 _ZERO_GRAD_OPS = ('ge', 'gt', 'eq', 'ne', 'floordiv', 'bwand', 'bwor', 'bwxor', 'int', 'bool', 'sign', 'argsort', 'gtabs')
@@ -90,6 +91,7 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
     ordered_ops = cpb.stable_toposort(edges)
 
     net_lookup = {net.source: net for node in ordered_ops for net in node.args}
+    path_nodes = set(ordered_ops)  # Nodes depending on y
     grad_dict: dict[Net, unifloat] = {}  # Gradients of scalars
     array_grads: dict[Net, array[Any]] = {}  # Gradients of arrays as flat arrays
     element_grads: dict[Net, dict[int, unifloat]] = {}  # Gradients of single array elements
@@ -179,7 +181,7 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
             n, r = _const_ints(node.args[2])
             assert isinstance(out_net, ArrayNet)
             sol: array[Any] = array._from_net(out_net, (n, r))
-            g_b = _solve_arrays(a.reshape(n, n).T, g.reshape(n, r))
+            g_b = solve_arrays(a.reshape(n, n).T, g.reshape(n, r))
             add_grad(b, g_b)
             add_grad(a, -g_b.matmul(sol.T))
 
@@ -188,6 +190,20 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
             (n,) = _const_ints(node.args[1])
             assert out_net is not None
             add_grad(a, inv(a.reshape(n, n).T) * (value(out_net) * g))
+
+        elif opn in ('lerp', 'bsearch'):
+            # a is the table (lerp) or the grid (bsearch), b the position
+            if args[0].source in path_nodes:
+                raise NotImplementedError(f"Automatic differentiation of {opn} to the table is not supported yet")
+            if opn == 'lerp':
+                # Slope of the table between the two elements around the index
+                diff, inside = get_table_delta(a, b)
+                add_grad(b, g * (inside * diff))
+            else:
+                # The index increases by 1 over the interval of the grid around the position
+                assert out_net is not None
+                diff, inside = get_table_delta(a, _wrap(out_net))
+                add_grad(b, g * (inside / diff))
 
         elif opn in ('mask', 'masknot'):
             # The gradient passes where the value passes

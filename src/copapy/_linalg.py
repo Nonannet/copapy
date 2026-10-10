@@ -83,7 +83,7 @@ def _solve_values(a: Sequence[Any], b: Sequence[Any], n: int, r: int, pivot: boo
     return [v if isinstance(v, value) else float(v) for i in range(n) for v in rows[i][n:]]
 
 
-def _solve_arrays(a: array[Any], b: array[Any]) -> array[float]:
+def solve_arrays(a: array[Any], b: array[Any]) -> array[float]:
     """Solution of a x = b by the solve array stencil for an n x n array a
     and an array b with n or n x r elements. The result has the shape of b."""
     n = a.shape[0]
@@ -209,14 +209,14 @@ def solve(a: Any, b: Any, pivot: bool = True) -> Any:
         raise ValueError(f"Shape mismatch: matrix {a.shape} and right-hand side {b.shape}")
 
     if isinstance(a, array) or isinstance(b, array):
-        return _solve_arrays(a if isinstance(a, array) else a._force_array(),
+        return solve_arrays(a if isinstance(a, array) else a._force_array(),
                              b if isinstance(b, array) else b._force_array())
 
     if not (a._is_constant() and b._is_constant()) and a._packed is not False:
         # The size of the unrolled elimination depends on the elements of the
         # matrix that are not known at trace time
         if a._packed or b._packed or sum(1 for v in a.values if isinstance(v, value)) > unroll_threshold:
-            packed = _solve_arrays(a._force_array(), b._force_array())
+            packed = solve_arrays(a._force_array(), b._force_array())
             return vector._from_array(packed) if isinstance(b, vector) else tensor._from_array(packed)
 
     values = _solve_values(a.values, b.values, n, len(b.values) // n, pivot)
@@ -247,7 +247,7 @@ def inv(a: Any, pivot: bool = True) -> Any:
     n: int = a.shape[0]
     identity = [[float(i == j) for j in range(n)] for i in range(n)]
     if isinstance(a, array):
-        return _solve_arrays(a, array(identity, 'float'))
+        return solve_arrays(a, array(identity, 'float'))
     return solve(a, tensor(identity), pivot)
 
 
