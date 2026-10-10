@@ -1,6 +1,6 @@
 from typing import Any, Sequence, overload
 from functools import lru_cache
-from ._basic_types import value, ArrayNet, add_op, to_float, value_from_number
+from ._basic_types import value, ArrayNet, add_op, to_float, value_from_number, select_by_mask
 from ._arrays import array, _add_array_op
 from ._vectors import vector
 from ._tensors import tensor
@@ -23,15 +23,6 @@ def _gtabs(x: Any, y: Any) -> Any:
     return -int(abs(x) > abs(y))
 
 
-def _select(m: value[int], x: Any, y: Any) -> Any:
-    """x if the mask m is set, otherwise y. The unselected operand is replaced
-    by 0.0 by its bit pattern, so the result is exact and inf or nan in the
-    unselected operand have no effect."""
-    kept_x = 0.0 if not isinstance(x, value) and x == 0 else add_op('mask', [x, m])
-    kept_y = 0.0 if not isinstance(y, value) and y == 0 else add_op('masknot', [y, m])
-    return kept_x + kept_y
-
-
 def _cswap(m: Any, x: Any, y: Any) -> tuple[Any, Any]:
     """(y, x) if the mask m is set, otherwise (x, y). Masks known at trace
     time and equal constants (e.g. zeros in both rows) generate no code."""
@@ -39,7 +30,7 @@ def _cswap(m: Any, x: Any, y: Any) -> tuple[Any, Any]:
         return (y, x) if m else (x, y)
     if not isinstance(x, value) and not isinstance(y, value) and x == y:
         return x, y
-    return _select(m, y, x), _select(m, x, y)
+    return select_by_mask(m, y, x), select_by_mask(m, x, y)
 
 
 def _solve_values(a: Sequence[Any], b: Sequence[Any], n: int, r: int, pivot: bool) -> list[Any]:

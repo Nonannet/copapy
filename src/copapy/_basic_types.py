@@ -593,6 +593,10 @@ def iif(expression: Any, true_result: Any, false_result: Any) -> Any:
     """Inline if-else operation. Returns true_result if expression is non-zero,
     else returns false_result.
 
+    Both results are computed if expression is not known at trace time. The selection
+    is done without a branching. The result is exact and inf or nan in the
+    result that is not selected have no effect.
+
     Arguments:
         expression: The condition to evaluate.
         true_result: The result if expression is non-zero.
@@ -603,7 +607,29 @@ def iif(expression: Any, true_result: Any, false_result: Any) -> Any:
     """
     allowed_type = (value, int, float)
     assert isinstance(true_result, allowed_type) and isinstance(false_result, allowed_type), "Result type not supported"
-    return (expression != 0) * true_result + (expression == 0) * false_result
+
+    def is_float(v: Any) -> bool:
+        return v.dtype == 'float' if isinstance(v, value) else isinstance(v, float)
+
+    if is_float(true_result) or is_float(false_result):
+        true_result = to_float(true_result) if isinstance(true_result, value) else float(true_result)
+        false_result = to_float(false_result) if isinstance(false_result, value) else float(false_result)
+
+    if not isinstance(expression, value):
+        return true_result if expression != 0 else false_result
+
+    # Results of comparisons are 0 or 1: negated to a mask with no or all bits set
+    condition = expression if expression.dtype == 'bool' else expression != 0
+    return select_by_mask(-condition, true_result, false_result)
+
+
+def select_by_mask(mask: value[int], x: Any, y: Any) -> Any:
+    """x if all bits of the int mask are set, y if no bit is set. The operand that
+    is not selected is replaced by zero by its bit pattern, so the result is exact
+    and inf or nan in that operand have no effect. Constant zeros generate no code."""
+    kept_x = x if not isinstance(x, value) and x == 0 else add_op('mask', [x, mask])
+    kept_y = y if not isinstance(y, value) and y == 0 else add_op('masknot', [y, mask])
+    return kept_x + kept_y
 
 
 def to_float(val: value[Any]) -> value[Any]:

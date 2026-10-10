@@ -684,13 +684,15 @@ if __name__ == "__main__":
         code += get_math_func2(fn, 'float', 'float')
 
     # Branch-free selection: gtabs returns the int mask -1 if |arg1| > |arg2| else 0,
-    # mask and masknot keep a float where the mask is set / not set, otherwise 0.0
+    # mask and masknot keep a value where the mask is set / not set, otherwise 0
     code += get_custom_stencil('gtabs_float_float(float arg1, float arg2)',
                                'result_int_float(-(fabsf(arg1) > fabsf(arg2)), arg2);')
     code += get_custom_stencil('mask_float_int(float arg1, int arg2)',
                                'union { float f; int i; } x = {arg1}; x.i &= arg2; result_float_int(x.f, arg2);')
     code += get_custom_stencil('masknot_float_int(float arg1, int arg2)',
                                'union { float f; int i; } x = {arg1}; x.i &= ~arg2; result_float_int(x.f, arg2);')
+    code += get_custom_stencil('mask_int_int(int arg1, int arg2)', 'result_int_int(arg1 & arg2, arg2);')
+    code += get_custom_stencil('masknot_int_int(int arg1, int arg2)', 'result_int_int(arg1 & ~arg2, arg2);')
 
     for t in types:
         code += get_min(t, t)
