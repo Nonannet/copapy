@@ -33,13 +33,13 @@ Example usage:
     >>> print("Result e:", tg.read_value(e))
 """
 
-from ._target import Target, jit
+from ._target import Target, jit, map_to_buffer, map_to_numpy
 from ._basic_types import NumLike, value, generic_sdb
 from ._vectors import vector, cross, dot, distance, scalar_projection, angle_between, rotate_vector, vector_projection
 from ._quaternion import quaternion
 from ._tensors import tensor, zeros, ones, arange, eye, identity, diagonal, concat, ravel
 from ._math import sqrt, abs, sign, sin, cos, tan, tanh, asin, acos, atan, atan2, log, exp, pow, get_42, clamp, minimum, maximum, min, max
-from ._casts import cast, to_float, to_int, to_bool, to_bytes
+from ._casts import cast, to_float, to_int, to_bool, to_byte
 from ._linalg import solve, inv, det
 from ._interp import interp, lerp
 from ._autograd import grad
@@ -99,7 +99,7 @@ __all__ = [
     "to_float",
     "to_int",
     "to_bool",
-    "to_bytes",
+    "to_byte",
     "cross",
     "dot",
     "distance",
@@ -121,5 +121,7 @@ __all__ = [
     "argsort",
     "nn",
     "filters",
-    "jit"
+    "jit",
+    "map_to_buffer",
+    "map_to_numpy"
 ]

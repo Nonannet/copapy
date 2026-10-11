@@ -195,6 +195,10 @@ class array(Generic[TNum]):
             source = ArrayConst(flat, stored)
             self._init(ArrayNet(stored, source, len(flat)), shape, dtype)
 
+    _export: str | None = None
+    """How Target.read_value returns the array: None for nested lists, otherwise
+    'buffer', 'numpy' or 'numpy_copy' (set by map_to_buffer and map_to_numpy)"""
+
     def _init(self, net: ArrayNet, shape: tuple[int, ...], dtype: str | None = None) -> None:
         assert dtype is None or transl_type(dtype) == net.dtype
         self.net = net

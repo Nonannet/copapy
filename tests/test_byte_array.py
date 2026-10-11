@@ -67,7 +67,7 @@ def test_errors() -> None:
     with pytest.raises(ValueError):
         cp.cast(cp.value(5), 'byte')
     with pytest.raises(TypeError):
-        cp.to_bytes(cp.value(5))  # type: ignore[arg-type]
+        cp.to_byte(cp.value(5))  # type: ignore[arg-type]
     with pytest.raises(ValueError):
         cp.cast(cp.vector([cp.value(5), cp.value(6)]), 'byte')
 
@@ -92,8 +92,8 @@ def test_cast_to_bytes_saturates() -> None:
     from_float = cp.cast(cp.array([cp.value(v) for v in floats]), 'byte')
     from_bool = cp.cast(cp.array([cp.value(v) for v in ints]) > 0, 'byte')
     assert from_int.dtype == from_float.dtype == from_bool.dtype == 'byte'
-    assert cp.to_bytes(cp.array([300, 5])).dtype == 'byte'
-    res = evaluate(from_int, from_float, from_bool, cp.to_bytes(cp.array([cp.value(300), cp.value(5)])))
+    assert cp.to_byte(cp.array([300, 5])).dtype == 'byte'
+    res = evaluate(from_int, from_float, from_bool, cp.to_byte(cp.array([cp.value(300), cp.value(5)])))
     assert res[3] == [255, 5]
     assert res[0] == [0, 0, 0, 1, 254, 255, 255, 255]
     assert res[1] == [0, 0, 0, 0, 17, 254, 255, 255, 255, 255, 0, 0]
