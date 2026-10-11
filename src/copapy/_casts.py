@@ -167,7 +167,7 @@ def to_bool(x: Any) -> Any:
     return cast(x, 'bool')
 
 
-def to_bytes(x: array[Any]) -> array[int]:
+def to_byte(x: array[Any]) -> array[int]:
     """Convert the elements of an array to bytes, limited to the range 0 to
     255. Floats are truncated towards zero, nan is converted to 0.
 
@@ -178,5 +178,5 @@ def to_bytes(x: array[Any]) -> array[int]:
         x as byte array
     """
     if not isinstance(x, array):
-        raise TypeError(f"Can not convert {type(x).__name__} to bytes, only arrays are supported")
+        raise TypeError(f"Can not convert {type(x).__name__} to byte, only arrays are supported")
     return _cast_array(x, 'byte')
