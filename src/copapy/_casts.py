@@ -7,7 +7,7 @@ from ._arrays import array, ArrayType, _add_array_op
 from ._vectors import vector
 from ._tensors import tensor
 
-_dtype_names: dict[Any, str] = {float: 'float', int: 'int', bool: 'bool'}
+_dtype_names: dict[type, str] = {float: 'float', int: 'int', bool: 'bool'}
 _number_types: dict[str, Any] = {'float': float, 'int': int, 'bool': bool}
 
 # Size in bytes of the fields supported by pack and unpack (struct format characters)

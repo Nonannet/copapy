@@ -1,4 +1,4 @@
-from typing import Any, Sequence, TypeVar, overload
+from typing import Any, Sequence, TypeAlias, TypeVar, overload
 import math
 from ._basic_types import value, ArrayNet, to_float, value_from_number, unifloat
 from ._arrays import array, ArrayType, _add_array_op
@@ -8,6 +8,8 @@ from ._casts import cast, _cast_array
 from ._math import minimum, maximum
 
 U = TypeVar("U", int, float)
+
+TableLike: TypeAlias = 'ArrayType[Any] | array[Any] | Sequence[float | value[Any]]'
 
 _METHODS = ('linear', 'previous', 'nearest')
 
@@ -149,16 +151,16 @@ def _interp_number(x: float, xp: list[float], fp: list[float], method: str) -> f
 
 
 @overload
-def interp(x: float | int, xp: Any, fp: Any, method: str = 'linear') -> 'value[float] | float': ...
+def interp(x: float | int, xp: TableLike, fp: TableLike, method: str = 'linear') -> 'value[float] | float': ...
 @overload
-def interp(x: value[Any], xp: Any, fp: Any, method: str = 'linear') -> value[float]: ...
+def interp(x: value[Any], xp: TableLike, fp: TableLike, method: str = 'linear') -> value[float]: ...
 @overload
-def interp(x: vector[Any], xp: Any, fp: Any, method: str = 'linear') -> vector[float]: ...
+def interp(x: vector[Any], xp: TableLike, fp: TableLike, method: str = 'linear') -> vector[float]: ...
 @overload
-def interp(x: tensor[Any], xp: Any, fp: Any, method: str = 'linear') -> tensor[float]: ...
+def interp(x: tensor[Any], xp: TableLike, fp: TableLike, method: str = 'linear') -> tensor[float]: ...
 @overload
-def interp(x: array[Any], xp: Any, fp: Any, method: str = 'linear') -> array[float]: ...
-def interp(x: Any, xp: Any, fp: Any, method: str = 'linear') -> Any:
+def interp(x: array[Any], xp: TableLike, fp: TableLike, method: str = 'linear') -> array[float]: ...
+def interp(x: Any, xp: TableLike, fp: TableLike, method: str = 'linear') -> Any:
     """One-dimensional interpolation of a table.
 
     Outside of the range of xp the first or last value of fp is returned. The

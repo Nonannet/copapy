@@ -1,7 +1,7 @@
 from . import vector
 from . import tensor
 from . import value
-from typing import TypeVar, Any, Sequence, overload
+from typing import TypeVar, TypeAlias, Any, Sequence, overload
 import copapy as cp
 from ._arrays import array, ArrayType, _add_array_op, _size
 from ._basic_types import ArrayNet
@@ -10,6 +10,7 @@ __all__ = ["relu", "sigmoid", "softmax", "linear", "conv1d", "conv2d",
            "max_pool1d", "max_pool2d", "avg_pool1d", "avg_pool2d", "global_avg_pool2d"]
 
 U = TypeVar("U", int, float)
+ArrayLike: TypeAlias = array[Any] | ArrayType[Any] | Sequence[Any]
 TArr = TypeVar("TArr", array[Any], tensor[Any])
 TVec = TypeVar("TVec", array[Any], tensor[Any], vector[Any])
 
@@ -92,7 +93,7 @@ def _pair(x: int | Sequence[int], name: str, minimum: int) -> tuple[int, int]:
     return pair[0], pair[1]
 
 
-def _conv(x: 'array[float]', weight: 'array[float]', bias: Any, stride: tuple[int, int],
+def _conv(x: 'array[float]', weight: 'array[float]', bias: ArrayLike | None, stride: tuple[int, int],
           padding: tuple[int, int], dilation: tuple[int, int],
           out_size: tuple[int, int] | None = None) -> 'array[float]':
     """Convolution of an input [n, ci, h, w] with the weights [co, ci, kh, kw]. The padding
@@ -120,7 +121,7 @@ def _conv(x: 'array[float]', weight: 'array[float]', bias: Any, stride: tuple[in
     return array._from_net(node.result, (n, co, oh, ow))
 
 
-def linear(x: TVec, weight: Any, bias: Any = None) -> TVec:
+def linear(x: TVec, weight: ArrayLike, bias: ArrayLike | None = None) -> TVec:
     """Fully connected layer: weight @ x + bias
 
     Arguments:
@@ -149,7 +150,7 @@ def linear(x: TVec, weight: Any, bias: Any = None) -> TVec:
     return out
 
 
-def conv2d(x: TArr, weight: Any, bias: Any = None, stride: int | Sequence[int] = 1,
+def conv2d(x: TArr, weight: ArrayLike, bias: ArrayLike | None = None, stride: int | Sequence[int] = 1,
            padding: int | Sequence[int] = 0, dilation: int | Sequence[int] = 1) -> TArr:
     """2D convolution (cross-correlation as in most deep learning frameworks)
     computed by a single array stencil.
@@ -178,7 +179,7 @@ def conv2d(x: TArr, weight: Any, bias: Any = None, stride: int | Sequence[int] =
     return tensor._from_array(ret) if isinstance(x, tensor) else ret
 
 
-def conv1d(x: TArr, weight: Any, bias: Any = None, stride: int = 1,
+def conv1d(x: TArr, weight: ArrayLike, bias: ArrayLike | None = None, stride: int = 1,
            padding: int = 0, dilation: int = 1) -> TArr:
     """1D convolution (cross-correlation as in most deep learning frameworks)
     computed by a single array stencil.

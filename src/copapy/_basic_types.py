@@ -386,7 +386,7 @@ class HeadNode(Node):
         value: Numeric value written to the memory when loading the program.
         dtype: Data type of the value.
     """
-    def __init__(self, value: Any):
+    def __init__(self, value: int | float):
         if isinstance(value, int):
             self.value: int | float =  value
             self.dtype = 'int'
@@ -403,7 +403,7 @@ class HeadNode(Node):
 class Constant(HeadNode):
     """Anonymous constant. Constants of equal value and type are the same
     node and can be removed during optimization."""
-    def __init__(self, value: Any):
+    def __init__(self, value: int | float):
         super().__init__(value)
         self.node_hash = hash(value) ^ hash(self.dtype)
 
@@ -419,7 +419,7 @@ class Constant(HeadNode):
 class Input(HeadNode):
     """Named value (copapy value) that can be changed by Target.write_value.
     Each Input is a distinct node, independent of its initial value."""
-    def __init__(self, value: Any):
+    def __init__(self, value: int | float):
         super().__init__(value)
         self.node_hash = id(self)
 
@@ -570,7 +570,7 @@ class ArrayElement(Node):
         return self.node_hash
 
 
-def value_from_number(val: Any) -> value[Any]:
+def value_from_number(val: int | float) -> value[Any]:
     # Create anonymous constant that can be removed during optimization
     new_node = Constant(val)
     new_net = Net(new_node.dtype, new_node)
