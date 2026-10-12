@@ -22,7 +22,7 @@ def test_timing_compiler(monkeypatch: pytest.MonkeyPatch):
 
     print('-- get_edges:')
     t0 = time.time()
-    edges = list(cpb.get_all_dag_edges(out))
+    edges = list(cpb.get_all_dag_edges(cpb.canonicalize(out)[0]))
     t1 = time.time()
     print(f'   found {len(edges)} edges')
     #for p in edges:

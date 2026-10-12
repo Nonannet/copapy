@@ -33,7 +33,7 @@ def test_ast_generation():
     print(out)
     print('-- get_edges:')
 
-    edges = list(cpb.get_all_dag_edges(out))
+    edges = list(cpb.get_all_dag_edges(cpb.canonicalize(out)[0]))
     for p in edges:
         print('#', p)
 

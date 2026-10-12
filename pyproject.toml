@@ -42,19 +42,19 @@ dev = [
     "ruff",
     "mypy",
     "pytest",
-    "pelfy>=1.0.8",
+    "pelfy>=1.0.10",
     "scipy"
 ]
 mindev = [
     "pytest",
-    "pelfy>=1.0.8"
+    "pelfy>=1.0.10"
 ]
 doc_build = [
     "sphinx",
     "pydata_sphinx_theme",
     "sphinx-autodoc-typehints",
     "myst-parser",
-    "pelfy>=1.0.8"
+    "pelfy>=1.0.10"
 ]
 
 [tool.mypy]

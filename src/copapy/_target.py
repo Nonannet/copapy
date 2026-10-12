@@ -197,6 +197,17 @@ class Target():
         ret: memoryview[Any] = view.cast(_BUFFER_FORMATS[net.dtype], variable.shape)
         return ret
 
+    def _locate_element(self, net: Net) -> bool:
+        """Returns if the net is stored on the target. An array element that is
+        not accessed by the compiled program is located in the memory of its array."""
+        if net not in self._values and isinstance(net.source, ArrayElement):
+            array_net = net.source.args[0]
+            if array_net in self._values:
+                base, _, _ = self._values[array_net]
+                size = self.sdb.get_type_size(transl_type(array_net.dtype))
+                self._values[net] = (base + net.source.index * size, size, net.dtype)
+        return net in self._values
+
     def compile(self, *values: Any) -> None:
         """Compiles the code to compute the given values.
 
@@ -296,19 +307,14 @@ class Target():
                 flat = tuple(bool(v) for v in flat)
             return variables.get_values(flat)
 
-        if isinstance(variables, value) and variables.net not in self._values and \
+        if isinstance(variables, value) and not self._locate_element(variables.net) and \
            isinstance(variables.net.source, ArrayElement):
-            # Element not accessed by the compiled program, read it from its array
+            # Element of an array that is not stored on the target
             element = variables.net.source
             array_net = element.args[0]
-            if array_net in self._values:
-                base, _, _ = self._values[array_net]
-                size = self.sdb.get_type_size(transl_type(array_net.dtype))
-                self._values[variables.net] = (base + element.index * size, size, array_net.dtype)
-            else:
-                assert isinstance(array_net.source, ArrayConst), f"Value {variables} not found. It might not have been compiled for the target."
-                const = array_net.source.values[element.index]
-                return bool(const) if variables.dtype == 'bool' else const
+            assert isinstance(array_net.source, ArrayConst), f"Value {variables} not found. It might not have been compiled for the target."
+            const = array_net.source.values[element.index]
+            return bool(const) if variables.dtype == 'bool' else const
 
         if isinstance(variables, ArrayType):
             packed = variables._packed_array()
@@ -387,7 +393,7 @@ class Target():
         assert not isinstance(data, Iterable), "If net is not iterable, value must not be iterable"
 
         assert isinstance(variables, value), "Argument must be a copapy value"
-        assert variables.net in self._values, f"Value {variables} not found. It might not have been compiled for the target."
+        assert self._locate_element(variables.net), f"Value {variables} not found. It might not have been compiled for the target."
         addr, lengths, var_type = self._values[variables.net]
         assert lengths > 0
 

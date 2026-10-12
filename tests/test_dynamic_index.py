@@ -44,7 +44,7 @@ def test_vector_lookup_table() -> None:
     k = cp.value(0)
     y = table[k] * 2.0
 
-    ordered = compiler.stable_toposort(compiler.get_all_dag_edges([Store(y.net)]))
+    ordered = compiler.stable_toposort(compiler.get_all_dag_edges(compiler.canonicalize([Store(y.net)])[0]))
     assert [n.name for n in ordered].count('copy32_arr') == 1
     assert any(isinstance(n, compiler.ArrayConst) for n in ordered)  # the table is data
     pack_stores = [node for _, node in compiler.add_load_ops(ordered) if node.name == compiler.PACK_STORE]
@@ -77,7 +77,7 @@ def test_pack_constants_at_load_time() -> None:
     only computed elements and copapy values are stored on each run"""
     x = cp.value(2.0)
     p = cp.array([1.5, x, 3.0, 4.0, x * 2.0, 6.0, 7.0, 8.0])
-    ordered = compiler.stable_toposort(compiler.get_all_dag_edges([p.net.source]))
+    ordered = compiler.stable_toposort(compiler.get_all_dag_edges(compiler.canonicalize([p.net.source])[0]))
     pack_stores = [node for _, node in compiler.add_load_ops(ordered) if node.name == compiler.PACK_STORE]
     assert len(pack_stores) == 2  # x and x * 2.0
 

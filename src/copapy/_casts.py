@@ -204,7 +204,7 @@ def _reinterpret(x: value[Any], dtype: str) -> value[Any]:
     """Bit pattern of a float value as int or of an int value as float. It
     requires no stencil: the value is stored to memory and read with the other type."""
     stored = ArrayPack([x.net], transl_type(x.dtype))
-    return value(Net(dtype, ArrayElement(stored.result, 0)))
+    return value(Net(dtype, ArrayElement(stored.result, 0, dtype)))
 
 
 def _pack_field(x: NumLike, char: str, big: bool) -> list[uniint]:

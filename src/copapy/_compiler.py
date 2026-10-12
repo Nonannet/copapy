@@ -3,6 +3,7 @@ from . import _binwrite as binw
 from ._stencils import stencil_database, patch_entry
 from collections import defaultdict
 import heapq
+import struct
 from ._basic_types import Net, Node, Store, HeadNode, Constant, Op, transl_type, ArrayNet, ArrayConst, ArrayOp, ArrayElement, ArrayPack
 
 # Pseudo operation: store register 0 to an array element of an ArrayPack
@@ -65,6 +66,128 @@ def stable_toposort(edges: Iterable[tuple[Node, Node]]) -> list[Node]:
     return result
 
 
+def _node_key(node: Node, arg_ids: tuple[int, ...]) -> tuple[Any, ...] | None:
+    """Returns a Key in form of a tuple for a node that identifies the node in
+    the id table of canonicalize: nodes with the same key compute the same value.
+    None for nodes that are never merged.
+
+    Arguments:
+        node: Node to get the key for
+        arg_ids: Ids of the canonical nodes of the arguments
+    """
+    if isinstance(node, Op):
+        if isinstance(node, ArrayOp):
+            length = node.result.length if isinstance(node.result, ArrayNet) else None
+            return (node.name, arg_ids, node.result.dtype, length)
+        return (node.name, tuple(sorted(arg_ids)) if node.commutative else arg_ids)
+    if isinstance(node, Constant):
+        # Floats by bit pattern: 0.0 and -0.0 are different constants
+        bits = struct.pack('d', node.value) if node.dtype == 'float' else node.value
+        return ('const', node.dtype, bits)
+    if not arg_ids:
+        return None  # Input and ArrayConst: each node is distinct
+    if isinstance(node, ArrayElement):
+        return ('element', arg_ids[0], node.index, node.dtype)
+    if isinstance(node, Store):
+        return (node.name, arg_ids)
+    return None  # ArrayPack: each node is distinct
+
+
+def _modified_node_copy(node: Node, args: tuple[Net, ...]) -> Node:
+    """Copy of a node with other argument nets"""
+    new = object.__new__(type(node))  # much faster than copy.copy
+    new.__dict__.update(node.__dict__)
+    new.args = args
+    if isinstance(new, ArrayOp):
+        res = new.result
+        new.result = ArrayNet(res.dtype, new, res.length) if isinstance(res, ArrayNet) else Net(res.dtype, new)
+    elif isinstance(new, ArrayPack):
+        new.result = ArrayNet(new.result.dtype, new, new.result.length)
+        new.elements = [Net(el.dtype, ArrayElement(new.result, i)) for i, el in enumerate(new.elements)]
+    return new
+
+
+def canonicalize(roots: Iterable[Node]) -> tuple[list[Node], dict[Net, Net]]:
+    """Rebuild a DAG with all equivalent nodes merged (common subexpression
+    elimination). The identity of each node is looked up in an id table.
+
+    The given DAG is not changed: nodes are copied if their arguments are
+    replaced, otherwise the nodes and nets are reused. In the returned DAG
+    each node has exactly one result net.
+
+    Arguments:
+        roots: End nodes of the DAG
+
+    Returns:
+        Tuple of the end nodes of the canonical DAG and a dict to look up
+        the canonical net for each net of the given DAG
+    """
+    roots = list(roots)
+    table: dict[tuple[Any, ...], int] = {}  # id by key
+    ids: dict[Node, int] = {}  # id of each given node, equivalent nodes have the same id
+    nodes: list[Node] = []  # canonical node by id
+    nets: list[Net | None] = []  # result net of the canonical node by id, None until it is used
+    net_map: dict[Net, Net] = {}
+    with_result = (ArrayOp, ArrayPack)
+
+    stack = roots[::-1]
+    while stack:
+        node = stack[-1]
+        if node in ids:
+            stack.pop()
+            continue
+        pending = [net.source for net in node.args if net.source not in ids]
+        if pending:
+            # Arguments first: the node is on top of the stack again when they have ids
+            stack.extend(pending)
+            continue
+        stack.pop()
+
+        new_args: list[Net] = []
+        arg_ids: list[int] = []
+        changed = False
+        for net in node.args:
+            i = ids[net.source]
+            new = nets[i]
+            if new is None:
+                new = nets[i] = net if nodes[i] is net.source else Net(net.dtype, nodes[i])
+            if new is not net:
+                changed = True
+            net_map[net] = new
+            new_args.append(new)
+            arg_ids.append(i)
+
+        key = _node_key(node, tuple(arg_ids))
+        i = table.get(key, -1) if key else -1
+
+        if i < 0:
+            i = len(nodes)
+            canonical = _modified_node_copy(node, tuple(new_args)) if changed else node
+            nodes.append(canonical)
+            if key:
+                table[key] = i
+            if isinstance(canonical, with_result):
+                nets.append(canonical.result)
+                if isinstance(canonical, ArrayPack):
+                    # Elements of the array are the nets the values are stored to
+                    assert isinstance(node, ArrayPack)
+                    for element, old in zip(canonical.elements, node.elements):
+                        table[_node_key(element.source, (i,))] = ids[old.source] = len(nodes)  # type: ignore[index]
+                        nodes.append(element.source)
+                        nets.append(element)
+                        net_map[old] = element
+            else:
+                nets.append(None)
+
+        ids[node] = i
+        if isinstance(node, with_result):
+            canonical = nodes[i]
+            assert isinstance(canonical, with_result)
+            net_map[node.result] = canonical.result
+
+    return list(dict.fromkeys(nodes[ids[node]] for node in roots)), net_map
+
+
 def get_all_dag_edges_between(roots: Iterable[Node], leaves: Iterable[Node]) -> Generator[tuple[Node, Node], None, None]:
     """Get all edges in the DAG connecting given roots with given leaves
 
@@ -112,19 +235,11 @@ def get_all_dag_edges(nodes: Iterable[Node]) -> Generator[tuple[Node, Node], Non
         Tuples of (source_node, target_node) representing edges in the DAG
     """
     emitted_edges: set[tuple[Node, Node]] = set()
-    used_nets: dict[Net, Net] = {}
     node_list: list[Node] = list(nodes)
 
     while(node_list):
         node = node_list.pop()
         for net in node.args:
-
-            # In case there is already net with equivalent value use this
-            if net in used_nets:
-                net = used_nets[net]
-            else:
-                used_nets[net] = net
-
             edge = (net.source, node)
             if edge not in emitted_edges:
                 yield edge
@@ -362,7 +477,8 @@ def get_dag_stats(node_list: Iterable[Node | Net]) -> dict[str, int]:
     Returns:
         Dictionary of operation name to occurrence count
     """
-    edges = get_all_dag_edges(n.source if isinstance(n, Net) else n for n in node_list)
+    roots, _ = canonicalize(n.source if isinstance(n, Net) else n for n in node_list)
+    edges = get_all_dag_edges(roots)
     ops = {node for node, _ in edges}
 
     op_stat: dict[str, int] = {}
@@ -386,7 +502,8 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
     data_list: list[bytes] = []
     patch_list: list[patch_entry] = []
 
-    ordered_ops = stable_toposort(get_all_dag_edges(node_list))
+    roots, net_map = canonicalize(node_list)
+    ordered_ops = stable_toposort(get_all_dag_edges(roots))
     const_net_list = get_const_nets(ordered_ops)
     output_ops = list(add_load_ops(ordered_ops))
     extended_output_ops = list(add_store_ops(output_ops, const_net_list))
@@ -584,5 +701,10 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
 
     dw.write_com(binw.Command.ENTRY_POINT)
     dw.write_int(aux_func_len + sdb.thumb_mode)
+
+    # Nets of the given DAG are stored at the address of their canonical nets
+    for net, canonical in net_map.items():
+        if canonical in variables:
+            variables[net] = variables[canonical]
 
     return dw, variables

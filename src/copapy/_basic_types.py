@@ -1,5 +1,7 @@
 import functools
 import pkgutil
+import struct
+import weakref
 from typing import Any, Sequence, TypeVar, overload, TypeAlias, Generic, Callable
 from ._stencils import stencil_database, detect_process_arch
 import copapy as cp
@@ -67,7 +69,6 @@ class Node:
     def __init__(self) -> None:
         self.args: tuple[Net, ...] = ()
         self.name: str = ''
-        self.node_hash = 0
 
     def __repr__(self) -> str:
         return f"Node:{self.name}({', '.join(str(a) for a in self.args) if self.args else (self.value if isinstance(self, HeadNode) else '')})"
@@ -88,12 +89,6 @@ class Net:
     def __repr__(self) -> str:
         names = get_var_name(self)
         return f"{'name:' + names[0] if names else 'h:' + str(hash(self))[-5:]}"
-
-    def __hash__(self) -> int:
-        return self.source.node_hash
-
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, Net) and self.source == other.source
 
 
 class value(Generic[TNum]):
@@ -139,7 +134,7 @@ class value(Generic[TNum]):
 
     def __repr__(self) -> str:
         names = get_var_name(self)
-        return f"{'name:' + names[0] if names else 'h:' + str(self.net.source.node_hash)[-5:]}"
+        return f"{'name:' + names[0] if names else 'h:' + str(hash(self.net.source))[-5:]}"
 
     @overload
     def __add__(self: 'value[TNum]', other: 'value[TNum] | TNum') -> 'value[TNum]': ...
@@ -401,33 +396,13 @@ class HeadNode(Node):
 
 
 class Constant(HeadNode):
-    """Anonymous constant. Constants of equal value and type are the same
-    node and can be removed during optimization."""
-    def __init__(self, value: int | float):
-        super().__init__(value)
-        self.node_hash = hash(value) ^ hash(self.dtype)
-
-    def __eq__(self, other: object) -> bool:
-        return (self is other) or (isinstance(other, Constant) and
-                                   self.value == other.value and
-                                   self.dtype == other.dtype)
-
-    def __hash__(self) -> int:
-        return self.node_hash
+    """Anonymous constant. Constants of equal value and type are merged
+    to one node when the graph is canonicalized."""
 
 
 class Input(HeadNode):
     """Named value (copapy value) that can be changed by Target.write_value.
     Each Input is a distinct node, independent of its initial value."""
-    def __init__(self, value: int | float):
-        super().__init__(value)
-        self.node_hash = id(self)
-
-    def __eq__(self, other: object) -> bool:
-        return self is other
-
-    def __hash__(self) -> int:
-        return self.node_hash
 
 
 class Store(Node):
@@ -442,62 +417,14 @@ class Store(Node):
 
         self.name = 'store_' + transl_type(net.dtype)
         self.args = (net,)
-        self.node_hash = hash(self.name) ^ hash(net.source.node_hash)
 
 
 class Op(Node):
     def __init__(self, typed_op_name: str, args: Sequence[Net], commutative: bool = False):
         self.name: str = typed_op_name
         self.args: tuple[Net, ...] = tuple(args)
-        self.node_hash = self.get_node_hash(commutative)
         self.commutative = commutative
 
-    def get_node_hash(self, commutative: bool = False) -> int:
-        if commutative:
-            h = hash(self.name) ^ hash(frozenset(a.source.node_hash for a in self.args))
-        else:
-            h = hash(self.name) ^ hash(tuple(a.source.node_hash for a in self.args))
-        return h if h != -1 else -2
-
-    def __eq__(self, other: object) -> bool:
-        if self is other:
-            return True
-        if not isinstance(other, Op):
-            return NotImplemented
-
-        # Traverse graph for both notes. Return false on first difference.
-        # A false inequality result in seldom cases is ok, whereas a false
-        # equality result leads to wrong computation results.
-        nodes: list[tuple[Node, Node]] = [(self, other)]
-        seen: set[tuple[int, int]] = set()
-        while(nodes):
-            s_node, o_node = nodes.pop()
-
-            if s_node.node_hash != o_node.node_hash:
-                return False
-            key = (id(s_node), id(o_node))
-            if key in seen:
-                continue
-            if isinstance(s_node, Op):
-                if (s_node.name.split('_')[0] != o_node.name.split('_')[0] or
-                    len(o_node.args) != len(s_node.args)):
-                    return False
-                if s_node.commutative:
-                    for s_net, o_net in zip(sorted(s_node.args, key=hash),
-                                            sorted(o_node.args, key=hash)):
-                        if s_net is not o_net:
-                            nodes.append((s_net.source, o_net.source))
-                else:
-                    for s_net, o_net in zip(s_node.args, o_node.args):
-                        if s_net is not o_net:
-                            nodes.append((s_net.source, o_net.source))
-            elif s_node != o_node:
-                return False
-            seen.add(key)
-        return True
-
-    def __hash__(self) -> int:
-        return self.node_hash
 
 class ArrayNet(Net):
     """A Net representing a contiguous array of scalars in the heap memory.
@@ -518,7 +445,6 @@ class ArrayConst(Node):
         self.dtype = dtype
         self.name = 'const_' + dtype + 'arr'
         self.args = ()
-        self.node_hash = id(self)
 
 
 class ArrayOp(Op):
@@ -546,35 +472,42 @@ class ArrayPack(Node):
         assert all(transl_type(a.dtype) == dtype for a in args), "All values must have the type of the array"
         self.name = 'pack_' + dtype + 'arr'
         self.args = tuple(args)
-        self.node_hash = id(self)
         self.result = ArrayNet(dtype, self, len(args))
         self.elements = [Net(dtype, ArrayElement(self.result, i)) for i in range(len(args))]
 
 
 class ArrayElement(Node):
     """Scalar element of an array at a constant index. It is no stencil
-    but an alias to the memory of the array element."""
-    def __init__(self, array_net: ArrayNet, index: int):
+    but an alias to the memory of the array element.
+
+    Attributes:
+        index: Index of the element in the array
+        dtype: Type the element is read as, it differs from the type of the
+            array if the bit pattern of the element is reinterpreted
+    """
+    def __init__(self, array_net: ArrayNet, index: int, dtype: str | None = None):
         assert 0 <= index < array_net.length, f"Index {index} out of bounds for length {array_net.length}"
         self.name = 'element_' + array_net.dtype
         self.args = (array_net,)
         self.index = index
-        self.node_hash = hash((array_net.source.node_hash, index, 'element'))
+        self.dtype = dtype or array_net.dtype
 
-    def __eq__(self, other: object) -> bool:
-        return self is other or (isinstance(other, ArrayElement) and
-                                 self.index == other.index and
-                                 self.args[0] == other.args[0])
 
-    def __hash__(self) -> int:
-        return self.node_hash
+# Nets of the anonymous constants in use, by type and value
+_constant_nets: 'weakref.WeakValueDictionary[tuple[type, int | bytes], Net]' = weakref.WeakValueDictionary()
 
 
 def value_from_number(val: int | float) -> value[Any]:
-    # Create anonymous constant that can be removed during optimization
-    new_node = Constant(val)
-    new_net = Net(new_node.dtype, new_node)
-    return value(new_net)
+    """Anonymous constant that can be removed during optimization. Constants
+    of the same type and value share one node: they can not change, so the
+    canonicalization of the graph has nothing to merge and to rebuild for them."""
+    # Floats by bit pattern: 0.0 and -0.0 are different constants
+    key = (float, struct.pack('d', val)) if isinstance(val, float) else (type(val), val)
+    net = _constant_nets.get(key)
+    if net is None:
+        new_node = Constant(val)
+        net = _constant_nets[key] = Net(new_node.dtype, new_node)
+    return value(net)
 
 
 def select_by_mask(mask: value[int], x: Any, y: Any) -> Any:

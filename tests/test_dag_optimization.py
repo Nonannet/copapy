@@ -14,7 +14,7 @@ def show_dag(val: value[Any]):
     print(out)
     print('-- get_edges:')
 
-    edges = list(cpb.get_all_dag_edges(out))
+    edges = list(cpb.get_all_dag_edges(cpb.canonicalize(out)[0]))
     for p in edges:
         print('#', p)
 
@@ -76,9 +76,91 @@ def test_dag_reduction():
     print(stat)
 
 
+def dag_nodes(roots: list[cpb.Node]) -> list[cpb.Node]:
+    return cpb.stable_toposort(cpb.get_all_dag_edges(roots))
+
+
+def test_canonicalize_merges_equivalent_nodes():
+    a = value(8)
+    b = value(3)
+    v1 = (a * 3 + b) * 2.5
+    v2 = (b + a * 3) * 2.5  # commutative add with swapped arguments
+    roots = [Store(v1.net), Store(v2.net)]
+
+    # Nodes have no identity beyond the object identity before the pass
+    assert v1.net.source is not v2.net.source
+    assert len([n for n in dag_nodes(roots) if n.name == 'mul_int_int']) == 2
+
+    new_roots, net_map = cpb.canonicalize(roots)
+    names = [n.name for n in dag_nodes(new_roots)]
+    assert len(new_roots) == 1
+    assert names.count('mul_int_int') == 1
+    assert names.count('add_int_int') == 1
+    assert names.count('const_int') == 3  # a, b and 3
+    assert names.count('const_float') == 1
+    assert net_map[v1.net] is net_map[v2.net]
+
+    # The given DAG is not changed
+    assert roots[1].args[0] is v2.net
+    assert v2.net.source.args[0].source is not v1.net.source.args[0].source
+
+    # Not commutative: the order of the arguments is part of the identity
+    new_roots, _ = cpb.canonicalize([Store((a - b).net), Store((b - a).net)])
+    assert len(new_roots) == 2
+
+
+def test_canonicalize_recalculates_identities():
+    """Identities are derived from the DAG on each call, so they follow changes of the DAG"""
+    a = value(8)
+    b = value(3)
+    v1 = (a + 1) * 2
+    v2 = (b + 1) * 2
+    roots = [Store(v1.net), Store(v2.net)]
+    assert len(cpb.canonicalize(roots)[0]) == 2
+
+    # Replace b by a in the second expression
+    add = v2.net.source.args[0].source
+    add.args = (a.net, add.args[1])
+    new_roots, net_map = cpb.canonicalize(roots)
+    assert len(new_roots) == 1
+    assert net_map[v1.net] is net_map[v2.net]
+
+    # ... and back
+    add.args = (b.net, add.args[1])
+    assert len(cpb.canonicalize(roots)[0]) == 2
+
+
+def test_canonicalize_constants():
+    a = value(2.0)
+    roots = [Store(cp.atan2(a, 0.0).net), Store(cp.atan2(a, -0.0).net),
+             Store(cp.atan2(a, 1.0).net), Store(cp.atan2(a, 1.0).net)]
+    new_roots, _ = cpb.canonicalize(roots)
+    consts = [n.value for n in dag_nodes(new_roots) if isinstance(n, cpb.Constant)]
+    assert len(new_roots) == 3
+    assert sorted(str(c) for c in consts) == ['-0.0', '0.0', '1.0']  # signed zeros are not merged
+
+
+def test_merged_values_are_readable():
+    a = value(8.0)
+    v1 = a * 3.0 + 1.0
+    v2 = a * 3.0 + 1.0
+    arr = cp.array([1.0, a, 3.0])
+
+    tg = cp.Target()
+    tg.compile(v1, v2, arr)
+    tg.run()
+    assert tg.read_value(v1) == tg.read_value(v2) == 25.0
+    assert tg.read_value(arr[1]) == tg.read_value(arr[1]) == 8.0  # a new element on each access
+
+    tg.write_value(a, 2.0)
+    tg.run()
+    assert tg.read_value(v2) == 7.0
+    assert tg.read_value(arr[1]) == 2.0
+
+
 def emitted_ops(val: value[Any]) -> list[str]:
     end_nodes = [Store(val.net)]
-    ordered_ops = cpb.stable_toposort(cpb.get_all_dag_edges(end_nodes))
+    ordered_ops = cpb.stable_toposort(cpb.get_all_dag_edges(cpb.canonicalize(end_nodes)[0]))
     return [node.name for _, node in cpb.add_load_ops(ordered_ops)]
 
 
