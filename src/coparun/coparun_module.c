@@ -74,6 +74,30 @@ static PyObject* read_data_mem(PyObject* self, PyObject* args) {
     return result;
 }
 
+static PyObject* code_mem(PyObject* self, PyObject* args) {
+    PyObject *handle_obj;
+
+    // Expect: handle
+    if (!PyArg_ParseTuple(args, "O", &handle_obj)) {
+        return NULL;
+    }
+
+    void *ptr = PyLong_AsVoidPtr(handle_obj);
+    if (!ptr) {
+        PyErr_SetString(PyExc_ValueError, "Invalid context handle");
+        return NULL;
+    }
+    runmem_t *context = (runmem_t*)ptr;
+
+    if (!context->executable_memory) {
+        PyErr_SetString(PyExc_ValueError, "No code memory allocated");
+        return NULL;
+    }
+
+    return PyBytes_FromStringAndSize((const char *)context->executable_memory,
+                                     (Py_ssize_t)context->executable_memory_len);
+}
+
 // Exporter of the data memory of a context for the buffer protocol. It counts the
 // buffers in use (memoryviews, numpy arrays ...): the memory must not be freed
 // while exports is not zero.
@@ -172,6 +196,7 @@ static PyObject* clear_target(PyObject* self, PyObject* args) {
 static PyMethodDef MyMethods[] = {
     {"coparun", coparun, METH_VARARGS, "Pass raw command data to coparun"},
     {"read_data_mem", read_data_mem, METH_VARARGS, "Read memory and return as bytes"},
+    {"code_mem", code_mem, METH_VARARGS, "Copy of the patched code memory of the target as bytes"},
     {"data_mem", data_mem, METH_VARARGS, "Data memory of the target as object with the buffer protocol (no copy)"},
     {"create_target", create_target, METH_NOARGS, "Create and return a handle to a zero-initialized runmem_t struct"},
     {"clear_target", clear_target, METH_VARARGS, "Free all memory associated with the given target handle"},

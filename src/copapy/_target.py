@@ -155,6 +155,48 @@ def map_to_numpy(arr: array[Any] | ArrayType[Any], copy: bool = False) -> array[
     return _mapped(arr, 'numpy_copy' if copy else 'numpy')
 
 
+def root_nodes(values: Any) -> list[Node]:
+    """End nodes of the DAG that computes the given values.
+
+    Arguments:
+        values: Values, vectors, tensors and arrays to compute, also in
+            (nested) sequences or as values of dicts
+    """
+    nodes: list[Node] = []
+
+    def add_root(net: Net) -> None:
+        if isinstance(net.source, ArrayElement):
+            # Element is an alias to the array memory
+            net = net.source.args[0]
+        if isinstance(net.source, ArrayOp | ArrayPack):
+            # Result is already written to heap by the array op or pack
+            nodes.append(net.source)
+        elif not isinstance(net.source, ArrayConst):
+            nodes.append(Store(net))
+
+    def add(input: Any) -> None:
+        if isinstance(input, array):
+            add_root(input.net)
+        elif isinstance(input, ArrayType):
+            packed = input._packed_array()
+            if packed is not None:
+                add_root(packed.net)
+            else:
+                for v in input.values:
+                    if isinstance(v, value):
+                        add_root(v.net)
+        elif isinstance(input, value):
+            add_root(input.net)
+        elif isinstance(input, dict):
+            add(list(input.values()))
+        elif isinstance(input, Iterable) and not isinstance(input, str | bytes):
+            for v in input:
+                add(v)
+
+    add(values)
+    return nodes
+
+
 class Target():
     """Target device for compiling for and running on copapy code.
     """
@@ -204,38 +246,7 @@ class Target():
             values: Values, vectors, tensors and arrays to compute, also in
                 (nested) sequences or as values of dicts
         """
-        nodes: list[Node] = []
-
-        def add_root(net: Net) -> None:
-            if isinstance(net.source, ArrayElement):
-                # Element is an alias to the array memory
-                net = net.source.args[0]
-            if isinstance(net.source, ArrayOp | ArrayPack):
-                # Result is already written to heap by the array op or pack
-                nodes.append(net.source)
-            elif not isinstance(net.source, ArrayConst):
-                nodes.append(Store(net))
-
-        def add(input: Any) -> None:
-            if isinstance(input, array):
-                add_root(input.net)
-            elif isinstance(input, ArrayType):
-                packed = input._packed_array()
-                if packed is not None:
-                    add_root(packed.net)
-                else:
-                    for v in input.values:
-                        if isinstance(v, value):
-                            add_root(v.net)
-            elif isinstance(input, value):
-                add_root(input.net)
-            elif isinstance(input, dict):
-                add(list(input.values()))
-            elif isinstance(input, Iterable) and not isinstance(input, str | bytes):
-                for v in input:
-                    add(v)
-
-        add(values)
+        nodes = root_nodes(values)
 
         if self._data_mem is not None and self._data_mem.exports:
             raise RuntimeError("A buffer or numpy array mapped to the memory of the target is still in use")

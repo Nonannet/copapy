@@ -64,6 +64,7 @@ int main(int argc, char *argv[]) {
     targ.data_memory = NULL;
     targ.entr_point = NULL;
     targ.data_offs = 0;
+    targ.use_link_addr = 0;
 
     int ret = parse_commands(&targ, file_buff);
 

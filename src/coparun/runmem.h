@@ -28,6 +28,7 @@
 #define COPY_CODE         4
 #define PATCH             0x1000
 #define ENTRY_POINT       7
+#define LINK_ADDR         8
 #define RUN_PROG         64
 #define READ_DATA        65
 #define END_COM         256
@@ -48,6 +49,16 @@
  *   P = executable_memory + offs
  *   with PAGE: S and P rounded down to 4 KiB pages
  *   result = ((flags & PC_REL) ? S - P : S) >> shift
+ */
+
+/* LINK_ADDR command arguments:
+ *   uint32 code_addr  address of the code memory on the target
+ *   uint32 data_addr  address of the data memory on the target
+ *
+ * Patches are calculated for these addresses instead of the addresses of the
+ * memory allocated by the runner. The patched code can be read back and placed
+ * at code_addr on a target (static export), it can not be run by the runner.
+ * The addresses stay set for the context, also after FREE_MEMORY.
  */
 
 /* Patch encodings: how the result is inserted into the instruction */
@@ -91,6 +102,9 @@ typedef struct runmem_s {
     uint32_t executable_memory_len;  // Length of executable memory
     int data_offs;                   // Offset of data memory relative to executable memory
     entry_point_t entr_point;        // Entry point function pointer
+    int use_link_addr;               // Patch for the link addresses below (set by LINK_ADDR)
+    uint32_t code_link_addr;         // Address of the code memory on the target
+    uint32_t data_link_addr;         // Address of the data memory on the target
 } runmem_t;
 
 /* Command parser: takes a pointer to the command stream and returns

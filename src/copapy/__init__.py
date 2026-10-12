@@ -34,6 +34,7 @@ Example usage:
 """
 
 from ._target import Target, jit, map_to_buffer, map_to_numpy
+from ._static import export_static
 from ._basic_types import NumLike, value, generic_sdb
 from ._vectors import vector, cross, dot, distance, scalar_projection, angle_between, rotate_vector, vector_projection
 from ._quaternion import quaternion
@@ -125,5 +126,6 @@ __all__ = [
     "filters",
     "jit",
     "map_to_buffer",
-    "map_to_numpy"
+    "map_to_numpy",
+    "export_static"
 ]

@@ -16,7 +16,7 @@ def pack_array(values: 'tuple[int | float, ...] | list[int | float]', dtype: str
 Command = Enum('Command', [('ALLOCATE_DATA', 1), ('COPY_DATA', 2),
                            ('ALLOCATE_CODE', 3), ('COPY_CODE', 4),
                            ('PATCH', 0x1000),
-                           ('ENTRY_POINT', 7),
+                           ('ENTRY_POINT', 7), ('LINK_ADDR', 8),
                            ('RUN_PROG', 64), ('READ_DATA', 65),
                            ('END_COM', 256), ('FREE_MEMORY', 257), ('DUMP_CODE', 258)])
 COMMAND_SIZE = 4

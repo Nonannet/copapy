@@ -198,6 +198,8 @@ void free_memory(runmem_t *context) {
 int update_data_offs(runmem_t *context) {
     // Data memory is not allocated if a program has no data
     if (!context->data_memory || !context->executable_memory) return 1;
+    // Patches are calculated for the link addresses, not for the allocated memory
+    if (context->use_link_addr) return 1;
     if (context->data_memory - context->executable_memory > 0x7FFFFFFF ||
         context->executable_memory - context->data_memory > 0x7FFFFFFF) {
         perror("Error: code and data memory to far apart");
@@ -210,9 +212,14 @@ int update_data_offs(runmem_t *context) {
 int apply_patch(runmem_t *context, uint32_t offs, int32_t value, uint32_t patch_mask,
                 uint8_t encoding, uint8_t shift, uint8_t flags) {
     uint8_t *patch_addr = context->executable_memory + offs;
-    uint8_t *base = (flags & PATCH_FLAG_DATA) ? context->data_memory : context->executable_memory;
-    uintptr_t target = (uintptr_t)(base + value);  // S + A
-    uintptr_t pc = (uintptr_t)patch_addr;          // P
+    uintptr_t code_base = (uintptr_t)context->executable_memory;
+    uintptr_t data_base = (uintptr_t)context->data_memory;
+    if (context->use_link_addr) {
+        code_base = context->code_link_addr;
+        data_base = context->data_link_addr;
+    }
+    uintptr_t target = ((flags & PATCH_FLAG_DATA) ? data_base : code_base) + (uintptr_t)(intptr_t)value;  // S + A
+    uintptr_t pc = code_base + offs;               // P
     intptr_t result;
 
     if (flags & PATCH_FLAG_PAGE) {
@@ -326,8 +333,21 @@ int parse_commands(runmem_t *context, uint8_t *bytes) {
                 mark_mem_executable(context->executable_memory, context->executable_memory_len);
                 break;
 
+            case LINK_ADDR:
+                context->code_link_addr = *(uint32_t*)bytes; bytes += 4;
+                context->data_link_addr = *(uint32_t*)bytes; bytes += 4;
+                context->use_link_addr = 1;
+                LOG("LINK_ADDR code_addr=%#08x data_addr=%#08x\n", context->code_link_addr, context->data_link_addr);
+                break;
+
             case RUN_PROG:
                 LOG("RUN_PROG\n");
+                if (context->use_link_addr) {
+                    // The code is patched for the addresses on the target
+                    LOG("Code patched for link addresses can not be run\n");
+                    end_flag = -6;
+                    break;
+                }
                 {
                     int ret = call_entry_point(context->entr_point);
                     BLOG("Return value: %i\n", ret);
