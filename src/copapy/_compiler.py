@@ -188,6 +188,263 @@ def canonicalize(roots: Iterable[Node]) -> tuple[list[Node], dict[Net, Net]]:
     return list(dict.fromkeys(nodes[ids[node]] for node in roots)), net_map
 
 
+# Operations that are linear in their arguments (mul only with a constant factor),
+# by stencil name: operation and type
+_LINEAR_OPS: dict[str, tuple[str, str]] = {
+    **{f"{op}_{t}_{t}": (op, t) for op in ('add', 'sub', 'mul') for t in ('float', 'int')},
+    **{f"neg_{t}": ('neg', t) for t in ('float', 'int')}}
+
+
+def _wrap_int(v: Any) -> Any:
+    """Wrap an int to the signed 32 bit range of the target"""
+    return (int(v) + 0x80000000) % 0x100000000 - 0x80000000
+
+
+def _keep(v: Any) -> Any:
+    return v
+
+
+class _LinearForm:
+    """Value of a node as sum of coefficient * net over its terms plus an offset
+
+    Attributes:
+        dtype: Type of the value
+        node: Node computing the value without folding
+        terms: Coefficient by net
+        offset: Constant summand
+        ops: Number of operations used to compute the value without folding
+    """
+    __slots__ = ('dtype', 'node', 'terms', 'offset', 'ops')
+
+    def __init__(self, dtype: str, node: Node, terms: dict[Net, Any], offset: Any, ops: int):
+        self.dtype = dtype
+        self.node = node
+        self.terms = terms
+        self.offset = offset
+        self.ops = ops
+
+
+def fold_linear(roots: Iterable[Node]) -> tuple[list[Node], dict[Net, Net]]:
+    """Fold constants over additions, subtractions, negations and multiplications
+    with constants: (3 * a + 6 * b) * 5 is computed as 15 * a + 30 * b. Nested
+    operations of these types are collected to a sum of terms with one
+    coefficient each and are generated again from this sum, if this takes
+    fewer operations.
+
+    Values used more than once are not folded into the operations using them,
+    so no value is computed twice. Only constants are folded, not the values
+    of copapy values (Input). The results of float operations can differ by
+    rounding, values are not preserved for inf and nan operands (x - x is 0).
+    Int coefficients are wrapped to 32 bit.
+
+    The function expects a DAG returned by canonicalize: the uses of a value
+    are counted by node. The given DAG is not changed, new nodes are not merged
+    with equivalent nodes: canonicalize is to be called again on the result.
+
+    Arguments:
+        roots: End nodes of the DAG
+
+    Returns:
+        Tuple of the end nodes of the folded DAG and a dict to look up
+        the net in the folded DAG for the nets of the given DAG that are still computed
+    """
+    roots = list(roots)
+    with_result = (ArrayOp, ArrayPack)
+
+    # Number of uses of each node, end nodes are used by the caller
+    uses: dict[Node, int] = dict.fromkeys(roots, 1)
+    seen = set(roots)
+    stack = list(seen)
+    while stack:
+        for net in stack.pop().args:
+            source = net.source
+            uses[source] = uses.get(source, 0) + 1
+            if source not in seen:
+                seen.add(source)
+                stack.append(source)
+
+    processed: set[Node] = set()
+    done: dict[Node, Node] = {}  # node of the folded DAG for each given node
+    pending: dict[Node, _LinearForm] = {}  # linear nodes that are not yet used
+    result_nets: dict[Node, Net] = {}  # result net of each new node
+    net_map: dict[Net, Net] = {}
+    constants: dict[tuple[str, Any], Net] = {}
+
+    def net_of(node: Node, old: Net) -> Net:
+        """Result net of a node of the folded DAG, old is the net it replaces"""
+        if node is old.source:
+            return old
+        if isinstance(node, with_result):
+            return node.result
+        net = result_nets.get(node)
+        if net is None:
+            net = result_nets[node] = Net(old.dtype, node)
+        return net
+
+    def emit(form: _LinearForm) -> tuple[Net, int]:
+        """Generate the operations for a linear form, returns the result
+        net and the number of operations"""
+        dtype = form.dtype
+        count = 0
+
+        def const(v: Any) -> Net:
+            key = (dtype, v)
+            if key not in constants:
+                node = Constant(float(v) if dtype == 'float' else int(v))
+                constants[key] = Net(node.dtype, node)
+            return constants[key]
+
+        def op(name: str, *args: Net) -> Net:
+            nonlocal count
+            count += 1
+            node = Op('_'.join([name] + [dtype] * len(args)), args, name in ('add', 'mul'))
+            net = result_nets[node] = Net(dtype, node)
+            return net
+
+        def chain(pos: list[Net], neg: list[Net]) -> Net:
+            ret = pos[0]
+            for net in pos[1:]:
+                ret = op('add', ret, net)
+            for net in neg:
+                ret = op('sub', ret, net)
+            return ret
+
+        # Terms with the same factor are summed before the multiplication
+        groups: dict[Any, tuple[list[Net], list[Net]]] = {}
+        for net, coeff in form.terms.items():
+            if coeff != 0:
+                groups.setdefault(abs(coeff), ([], []))[coeff < 0].append(net)
+
+        pos: list[Net] = []
+        neg: list[Net] = []
+        for factor, (g_pos, g_neg) in groups.items():
+            inner = chain(g_pos, g_neg) if g_pos else chain(g_neg, [])
+            if factor != 1:
+                pos.append(op('mul', inner, const(factor if g_pos else -factor)))
+            else:
+                (pos if g_pos else neg).append(inner)
+        if form.offset != 0 or not (pos or neg):
+            pos.append(const(form.offset))
+
+        return (chain(pos, neg) if pos else op('neg', chain(neg, []))), count
+
+    def resolve(net: Net) -> Net:
+        """Net of the folded DAG for a net that is used as a value"""
+        source = net.source
+        form = pending.pop(source, None)
+        if form is not None:
+            node = form.node
+            if form.ops > 1:  # A single operation can not be replaced by fewer
+                folded, count = emit(form)
+                if count < form.ops:
+                    node = folded.source
+                    result_nets[node] = folded
+            done[source] = node
+        new = net_map[net] = net_of(done[source], net)
+        return new
+
+    stack = roots[::-1]
+    while stack:
+        node = stack[-1]
+        if node in processed:
+            stack.pop()
+            continue
+        missing = [net.source for net in node.args if net.source not in processed]
+        if missing:
+            # Arguments first: the node is on top of the stack again when they are processed
+            stack.extend(missing)
+            continue
+        stack.pop()
+        processed.add(node)
+        if node in done:
+            continue  # Element of a rebuilt ArrayPack
+
+        linear = _LINEAR_OPS.get(node.name) if type(node) is Op else None
+        if linear and linear[0] == 'mul' and not any(isinstance(net.source, Constant) for net in node.args):
+            linear = None
+
+        new_args: list[Net] = []
+        parts: list[tuple[dict[Net, Any], Any, bool]] = []  # terms, offset and if it is a constant
+        ops = 1
+        for net in node.args:
+            source = net.source
+            form = pending.get(source) if linear else None
+            if linear and isinstance(source, Constant) and source.dtype == linear[1]:
+                new_args.append(net)
+                parts.append(({}, source.value, True))
+            elif linear and form is not None and uses[source] == 1 and form.dtype == linear[1]:
+                # Only used here: the operations are folded into this node
+                del pending[source]
+                new_args.append(net_of(form.node, net))
+                parts.append((form.terms, form.offset, False))
+                ops += form.ops
+            else:
+                new = resolve(net)
+                new_args.append(new)
+                parts.append(({new: 1}, 0, False))
+
+        changed = any(new is not old for new, old in zip(new_args, node.args))
+        rebuilt = _modified_node_copy(node, tuple(new_args)) if changed else node
+
+        if not linear:
+            done[node] = rebuilt
+            if isinstance(node, with_result):
+                assert isinstance(rebuilt, with_result)
+                net_map[node.result] = rebuilt.result
+                if isinstance(node, ArrayPack) and isinstance(rebuilt, ArrayPack):
+                    for old, element in zip(node.elements, rebuilt.elements):
+                        done[old.source] = element.source
+                        net_map[old] = element
+            continue
+
+        wrap = _wrap_int if linear[1] == 'int' else _keep
+        terms, offset, _ = parts[0]
+        if linear[0] in ('neg', 'mul'):
+            factor = -1
+            if linear[0] == 'mul':
+                if parts[1][2]:
+                    factor = parts[1][1]
+                else:
+                    factor = offset
+                    terms, offset, _ = parts[1]
+            for net in terms:
+                terms[net] = wrap(terms[net] * factor)
+            offset = wrap(offset * factor)
+        else:
+            other, other_offset, _ = parts[1]
+            if linear[0] == 'sub':
+                for net in other:
+                    other[net] = -other[net]
+                other_offset = -other_offset
+            if len(other) > len(terms):
+                terms, other = other, terms  # The smaller dict is merged into the larger one
+            for net, coeff in other.items():
+                terms[net] = wrap(terms.get(net, 0) + coeff)
+            offset = wrap(offset + other_offset)
+        pending[node] = _LinearForm(linear[1], rebuilt, terms, offset, ops)
+
+    return list(dict.fromkeys(done[node] if node in done else pending[node].node for node in roots)), net_map
+
+
+def _optimize(node_list: Iterable[Node], fast_math: bool) -> tuple[list[Node], dict[Net, Net]]:
+    """Merge equivalent nodes and, with fast_math, fold constants.
+
+    Returns:
+        Tuple of the end nodes of the DAG to compile and a dict to look up
+        the net in this DAG for each net of the given DAG
+    """
+    roots, net_map = canonicalize(node_list)
+    if fast_math:
+        roots, folded = fold_linear(roots)
+        roots, merged = canonicalize(roots)  # New nodes can be equivalent to other nodes
+
+        def final(net: Net) -> Net:
+            net = folded.get(net, net)
+            return merged.get(net, net)
+        net_map = {net: final(canonical) for net, canonical in net_map.items()}
+    return roots, net_map
+
+
 def get_all_dag_edges_between(roots: Iterable[Node], leaves: Iterable[Node]) -> Generator[tuple[Node, Node], None, None]:
     """Get all edges in the DAG connecting given roots with given leaves
 
@@ -468,16 +725,17 @@ def get_aux_func_layout(function_names: Iterable[str], sdb: stencil_database, of
     return section_list, function_lookup, offset
 
 
-def get_dag_stats(node_list: Iterable[Node | Net]) -> dict[str, int]:
+def get_dag_stats(node_list: Iterable[Node | Net], fast_math: bool = False) -> dict[str, int]:
     """Get operation statistics for the DAG identified by provided end nodes
 
     Arguments:
         node_list: List of end nodes of the DAG
+        fast_math: Fold constants like a Target with fast_math
 
     Returns:
         Dictionary of operation name to occurrence count
     """
-    roots, _ = canonicalize(n.source if isinstance(n, Net) else n for n in node_list)
+    roots, _ = _optimize((n.source if isinstance(n, Net) else n for n in node_list), fast_math)
     edges = get_all_dag_edges(roots)
     ops = {node for node, _ in edges}
 
@@ -488,12 +746,14 @@ def get_dag_stats(node_list: Iterable[Node | Net]) -> dict[str, int]:
     return op_stat
 
 
-def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[binw.data_writer, dict[Net, tuple[int, int, str]]]:
+def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database,
+                   fast_math: bool = False) -> tuple[binw.data_writer, dict[Net, tuple[int, int, str]]]:
     """Compiles a DAG identified by provided end nodes to binary code
 
     Arguments:
         node_list: List of end nodes of the DAG to compile
         sdb: Stencil database
+        fast_math: Fold constants over additions and multiplications (see fold_linear)
 
     Returns:
         Tuple of data writer with binary code and variable layout dictionary
@@ -502,7 +762,7 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
     data_list: list[bytes] = []
     patch_list: list[patch_entry] = []
 
-    roots, net_map = canonicalize(node_list)
+    roots, net_map = _optimize(node_list, fast_math)
     ordered_ops = stable_toposort(get_all_dag_edges(roots))
     const_net_list = get_const_nets(ordered_ops)
     output_ops = list(add_load_ops(ordered_ops))

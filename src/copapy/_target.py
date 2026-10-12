@@ -158,13 +158,17 @@ def map_to_numpy(arr: array[Any] | ArrayType[Any], copy: bool = False) -> array[
 class Target():
     """Target device for compiling for and running on copapy code.
     """
-    def __init__(self, arch: str = 'native', optimization: str = 'O3') -> None:
+    def __init__(self, arch: str = 'native', optimization: str = 'O3', fast_math: bool = False) -> None:
         """Initialize Target object
 
         Arguments:
             arch: Target architecture
             optimization: Optimization level
+            fast_math: Fold constants over additions, subtractions and
+                multiplications with constants: (3 * a + 6 * b) * 5 is computed
+                as 15 * a + 30 * b. Float results can differ by rounding.
         """
+        self.fast_math = fast_math
         self.sdb = stencil_db_from_package(arch, optimization)
         self._values: dict[Net, tuple[int, int, str]] = {}
         self._data_mem: Any = None  # Data memory of the target with the buffer protocol
@@ -251,7 +255,7 @@ class Target():
         if self._data_mem is not None and self._data_mem.exports:
             raise RuntimeError("A buffer or numpy array mapped to the memory of the target is still in use")
         self._data_mem = None
-        dw, self._values = compile_to_dag(nodes, self.sdb)
+        dw, self._values = compile_to_dag(nodes, self.sdb, self.fast_math)
         dw.write_com(binw.Command.END_COM)
         assert coparun(self._context, dw.get_data()) > 0
 
