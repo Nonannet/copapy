@@ -57,10 +57,11 @@ def test_get_dag_stats(monkeypatch: pytest.MonkeyPatch):
     print(stat)
 
     # The int constants i and 7 are converted to float at trace time (7.0 is
-    # merged with i = 7), both additions per element and the sum are float additions
-    assert stat['const_float'] == 2 * v_size + sum_size
+    # merged with i = 7), both additions per element and the sum are float additions.
+    # Adding i = 0 generates no code: v1 + 0 + 7 is merged with v1 + 7 for i = 7
+    assert stat['const_float'] == 2 * v_size + sum_size - 1
     assert 'float_int' not in stat
-    assert stat['add_float_float'] == 3 * sum_size * v_size - 2
+    assert stat['add_float_float'] == 3 * sum_size * v_size - 2 - 2 * v_size
 
 
 def test_dag_reduction():

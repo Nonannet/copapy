@@ -1,4 +1,3 @@
-from copapy._basic_types import NumLike, value_from_number
 from . import value
 from ._arrays import array, ArrayType
 from ._vectors import vector, VecFloatLike, VecIntLike, VecNumLike
@@ -437,21 +436,6 @@ class tensor(ArrayType[TNum]):
             if ret is not None:
                 return ret
 
-        # Keyed by type as well, since 1 == 1.0 == True share the same hash
-        seen_consts: dict[tuple[type, NumLike], NumLike] = {}
-
-        def call_op(a: TNum | value[TNum], b: NumLike) -> Any:
-            if isinstance(b, value) or not isinstance(a, value):
-                b_trans = b
-            else:
-                key = (type(b), b)
-                if key in seen_consts:
-                    b_trans = seen_consts[key]
-                else:
-                    b_trans = value_from_number(b)
-                    seen_consts[key] = b_trans
-            return op(a, b_trans)
-
         if isinstance(other, Sequence | vector):
             other_tensor: tensor[Any] = tensor(other)
             return self._binary_op(other_tensor, op)
@@ -462,7 +446,7 @@ class tensor(ArrayType[TNum]):
 
             # Check if shapes are identical
             if self_shape == other_shape:
-                result_vals = tuple(call_op(a, b) for a, b in zip(self.values, other.values))
+                result_vals = tuple(op(a, b) for a, b in zip(self.values, other.values))
                 return tensor(result_vals, self_shape)
 
             # Broadcast shapes using numpy-style broadcasting rules
@@ -473,12 +457,12 @@ class tensor(ArrayType[TNum]):
             other_expanded = other._expand_to_shape(result_shape)
 
             # Apply operation element-wise
-            result_vals = tuple(call_op(a, b) for a, b in zip(self_expanded.values, other_expanded.values))
+            result_vals = tuple(op(a, b) for a, b in zip(self_expanded.values, other_expanded.values))
             return tensor(result_vals, result_shape)
 
         else:
             # Broadcast scalar
-            result_vals = tuple(call_op(v, other) for v in self.values)
+            result_vals = tuple(op(v, other) for v in self.values)
             return tensor(result_vals, self.shape)
 
     def _broadcast_shapes(self, shape1: tuple[int, ...], shape2: tuple[int, ...]) -> tuple[int, ...]:

@@ -2,7 +2,7 @@ from typing import overload, Iterable, Callable, Any, Iterator
 from ._vectors import vector
 from ._tensors import tensor
 import copapy as cp
-from ._basic_types import NumLike, value, unifloat, value_from_number
+from ._basic_types import NumLike, value, unifloat
 from ._arrays import ArrayType
 from ._mixed import mixed_sum
 
@@ -237,10 +237,7 @@ class quaternion(ArrayType[float]):
     def __add__(self, other: 'quaternion | NumLike') -> 'quaternion':
         if isinstance(other, quaternion):
             return quaternion(a + b for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return quaternion(v + other for v in self.values)
-        o = value_from_number(other)  # Make sure a single constant is allocated
-        return quaternion(a + o if isinstance(a, value) else a + other for a in self.values)
+        return quaternion(v + other for v in self.values)
 
     def __radd__(self, other: int | float) -> 'quaternion':
         return self + other
@@ -252,19 +249,13 @@ class quaternion(ArrayType[float]):
     def __sub__(self, other: 'quaternion | NumLike') -> 'quaternion':
         if isinstance(other, quaternion):
             return quaternion(a - b for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return quaternion(v - other for v in self.values)
-        o = value_from_number(other)  # Make sure a single constant is allocated
-        return quaternion(a - o if isinstance(a, value) else a - other for a in self.values)
+        return quaternion(v - other for v in self.values)
 
     def __rsub__(self, other: NumLike) -> 'quaternion':
         return -self + other
 
     def __mul__(self, other: NumLike) -> 'quaternion':
-        if isinstance(other, value):
-            return quaternion(v * other for v in self.values)
-        o = value_from_number(other)  # Make sure a single constant is allocated
-        return quaternion(v * o if isinstance(v, value) else v * other for v in self.values)
+        return quaternion(v * other for v in self.values)
 
     def __rmul__(self, other: NumLike) -> 'quaternion':
         return self * other
@@ -293,7 +284,4 @@ class quaternion(ArrayType[float]):
         return vector(a != b for a, b in zip(self.values, other_values))
 
     def __truediv__(self, other: NumLike) -> 'quaternion':
-        if isinstance(other, value):
-            return quaternion(v / other for v in self.values)
-        o = value_from_number(other)  # Make sure a single constant is allocated
-        return quaternion(v / o if isinstance(v, value) else v / other for v in self.values)
+        return quaternion(v / other for v in self.values)

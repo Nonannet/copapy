@@ -3,7 +3,6 @@ from ._mixed import mixed_sum, mixed_homogenize
 from typing import Sequence, TypeVar, Iterable, Any, overload, TypeAlias, Callable, Iterator
 import copapy as cp
 from ._helper_types import TNum
-from ._basic_types import value_from_number
 from ._arrays import ArrayType
 
 #VecNumLike: TypeAlias = 'vector[int] | vector[float] | value[int] | value[float] | int | float | bool'
@@ -98,10 +97,7 @@ class vector(ArrayType[TNum]):
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a + b for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(a + other for a in self.values)
-        o = value_from_number(other)  # Make sure a single constant is allocated
-        return vector(a + o if isinstance(a, value) else a + other for a in self.values)
+        return vector(a + other for a in self.values)
 
     @overload
     def __radd__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
@@ -127,10 +123,7 @@ class vector(ArrayType[TNum]):
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a - b for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(a - other for a in self.values)
-        o = value_from_number(other)  # Make sure a single constant is allocated
-        return vector(a - o if isinstance(a, value) else a - other for a in self.values)
+        return vector(a - other for a in self.values)
 
     @overload
     def __rsub__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
@@ -145,10 +138,7 @@ class vector(ArrayType[TNum]):
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(b - a for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(other - a for a in self.values)
-        o = value_from_number(other)  # Make sure a single constant is allocated
-        return vector(o - a if isinstance(a, value) else other - a for a in self.values)
+        return vector(other - a for a in self.values)
 
     @overload
     def __mul__(self: 'vector[int]', other: VecFloatLike) -> 'vector[float]': ...
@@ -165,10 +155,7 @@ class vector(ArrayType[TNum]):
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a * b for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(a * other for a in self.values)
-        o = value_from_number(other)  # Make sure a single constant is allocated
-        return vector(a * o if isinstance(a, value) else a * other for a in self.values)
+        return vector(a * other for a in self.values)
 
     @overload
     def __rmul__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
@@ -194,10 +181,7 @@ class vector(ArrayType[TNum]):
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a ** b for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(a ** other for a in self.values)
-        o = value_from_number(other)  # Make sure a single constant is allocated
-        return vector(a ** o if isinstance(a, value) else a ** other for a in self.values)
+        return vector(a ** other for a in self.values)
 
     @overload
     def __rpow__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
@@ -212,10 +196,7 @@ class vector(ArrayType[TNum]):
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(b ** a for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(other ** a for a in self.values)
-        o = value_from_number(other)  # Make sure a single constant is allocated
-        return vector(o ** a if isinstance(a, value) else other ** a for a in self.values)
+        return vector(other ** a for a in self.values)
 
     def __truediv__(self, other: VecNumLike) -> 'vector[float]':
         ret: 'vector[Any] | None' = self._try_array_op(other, 'div')
@@ -224,10 +205,7 @@ class vector(ArrayType[TNum]):
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a / b for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(a / other for a in self.values)
-        o = value_from_number(other)  # Make sure a single constant is allocated
-        return vector(a / o if isinstance(a, value) else a / other for a in self.values)
+        return vector(a / other for a in self.values)
 
     def __rtruediv__(self, other: VecNumLike) -> 'vector[float]':
         ret: 'vector[Any] | None' = self._try_array_op(other, 'div', reverse=True)
@@ -236,10 +214,7 @@ class vector(ArrayType[TNum]):
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(b / a for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(other / a for a in self.values)
-        o = value_from_number(other)  # Make sure a single constant is allocated
-        return vector(o / a if isinstance(a, value) else other / a for a in self.values)
+        return vector(other / a for a in self.values)
 
     @overload
     def dot(self: 'vector[int]', other: 'vector[int]') -> int | value[int]: ...
@@ -305,10 +280,7 @@ class vector(ArrayType[TNum]):
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a > b for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(a > other for a in self.values)
-        o = value_from_number(other)  # Make sure a single constant is allocated
-        return vector(a > o if isinstance(a, value) else a > other for a in self.values)
+        return vector(a > other for a in self.values)
 
     def __lt__(self, other: VecNumLike) -> 'vector[int]':
         ret: 'vector[Any] | None' = self._try_array_op(other, 'gt', reverse=True)
@@ -317,10 +289,7 @@ class vector(ArrayType[TNum]):
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a < b for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(a < other for a in self.values)
-        o = value_from_number(other)  # Make sure a single constant is allocated
-        return vector(a < o if isinstance(a, value) else a < other for a in self.values)
+        return vector(a < other for a in self.values)
 
     def __ge__(self, other: VecNumLike) -> 'vector[int]':
         ret: 'vector[Any] | None' = self._try_array_op(other, 'ge')
@@ -329,10 +298,7 @@ class vector(ArrayType[TNum]):
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a >= b for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(a >= other for a in self.values)
-        o = value_from_number(other)  # Make sure a single constant is allocated
-        return vector(a >= o if isinstance(a, value) else a >= other for a in self.values)
+        return vector(a >= other for a in self.values)
 
     def __le__(self, other: VecNumLike) -> 'vector[int]':
         ret: 'vector[Any] | None' = self._try_array_op(other, 'ge', reverse=True)
@@ -341,10 +307,7 @@ class vector(ArrayType[TNum]):
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a <= b for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(a <= other for a in self.values)
-        o = value_from_number(other)  # Make sure a single constant is allocated
-        return vector(a <= o if isinstance(a, value) else a <= other for a in self.values)
+        return vector(a <= other for a in self.values)
 
     def __eq__(self, other: VecNumLike | Sequence[int | float]) -> 'vector[int]':  # type: ignore
         ret: 'vector[Any] | None' = None if isinstance(other, Sequence) else self._try_array_op(other, 'eq')
@@ -353,10 +316,7 @@ class vector(ArrayType[TNum]):
         if isinstance(other, vector | Sequence):
             assert len(self) == len(other)
             return vector(a == b for a, b in zip(self.values, other))
-        if isinstance(other, value):
-            return vector(a == other for a in self.values)
-        o = value_from_number(other)  # Make sure a single constant is allocated
-        return vector(a == o if isinstance(a, value) else a == other for a in self.values)
+        return vector(a == other for a in self.values)
 
     def __ne__(self, other: VecNumLike) -> 'vector[int]':  # type: ignore
         ret: 'vector[Any] | None' = self._try_array_op(other, 'ne')
@@ -365,10 +325,7 @@ class vector(ArrayType[TNum]):
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a != b for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(a != other for a in self.values)
-        o = value_from_number(other)  # Make sure a single constant is allocated
-        return vector(a != o if isinstance(a, value) else a != other for a in self.values)
+        return vector(a != other for a in self.values)
 
 
     @overload
@@ -429,10 +386,7 @@ class vector(ArrayType[TNum]):
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(func(a, b) for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(func(a, other) for a in self.values)
-        o = value_from_number(other)  # Make sure a single constant is allocated
-        return vector(func(a, o) if isinstance(a, value) else func(a, other) for a in self.values)
+        return vector(func(a, other) for a in self.values)
 
 
 def cross(v1: vector[float], v2: vector[float]) -> vector[float]:
