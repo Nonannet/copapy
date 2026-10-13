@@ -24,6 +24,13 @@ static void write_u32(uint8_t *addr, uint32_t value) {
     memcpy(addr, &value, sizeof(value));
 }
 
+/* Reads the next 32 bit word of the command stream and advances the position */
+static uint32_t next_u32(uint8_t **bytes) {
+    uint32_t value = read_u32(*bytes);
+    *bytes += 4;
+    return value;
+}
+
 void patch_bitfield(uint8_t *patch_addr, uint32_t patch_mask, int32_t value) {
     uint32_t original = read_u32(patch_addr);
 
@@ -264,65 +271,122 @@ int apply_patch(runmem_t *context, uint32_t offs, int32_t value, uint32_t patch_
     return 1;
 }
 
-int parse_commands(runmem_t *context, uint8_t *bytes) {
+void runmem_init(runmem_t *context) {
+    context->data_memory = NULL;
+    context->data_memory_len = 0;
+    context->executable_memory = NULL;
+    context->executable_memory_len = 0;
+    context->data_offs = 0;
+    context->entr_point = NULL;
+    context->rx_state = RX_STATE_IDLE;
+    context->state_flag = STATE_FLAG_NONE;
+    context->data_dest = NULL;
+    context->data_size = 0;
+}
+
+/* Size of the arguments following the command word in bytes, without the
+   payload of COPY_DATA and COPY_CODE */
+static uint32_t command_header_size(uint32_t command) {
+    switch(command) {
+        case ALLOCATE_DATA:
+        case ALLOCATE_CODE:
+        case ENTRY_POINT:
+            return 4;
+        case COPY_DATA:
+        case COPY_CODE:
+        case READ_DATA:
+            return 8;
+        case PATCH:
+            return 16;
+        default:
+            return 0;
+    }
+}
+
+int parse_commands(runmem_t *context, uint8_t *bytes, uint32_t lengths) {
     int32_t value;
     uint32_t command;
     uint32_t patch_mask;
     uint8_t encoding, shift, flags;
     uint32_t offs;
     uint32_t size;
-    int end_flag = 0;
     uint32_t rel_entr_point = 0;
+    uint8_t *byte_offset = bytes;
 
-    while(!end_flag) {
-        command = *(uint32_t*)bytes;
+    context->state_flag = STATE_FLAG_NONE;
+
+    while(context->state_flag == STATE_FLAG_NONE) {
+        uint32_t remaining_bytes = (uint32_t)(byte_offset + lengths - bytes);
+
+        if (context->rx_state == RX_STATE_DATA) {
+            /* Payload of COPY_DATA or COPY_CODE, may arrive in several parts */
+            uint32_t chunk_size = context->data_size;
+            if (remaining_bytes < chunk_size) chunk_size = remaining_bytes;
+            memcpy(context->data_dest, bytes, chunk_size);
+            context->data_dest += chunk_size;
+            context->data_size -= chunk_size;
+            bytes += chunk_size;
+            if (context->data_size) break;
+            context->rx_state = RX_STATE_IDLE;
+            continue;
+        }
+
+        /* A command is parsed only if it is available with all its arguments */
+        if (remaining_bytes < 4) break;
+        command = read_u32(bytes);  // Not consumed until the command is complete
+        if (remaining_bytes < 4 + command_header_size(command)) break;
         bytes += 4;
+
         switch(command) {
             case ALLOCATE_DATA:
-                size = *(uint32_t*)bytes; bytes += 4;
+                size = next_u32(&bytes);
                 context->data_memory = allocate_data_memory(size);
                 context->data_memory_len = size;
                 LOG("ALLOCATE_DATA size=%i mem_addr=%p\n", size, (void*)context->data_memory);
-                if (!update_data_offs(context)) end_flag = -4;
+                if (!update_data_offs(context)) context->state_flag = STATE_FLAG_MEM_DIST;
                 break;
 
             case COPY_DATA:
-                offs = *(uint32_t*)bytes; bytes += 4;
-                size = *(uint32_t*)bytes; bytes += 4;
+                offs = next_u32(&bytes);
+                size = next_u32(&bytes);
                 LOG("COPY_DATA offs=%i size=%i\n", offs, size);
-                memcpy(context->data_memory + offs, bytes, size); bytes += size;
+                context->data_dest = context->data_memory + offs;
+                context->data_size = size;
+                context->rx_state = RX_STATE_DATA;
                 break;
 
             case ALLOCATE_CODE:
-                size = *(uint32_t*)bytes; bytes += 4;
+                size = next_u32(&bytes);
                 context->executable_memory = allocate_executable_memory(size);
                 context->executable_memory_len = size;
                 LOG("ALLOCATE_CODE size=%i mem_addr=%p\n", size, (void*)context->executable_memory);
-                if (!update_data_offs(context)) end_flag = -4;
+                if (!update_data_offs(context)) context->state_flag = STATE_FLAG_MEM_DIST;
                 break;
 
             case COPY_CODE:
-                offs = *(uint32_t*)bytes; bytes += 4;
-                size = *(uint32_t*)bytes; bytes += 4;
+                offs = next_u32(&bytes);
+                size = next_u32(&bytes);
                 LOG("COPY_CODE offs=%i size=%i\n", offs, size);
-                memcpy(context->executable_memory + offs, bytes, size); bytes += size;
+                context->data_dest = context->executable_memory + offs;
+                context->data_size = size;
+                context->rx_state = RX_STATE_DATA;
                 break;
 
             case PATCH:
-                offs = *(uint32_t*)bytes; bytes += 4;
-                value = *(int32_t*)bytes; bytes += 4;
-                patch_mask = *(uint32_t*)bytes; bytes += 4;
+                offs = next_u32(&bytes);
+                value = (int32_t)next_u32(&bytes);
+                patch_mask = next_u32(&bytes);
                 encoding = bytes[0];
                 shift = bytes[1];
                 flags = bytes[2];
                 bytes += 4;
-                if (!apply_patch(context, offs, value, patch_mask, encoding, shift, flags)) end_flag = -5;
+                if (!apply_patch(context, offs, value, patch_mask, encoding, shift, flags)) context->state_flag = STATE_FLAG_PATCH;
                 break;
 
             case ENTRY_POINT:
-                rel_entr_point = *(uint32_t*)bytes; bytes += 4;
+                rel_entr_point = next_u32(&bytes);
                 context->entr_point = (entry_point_t)(context->executable_memory + rel_entr_point);
-                LOG("ENTRY_POINT rel_entr_point=%i\n", rel_entr_point); 
+                LOG("ENTRY_POINT rel_entr_point=%i\n", rel_entr_point);
                 mark_mem_executable(context->executable_memory, context->executable_memory_len);
                 break;
 
@@ -335,8 +399,8 @@ int parse_commands(runmem_t *context, uint8_t *bytes) {
                 break;
 
             case READ_DATA:
-                offs = *(uint32_t*)bytes; bytes += 4;
-                size = *(uint32_t*)bytes; bytes += 4;
+                offs = next_u32(&bytes);
+                size = next_u32(&bytes);
                 BLOG("READ_DATA offs=%i size=%i data=", offs, size);
                 for (uint32_t i = 0; i < size; i++) {
                     printf("%02X ", context->data_memory[offs + i]);
@@ -351,19 +415,19 @@ int parse_commands(runmem_t *context, uint8_t *bytes) {
 
             case DUMP_CODE:
                 LOG("DUMP_CODE\n");
-                end_flag = 2;
+                context->state_flag = STATE_FLAG_DUMP_CODE;
                 break;
 
             case END_COM:
                 LOG("END_COM\n");
-                end_flag = 1;
+                context->state_flag = STATE_FLAG_END_COM;
                 break;
 
             default:
                 LOG("Unknown command\n");
-                end_flag = -1;
+                context->state_flag = STATE_FLAG_UNKNOWN_COMMAND;
                 break;
         }
     }
-    return end_flag;
+    return (int)(bytes - byte_offset);
 }

@@ -31,7 +31,8 @@ static PyObject* coparun(PyObject* self, PyObject* args) {
 
     /* If parse_commands may run for a long time, release the GIL. */
     Py_BEGIN_ALLOW_THREADS
-    result = parse_commands(context, (uint8_t*)buf);
+    parse_commands(context, (uint8_t*)buf, (uint32_t)buf_len);
+    result = context->state_flag;
     Py_END_ALLOW_THREADS
 
     return PyLong_FromLong(result);

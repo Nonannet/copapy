@@ -67,6 +67,18 @@
 #define PATCH_FLAG_PC_REL 0x02  /* subtract address of the patched instruction */
 #define PATCH_FLAG_PAGE   0x04  /* round target and instruction address down to 4 KiB pages */
 
+/* Parser states: a command stream can be passed in parts to parse_commands */
+#define RX_STATE_IDLE 0  /* next bytes are a command */
+#define RX_STATE_DATA 1  /* next bytes are payload of COPY_DATA or COPY_CODE */
+
+/* State flags: reason why parse_commands stopped parsing */
+#define STATE_FLAG_NONE             0  /* more bytes of the command stream required */
+#define STATE_FLAG_END_COM          1  /* END_COM reached */
+#define STATE_FLAG_DUMP_CODE        2  /* DUMP_CODE reached */
+#define STATE_FLAG_UNKNOWN_COMMAND -1
+#define STATE_FLAG_MEM_DIST        -4  /* code and data memory to far apart */
+#define STATE_FLAG_PATCH           -5  /* unknown patch encoding */
+
 /* Entry point type */
 typedef int (*entry_point_t)(void);
 
@@ -91,11 +103,23 @@ typedef struct runmem_s {
     uint32_t executable_memory_len;  // Length of executable memory
     int data_offs;                   // Offset of data memory relative to executable memory
     entry_point_t entr_point;        // Entry point function pointer
+    int rx_state;                    // Parser state (RX_STATE_*)
+    int state_flag;                  // Result of the last parse_commands call (STATE_FLAG_*)
+    uint8_t *data_dest;              // Destination of the remaining payload in RX_STATE_DATA
+    uint32_t data_size;              // Size of the remaining payload in RX_STATE_DATA
 } runmem_t;
 
-/* Command parser: takes a pointer to the command stream and returns
-   an error flag (0 on success according to current code) */
-int parse_commands(runmem_t *context, uint8_t *bytes);
+/* Initialize the run-time memory state (equal to zero-initialization) */
+void runmem_init(runmem_t *context);
+
+/* Command parser: takes the next lengths bytes of the command stream and
+   returns the number of bytes processed. The stream can be passed in parts
+   of any size: a command with incomplete arguments is not processed, the
+   remaining bytes must be passed again together with the following bytes
+   (at most 20 bytes). The payload of COPY_DATA and COPY_CODE is processed
+   as far as available. Parsing stops with context->state_flag set after
+   END_COM, DUMP_CODE or on an error; otherwise state_flag is STATE_FLAG_NONE. */
+int parse_commands(runmem_t *context, uint8_t *bytes, uint32_t lengths);
 
 /* Free program and data memory */
 void free_memory(runmem_t *context);
