@@ -9,12 +9,18 @@ if not "%ARCH%"=="x86" ^
 if not "%ARCH%"=="arm64" ^
 if not "%ARCH%"=="arm-v6" ^
 if not "%ARCH%"=="arm-v7" ^
+if not "%ARCH%"=="arm-v7-thumb" ^
+if not "%ARCH%"=="arm-v7m-thumb" ^
+if not "%ARCH%"=="arm-v7m-thumb-fpv5" ^
+if not "%ARCH%"=="arm-v81m-thumb" ^
 if not "%ARCH%"=="riscv32" ^
 if not "%ARCH%"=="riscv64" ^
 if not "%ARCH%"=="all" (
-    echo Usage: %0 [x86_64^|x86^|arm64^|arm-v6^|arm-v7^|riscv32^|riscv64^|all]
+    echo Usage: %0 [x86_64^|x86^|arm64^|arm-v6^|arm-v7^|arm-v7-thumb^|arm-v7m-thumb^|arm-v7m-thumb-fpv5^|arm-v81m-thumb^|riscv32^|riscv64^|all]
     exit /b 1
 )
+
+if "%CMSIS_DSP%"=="" set CMSIS_DSP=../CMSIS-DSP
 
 mkdir build\stencils
 mkdir build\runner
@@ -159,6 +165,126 @@ wsl arm-linux-gnueabihf-gcc -static -O3 -DENABLE_LOGGING ^
     -o build/runner/coparun-armv7
 
 :SKIP_ARMV7
+
+REM ============================================================
+REM ARM v7 thumb Cortex-A
+REM ============================================================
+if "%ARCH%"=="arm-v7-thumb" goto BUILD_ARMV7THUMB
+if "%ARCH%"=="all"          goto BUILD_ARMV7THUMB
+goto SKIP_ARMV7THUMB
+
+:BUILD_ARMV7THUMB
+echo --------------arm-v7a-thumb 32 bit----------------
+
+wsl arm-none-eabi-gcc -fno-pic -ffunction-sections -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -mthumb ^
+    -c build/stencils/stencils.c -O3 -o build/stencils/stencils.o
+
+wsl arm-none-eabi-ld -r build/stencils/stencils.o build/musl/musl_objects_armv7thumb.o ^
+    $(arm-none-eabi-gcc -march=armv7 -mfpu=vfp3 -mthumb -print-libgcc-file-name) ^
+    -o src/copapy/obj/stencils_armv7thumb_O3.o
+
+wsl arm-none-eabi-objdump -d -x src/copapy/obj/stencils_armv7thumb_O3.o > build/stencils/stencils_armv7thumb_O3.asm
+
+echo - Build runner for ARM v7 thumb...
+wsl arm-linux-gnueabihf-gcc -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -static -O3 -DENABLE_LOGGING ^
+    src/coparun/runmem.c ^
+    src/coparun/coparun.c ^
+    src/coparun/mem_man.c ^
+    -o build/runner/coparun-armv7thumb
+
+:SKIP_ARMV7THUMB
+
+REM ============================================================
+REM ARM v7 thumb Cortex-M4 (FPv4-SP)
+REM ============================================================
+if "%ARCH%"=="arm-v7m-thumb" goto BUILD_ARMV7MTHUMB
+if "%ARCH%"=="all"           goto BUILD_ARMV7MTHUMB
+goto SKIP_ARMV7MTHUMB
+
+:BUILD_ARMV7MTHUMB
+echo --------------arm-v7m-thumb 32 bit----------------
+
+set ARM_FLAGS=-march=armv7e-m -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb
+
+wsl arm-none-eabi-gcc -fno-pic -ffunction-sections %ARM_FLAGS% ^
+    -c build/stencils/stencils.c -O3 -o build/stencils/stencils.o
+
+REM Math functions based on CMSIS-DSP, remaining functions from MUSL
+REM The CR characters of a Windows checkout are removed before the script is passed to bash
+wsl tr -d "\r" < tools\build_cmsis_libm.sh | wsl bash -s -- %CMSIS_DSP% ^
+    build/musl/musl_objects_armv7mthumb.o ^
+    build/stencils/math.o "%ARM_FLAGS%"
+if errorlevel 1 exit /b 1
+
+wsl arm-none-eabi-ld -r build/stencils/stencils.o build/stencils/math.o ^
+    $(arm-none-eabi-gcc %ARM_FLAGS% -print-libgcc-file-name) ^
+    -o src/copapy/obj/stencils_armv7mthumb_O3.o
+
+wsl arm-none-eabi-objdump -d -x src/copapy/obj/stencils_armv7mthumb_O3.o > build/stencils/stencils_armv7mthumb_O3.asm
+
+REM The same runner for all ARM7
+echo - Build runner for ARM v7 thumb...
+wsl arm-linux-gnueabihf-gcc -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -static -O3 -DENABLE_LOGGING ^
+    src/coparun/runmem.c ^
+    src/coparun/coparun.c ^
+    src/coparun/mem_man.c ^
+    -o build/runner/coparun-armv7thumb
+
+:SKIP_ARMV7MTHUMB
+
+REM ============================================================
+REM ARM v7 thumb Cortex-M7 (FPv5-SP)
+REM ============================================================
+if "%ARCH%"=="arm-v7m-thumb-fpv5" goto BUILD_ARMV7MTHUMB_FPV5
+if "%ARCH%"=="all"                goto BUILD_ARMV7MTHUMB_FPV5
+goto SKIP_ARMV7MTHUMB_FPV5
+
+:BUILD_ARMV7MTHUMB_FPV5
+echo --------------arm-v7m-thumb-fpv5 32 bit----------------
+
+set ARM_FLAGS=-mcpu=cortex-m7 -mfpu=fpv5-sp-d16 -mfloat-abi=hard -mthumb
+
+wsl arm-none-eabi-gcc -fno-pic -ffunction-sections %ARM_FLAGS% ^
+    -c build/stencils/stencils.c -O3 -o build/stencils/stencils.o
+
+REM Math functions based on CMSIS-DSP, remaining functions from MUSL
+REM (the MUSL objects for FPv4-SP are compatible with FPv5-SP)
+REM The CR characters of a Windows checkout are removed before the script is passed to bash
+wsl tr -d "\r" < tools\build_cmsis_libm.sh | wsl bash -s -- %CMSIS_DSP% ^
+    build/musl/musl_objects_armv7mthumb.o ^
+    build/stencils/math.o "%ARM_FLAGS%"
+if errorlevel 1 exit /b 1
+
+wsl arm-none-eabi-ld -r build/stencils/stencils.o build/stencils/math.o ^
+    $(arm-none-eabi-gcc %ARM_FLAGS% -print-libgcc-file-name) ^
+    -o src/copapy/obj/stencils_armv7mthumb_fpv5_O3.o
+
+wsl arm-none-eabi-objdump -d -x src/copapy/obj/stencils_armv7mthumb_fpv5_O3.o > build/stencils/stencils_armv7mthumb_fpv5_O3.asm
+
+:SKIP_ARMV7MTHUMB_FPV5
+
+REM ============================================================
+REM ARM v8.1-M thumb Cortex-M55 and Cortex-M85 (Helium)
+REM ============================================================
+if "%ARCH%"=="arm-v81m-thumb" goto BUILD_ARMV81MTHUMB
+if "%ARCH%"=="all"            goto BUILD_ARMV81MTHUMB
+goto SKIP_ARMV81MTHUMB
+
+:BUILD_ARMV81MTHUMB
+echo --------------arm-v81m-thumb 32 bit----------------
+
+set ARM_FLAGS=-mcpu=cortex-m55 -mfloat-abi=hard -mthumb
+
+wsl arm-none-eabi-gcc -fno-pic -ffunction-sections %ARM_FLAGS% ^
+    -c build/stencils/stencils.c -O3 -o build/stencils/stencils.o
+
+wsl arm-none-eabi-ld -r build/stencils/stencils.o build/musl/musl_objects_armv81mthumb.o ^
+    $(arm-none-eabi-gcc %ARM_FLAGS% -print-libgcc-file-name) ^
+    -o src/copapy/obj/stencils_armv81mthumb_O3.o
+
+wsl arm-none-eabi-objdump -d -x src/copapy/obj/stencils_armv81mthumb_O3.o > build/stencils/stencils_armv81mthumb_O3.asm
+
+:SKIP_ARMV81MTHUMB
 
 REM ============================================================
 REM RISC-V 64-bit
