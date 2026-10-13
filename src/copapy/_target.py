@@ -416,4 +416,5 @@ class Target():
         """Reads the raw data of a value by the runner."""
         dw = binw.data_writer(self.sdb.byteorder)
         add_read_value_remote(dw, self._values, variable.net)
+        dw.write_com(binw.Command.END_COM)
         assert coparun(self._context, dw.get_data()) > 0

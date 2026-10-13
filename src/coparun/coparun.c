@@ -58,16 +58,17 @@ int main(int argc, char *argv[]) {
     }
 
     runmem_t targ;
-    targ.executable_memory_len = 0;
-    targ.data_memory_len = 0;
-    targ.executable_memory = NULL;
-    targ.data_memory = NULL;
-    targ.entr_point = NULL;
-    targ.data_offs = 0;
+    runmem_init(&targ);
 
-    int ret = parse_commands(&targ, file_buff);
+    parse_commands(&targ, file_buff, (uint32_t)sz);
+    int ret = targ.state_flag;
 
-    if (ret == 2) {
+    if (ret == STATE_FLAG_NONE) {
+        fprintf(stderr, "Error: Incomplete command stream\n");
+        return EXIT_FAILURE;
+    }
+
+    if (ret == STATE_FLAG_DUMP_CODE) {
         /* Dump code for debugging */
         if (argc != 3) {
             fprintf(stderr, "Usage: %s <code_file> <memory_dump_file>\n", argv[0]);
