@@ -82,6 +82,42 @@ def test_matrix_vector_multiplication():
     assert results[4].values == pytest.approx(ref_left, rel=1e-5)  # pyright: ignore[reportUnknownMemberType]
 
 
+@pytest.mark.parametrize("packed", [False, True])
+def test_matmul_keeps_vector_type(packed: bool) -> None:
+    m = cp.tensor([[cp.value(1.0), cp.value(2.0)], [cp.value(3.0), cp.value(4.0)]], packed=packed)
+    v = cp.vector([cp.value(1.0), cp.value(2.0)])
+    t = cp.tensor([cp.value(1.0), cp.value(2.0)])
+
+    exprs = (m @ v, v @ m, m @ t, v + m @ v)
+    assert [type(e) for e in exprs] == [cp.vector, cp.vector, cp.tensor, cp.vector]
+    assert isinstance(v @ t, cp.value)
+
+    results = evaluate(*exprs)
+    assert results[0].values == pytest.approx([5.0, 11.0])  # pyright: ignore[reportUnknownMemberType]
+    assert results[1].values == pytest.approx([7.0, 10.0])  # pyright: ignore[reportUnknownMemberType]
+    assert results[2].values == pytest.approx([5.0, 11.0])  # pyright: ignore[reportUnknownMemberType]
+    assert results[3].values == pytest.approx([6.0, 13.0])  # pyright: ignore[reportUnknownMemberType]
+
+
+def test_vector_tensor_elementwise() -> None:
+    v = cp.vector([cp.value(1.0), cp.value(2.0)])
+    t = cp.tensor([cp.value(3.0), cp.value(5.0)])
+
+    exprs = (v - t, t - v, v * t, v / t, v > t, v == t)
+    assert all(isinstance(e, cp.tensor) and e.shape == (2,) for e in exprs)
+
+    results = evaluate(*exprs)
+    assert results[0].values == pytest.approx([-2.0, -3.0])  # pyright: ignore[reportUnknownMemberType]
+    assert results[1].values == pytest.approx([2.0, 3.0])  # pyright: ignore[reportUnknownMemberType]
+    assert results[2].values == pytest.approx([3.0, 10.0])  # pyright: ignore[reportUnknownMemberType]
+    assert results[3].values == pytest.approx([1 / 3, 0.4])  # pyright: ignore[reportUnknownMemberType]
+    assert list(results[4].values) == [False, False]
+    assert list(results[5].values) == [False, False]
+
+    with pytest.raises(ValueError):
+        v - cp.tensor([1.0, 2.0, 3.0])
+
+
 def test_vector_dot_as_1d_matmul():
     assert cp.tensor([1, 2, 3]) @ cp.tensor([4, 5, 6]) == 32
 

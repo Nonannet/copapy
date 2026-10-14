@@ -673,18 +673,29 @@ class tensor(ArrayType[TNum]):
             size *= dim
         return size
 
-    def matmul(self, other: 'tensor[TNum] | vector[TNum]') -> 'TNum | value[TNum] | tensor[TNum]':
+    @overload
+    def matmul(self, other: 'vector[TNum]') -> 'TNum | value[TNum] | vector[TNum]': ...
+    @overload
+    def matmul(self, other: 'tensor[TNum]') -> 'TNum | value[TNum] | tensor[TNum]': ...
+    def matmul(self, other: 'tensor[TNum] | vector[TNum]') -> Any:
         """Matrix multiplication (@ operator).
 
         Arguments:
-            other: Another tensor to multiply with.
+            other: Another tensor or a vector to multiply with.
 
         Returns:
-            Result of matrix multiplication.
+            Result of matrix multiplication. A 1D result is a vector if
+            other is a vector.
 
         Raises:
             ValueError: If shapes are incompatible for matrix multiplication.
         """
+        ret = self._matmul(other)
+        if isinstance(other, vector) and isinstance(ret, tensor):
+            return _to_vector(ret)
+        return ret
+
+    def _matmul(self, other: 'tensor[TNum] | vector[TNum]') -> 'TNum | value[TNum] | tensor[TNum]':
         if self.ndim < 1 or other.ndim < 1:
             raise ValueError("matmul requires tensors with at least 1 dimension")
 
@@ -745,7 +756,11 @@ class tensor(ArrayType[TNum]):
 
         raise NotImplementedError(f"matmul not implemented for shapes {self.ndim}D @ {other.ndim}D")
 
-    def __matmul__(self, other: 'tensor[TNum] | vector[TNum]') -> 'TNum | value[TNum] | tensor[TNum]':
+    @overload
+    def __matmul__(self, other: 'vector[TNum]') -> 'TNum | value[TNum] | vector[TNum]': ...
+    @overload
+    def __matmul__(self, other: 'tensor[TNum]') -> 'TNum | value[TNum] | tensor[TNum]': ...
+    def __matmul__(self, other: 'tensor[TNum] | vector[TNum]') -> Any:
         """Matrix multiplication operator (@)."""
         return self.matmul(other)
 
@@ -899,6 +914,14 @@ class tensor(ArrayType[TNum]):
     def T(self) -> 'tensor[TNum]':
         """Transpose all axes (equivalent to transpose() with no args)."""
         return self.transpose()
+
+
+def _to_vector(t: tensor[TNum]) -> vector[TNum]:
+    """1D tensor as vector, a packed tensor keeps its array"""
+    assert t.ndim == 1, f"Can not convert a tensor of shape {t.shape} to a vector"
+    if t._array is not None:
+        return vector._from_array(t._array, t._packed)
+    return vector(t.values, t._packed)
 
 
 def zeros(shape: Sequence[int] | int) -> tensor[int]:
