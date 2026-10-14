@@ -85,6 +85,7 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
         return source.args[0].source if isinstance(source, ArrayElement) else source
 
     y_nets = {id(v): _resolve(v.net) for v in y_values if isinstance(v, value)}
+    x_net = _resolve(x.net)
     leaves = {leaf(net) for net in y_nets.values()} | ({y.net.source} if isinstance(y, array) else set())
 
     edges = cpb.get_all_dag_edges_between([x.net.source], leaves)
@@ -303,6 +304,8 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
         if not isinstance(v, value):
             return 0.0
         net = y_nets[id(v)]
+        if net is x_net:
+            return 1.0
         source = net.source
         if isinstance(source, ArrayElement):
             arr = array_grads.get(source.args[0])
@@ -323,3 +326,89 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
     if isinstance(y, tensor):
         return tensor([result_of(yi) for yi in y.values], y.shape)
     return [result_of(yi) for yi in y_values]
+
+
+def _flat_grad(g: Any) -> list[Any]:
+    """Elements of a gradient returned by grad as flat list"""
+    if isinstance(g, array):
+        return [g.element(i) for i in range(g.size)]
+    if isinstance(g, vector | tensor | quaternion):
+        return list(g.values)
+    if isinstance(g, list):
+        return g
+    return [g]
+
+
+@overload
+def jacobian(x: value[Any], y: value[Any]) -> unifloat: ...
+@overload
+def jacobian(x: value[Any], y: vector[Any]) -> vector[float]: ...
+@overload
+def jacobian(x: value[Any], y: quaternion) -> quaternion: ...
+@overload
+def jacobian(x: Any, y: array[Any]) -> array[float]: ...
+@overload
+def jacobian(x: array[Any], y: Any) -> array[float]: ...
+@overload
+def jacobian(x: vector[Any] | tensor[Any] | quaternion, y: value[Any] | vector[Any] | tensor[Any] | quaternion) -> tensor[float]: ...
+@overload
+def jacobian(x: Any, y: tensor[Any]) -> tensor[float]: ...
+@overload
+def jacobian(x: Sequence[Any], y: Sequence[value[Any]]) -> list[list[unifloat]]: ...
+@overload
+def jacobian(x: Sequence[Any], y: value[Any]) -> list[unifloat]: ...
+def jacobian(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any] | array[Any] | quaternion) -> Any:
+    """Returns the Jacobian dx/dy where x might be a scalar, a list of scalars,
+    a vector, matrix or array, and y might be a scalar, a list of scalars, a vector,
+    matrix or array. The result has the shape x.shape + y.shape. It is calculated
+    with one reverse-mode pass of grad per element of x.
+
+    For a scalar x the result is the same as of grad(x, y). The result is
+    an array if x or y is an array, a list of lists if x and y are lists and
+    otherwise a tensor.
+
+    Arguments:
+        x: Value to return derivative of
+        y: Value(s) to derive in respect to
+
+    Returns:
+        Derivative of x with the dimensions of x and y
+    """
+    if isinstance(x, value):
+        return grad(x, y)
+
+    x_values: list[Any]
+    x_shape: tuple[int, ...]
+    if isinstance(x, array):
+        x_values = [x.element(i) for i in range(x.size)]
+        x_shape = x.shape
+    elif isinstance(x, vector | tensor | quaternion):
+        x_values = list(x.values)
+        x_shape = x.shape
+    else:
+        assert isinstance(x, Sequence), f"Argument x for jacobian function must be a copapy value or a sequence of values but is {type(x)}."
+        x_values = list(x)
+        x_shape = (len(x_values),)
+
+    y_shape: tuple[int, ...]
+    if isinstance(y, value):
+        y_shape = ()
+    elif isinstance(y, array | vector | tensor | quaternion):
+        y_shape = y.shape
+    else:
+        y_shape = (len(y),)
+
+    y_size = 1
+    for d in y_shape:
+        y_size *= d
+
+    # Elements of x that are constants have a derivative of 0
+    rows = [_flat_grad(grad(xi, y)) if isinstance(xi, value) else [0.0] * y_size for xi in x_values]
+
+    if isinstance(x, array) or isinstance(y, array):
+        return array([v for row in rows for v in row], 'float').reshape(*(x_shape + y_shape))
+    if isinstance(x, vector | tensor | quaternion) or isinstance(y, vector | tensor | quaternion):
+        return tensor([v for row in rows for v in row], x_shape + y_shape)
+    if isinstance(y, value):
+        return [row[0] for row in rows]
+    return rows

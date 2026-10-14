@@ -189,7 +189,8 @@ def canonicalize(roots: Iterable[Node]) -> tuple[list[Node], dict[Net, Net]]:
 
 
 def get_all_dag_edges_between(roots: Iterable[Node], leaves: Iterable[Node]) -> Generator[tuple[Node, Node], None, None]:
-    """Get all edges in the DAG connecting given roots with given leaves
+    """Get all edges in the DAG connecting given roots with given leaves.
+    Leaves not connected to a root yield no edges.
 
     Arguments:
         nodes: Iterable of nodes to start the traversal from
@@ -221,8 +222,6 @@ def get_all_dag_edges_between(roots: Iterable[Node], leaves: Iterable[Node]) -> 
                     yield edge
                     node_list.append(node)
                     emitted_edges.add(edge)
-
-    assert all(r in {e[0] for e in emitted_edges} for r in leaves)
 
 
 def get_all_dag_edges(nodes: Iterable[Node]) -> Generator[tuple[Node, Node], None, None]:
