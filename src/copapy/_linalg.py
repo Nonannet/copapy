@@ -5,6 +5,7 @@ from ._arrays import array, _add_array_op
 from ._vectors import vector
 from ._tensors import tensor
 from ._casts import _cast_array
+from ._math import sqrt
 
 unroll_threshold: int = 16
 """Tensors are solved by the array stencil if more elements of the matrix than
@@ -96,6 +97,12 @@ def solve_arrays(a: array[Any], b: array[Any]) -> array[float]:
     return array._from_net(node.result, b.shape)
 
 
+def inv_array(a: array[Any]) -> array[float]:
+    """Inverse of an n x n array by the solve array stencil"""
+    n = a.shape[0]
+    return solve_arrays(a, array([[float(i == j) for j in range(n)] for i in range(n)], 'float'))
+
+
 def _det_array(a: array[Any]) -> value[float]:
     """Determinant of an n x n array by the det array stencil"""
     n = a.shape[0]
@@ -157,27 +164,30 @@ def _det_constants(a: Sequence[Any], n: int) -> float:
     return result
 
 
-def _square_matrix(a: Any) -> Any:
-    """The argument as array or tensor, checked to be a square matrix"""
-    if not isinstance(a, array | tensor):
-        a = tensor(a)
-    if a.ndim != 2 or a.shape[0] != a.shape[1]:
-        raise ValueError(f"requires a square matrix, got shape {a.shape}")
-    return a
+def _no_array(x: Any) -> None:
+    """Raise a TypeError for an array operand of a linear algebra function"""
+    if isinstance(x, array):
+        raise TypeError("Linear algebra functions require tensors or vectors, "
+                        "an array can be used as tensor without copying by cp.tensor(arr)")
+
+
+def _square_matrix(a: Any) -> tensor[Any]:
+    """The argument as tensor, checked to be a square matrix"""
+    _no_array(a)
+    m: tensor[Any] = a if isinstance(a, tensor) else tensor(a)
+    if m.ndim != 2 or m.shape[0] != m.shape[1]:
+        raise ValueError(f"requires a square matrix, got shape {m.shape}")
+    return m
 
 
 @overload
-def solve(a: 'array[Any]', b: 'array[Any] | tensor[Any] | vector[Any]', pivot: bool = True) -> array[float]: ...
+def solve(a: tensor[Any], b: vector[Any], pivot: bool = True) -> vector[float]: ...
 @overload
-def solve(a: 'tensor[Any]', b: 'array[Any]', pivot: bool = True) -> array[float]: ...
-@overload
-def solve(a: 'tensor[Any]', b: 'vector[Any]', pivot: bool = True) -> vector[float]: ...
-@overload
-def solve(a: 'tensor[Any]', b: 'tensor[Any]', pivot: bool = True) -> tensor[float]: ...
+def solve(a: tensor[Any], b: tensor[Any], pivot: bool = True) -> tensor[float]: ...
 def solve(a: Any, b: Any, pivot: bool = True) -> Any:
     """Solve the linear system a x = b for x (like numpy.linalg.solve).
 
-    Arrays and tensors with more than 16 copapy values in the matrix a are
+    Tensors with more than 16 copapy values in the matrix a are
     solved by a single array stencil: Gaussian elimination with partial
     pivoting. Otherwise the elimination is unrolled into scalar operations,
     where operations with constant zeros are eliminated and pivot elements
@@ -189,28 +199,21 @@ def solve(a: Any, b: Any, pivot: bool = True) -> Any:
     not on the values. A singular matrix results in inf or nan values.
 
     Arguments:
-        a: Square matrix (2D tensor or array)
-        b: Right-hand side: a vector, a 1D tensor or array with n elements
-            or a 2D tensor or array with n rows (one system per column)
+        a: Square matrix (2D tensor)
+        b: Right-hand side: a vector or 1D tensor with n elements
+            or a 2D tensor with n rows (one system per column)
         pivot: Partial pivoting for the unrolled elimination. It can be
             disabled to reduce the number of operations for matrices that do
             not require it, like symmetric positive definite or diagonally
             dominant matrices. The array stencil does always pivot.
 
     Returns:
-        Solution x with the shape of b: an array if a or b is an array,
-        otherwise a vector if b is a vector, otherwise a tensor
+        Solution x with the shape of b: a vector if b is a vector,
+        otherwise a tensor
     """
     a = _square_matrix(a)
-    if not isinstance(b, array | tensor | vector):
-        b = tensor(b)
     n: int = a.shape[0]
-    if b.ndim not in (1, 2) or b.shape[0] != n:
-        raise ValueError(f"Shape mismatch: matrix {a.shape} and right-hand side {b.shape}")
-
-    if isinstance(a, array) or isinstance(b, array):
-        return solve_arrays(a if isinstance(a, array) else a._force_array(),
-                             b if isinstance(b, array) else b._force_array())
+    b = _rhs(b, n)
 
     if not (a._is_constant() and b._is_constant()) and a._packed is not False:
         # The size of the unrolled elimination depends on the elements of the
@@ -223,11 +226,7 @@ def solve(a: Any, b: Any, pivot: bool = True) -> Any:
     return vector(values) if isinstance(b, vector) else tensor(values, b.shape)
 
 
-@overload
-def inv(a: 'array[Any]', pivot: bool = True) -> array[float]: ...
-@overload
-def inv(a: 'tensor[Any]', pivot: bool = True) -> tensor[float]: ...
-def inv(a: Any, pivot: bool = True) -> Any:
+def inv(a: tensor[Any], pivot: bool = True) -> tensor[float]:
     """Inverse of a square matrix (like numpy.linalg.inv).
 
     The inverse is the solution of a x = identity computed by solve: by the
@@ -237,46 +236,218 @@ def inv(a: Any, pivot: bool = True) -> Any:
     with the inverse.
 
     Arguments:
-        a: Square matrix (2D tensor or array)
+        a: Square matrix (2D tensor)
         pivot: Partial pivoting for the unrolled elimination, see solve
 
     Returns:
-        Inverse of a: an array if a is an array, otherwise a tensor
+        Inverse of a as tensor
     """
     a = _square_matrix(a)
     n: int = a.shape[0]
     identity = [[float(i == j) for j in range(n)] for i in range(n)]
-    if isinstance(a, array):
-        return solve_arrays(a, array(identity, 'float'))
     return solve(a, tensor(identity), pivot)
 
 
-@overload
-def det(a: 'array[Any]') -> value[float]: ...
-@overload
-def det(a: 'tensor[Any]') -> 'value[float] | float': ...
-def det(a: Any) -> Any:
+def det(a: tensor[Any]) -> value[float] | float:
     """Determinant of a square matrix (like numpy.linalg.det).
 
     Tensors up to 4 x 4 are expanded into scalar operations: additions and
-    multiplications only, products with constant zeros are eliminated. Arrays,
-    larger tensors and tensors created with packed=True are computed by a
+    multiplications only, products with constant zeros are eliminated. Larger
+    tensors and tensors created with packed=True are computed by a
     single array stencil: Gaussian elimination with partial pivoting. A
     singular matrix results in 0. Tensors of numbers are evaluated at trace
     time.
 
     Arguments:
-        a: Square matrix (2D tensor or array)
+        a: Square matrix (2D tensor)
 
     Returns:
         Determinant as copapy value, as number if a is a tensor of numbers
     """
     a = _square_matrix(a)
     n: int = a.shape[0]
-    if isinstance(a, array):
-        return _det_array(a)
     if a._is_constant():
         return _det_values(a.values, n) if n <= _DET_UNROLL_SIZE else _det_constants(a.values, n)
     if n > _DET_UNROLL_SIZE or a._packed:
         return _det_array(a._force_array())
-    return _det_values(a.values, n)
+    result: value[float] = _det_values(a.values, n)
+    return result
+
+
+def _is_zero(v: Any) -> bool:
+    """True for a constant zero, operations with it generate no code"""
+    return not isinstance(v, value) and v == 0
+
+
+def _as_float(v: Any) -> Any:
+    return to_float(v) if isinstance(v, value) else float(v)
+
+
+def _cholesky_values(a: Sequence[Any], n: int) -> list[Any]:
+    """Cholesky-Banachiewicz factorization unrolled at trace time, only the
+    lower triangle of a is used. Operations with constant zeros are eliminated.
+
+    Arguments:
+        a: Elements of the n x n matrix (row-major)
+
+    Returns:
+        Elements of the lower triangular n x n factor (row-major)
+    """
+    lo: list[list[Any]] = [[0.0] * n for _ in range(n)]
+    for j in range(n):
+        s = _as_float(a[j * n + j])
+        for k in range(j):
+            if not _is_zero(lo[j][k]):
+                s = s - lo[j][k] * lo[j][k]
+        if not isinstance(s, value) and s <= 0:
+            raise ValueError("Matrix is not positive definite")
+        lo[j][j] = sqrt(s)
+        inv = 1.0 / lo[j][j]
+        for i in range(j + 1, n):
+            s = _as_float(a[i * n + j])
+            for k in range(j):
+                if not (_is_zero(lo[i][k]) or _is_zero(lo[j][k])):
+                    s = s - lo[i][k] * lo[j][k]
+            lo[i][j] = 0.0 if _is_zero(s) else s * inv
+    return [v for row in lo for v in row]
+
+
+def _solve_triangular_values(a: Sequence[Any], b: Sequence[Any], n: int, r: int,
+                             lower: bool, trans: bool, unit_diagonal: bool) -> list[Any]:
+    """Forward or back substitution unrolled at trace time, the other triangle
+    of a is not used. Operations with constant zeros are eliminated.
+
+    Arguments:
+        a: Elements of the n x n triangular matrix (row-major)
+        b: Elements of the n x r right-hand sides (row-major)
+        lower: a is lower triangular, otherwise upper triangular
+        trans: Solve a^T x = b
+        unit_diagonal: The diagonal of a is assumed to be one and is not used
+
+    Returns:
+        Elements of the n x r solution (row-major)
+    """
+    def m(i: int, k: int) -> Any:
+        return a[k * n + i] if trans else a[i * n + k]
+
+    # The transposed of a lower triangular matrix is upper triangular
+    order = range(n) if lower != trans else reversed(range(n))
+    x: list[list[Any]] = [[0.0] * r for _ in range(n)]
+    done: list[int] = []
+    for i in order:
+        if not unit_diagonal and _is_zero(m(i, i)):
+            raise ValueError("Matrix is singular")
+        for c in range(r):
+            s = _as_float(b[i * r + c])
+            for k in done:
+                if not (_is_zero(m(i, k)) or _is_zero(x[k][c])):
+                    s = s - m(i, k) * x[k][c]
+            x[i][c] = s if unit_diagonal or _is_zero(s) else s / m(i, i)
+        done.append(i)
+    return [v if isinstance(v, value) else float(v) for row in x for v in row]
+
+
+def _rhs(b: Any, n: int) -> tensor[Any] | vector[Any]:
+    """Right-hand side as tensor or vector, checked to have n rows"""
+    _no_array(b)
+    rhs: tensor[Any] | vector[Any] = b if isinstance(b, tensor | vector) else tensor(b)
+    if rhs.ndim not in (1, 2) or rhs.shape[0] != n:
+        raise ValueError(f"Shape mismatch: matrix ({n}, {n}) and right-hand side {rhs.shape}")
+    return rhs
+
+
+def _solution(values: list[Any], b: tensor[Any] | vector[Any]) -> Any:
+    """Solution with the shape of b: a vector if b is a vector, otherwise a tensor"""
+    return vector(values) if isinstance(b, vector) else tensor(values, b.shape)
+
+
+def cholesky(a: tensor[Any]) -> tensor[float]:
+    """Cholesky factorization of a symmetric positive definite matrix
+    (like numpy.linalg.cholesky): the lower triangular matrix l with
+    a = l l^T. Only the lower triangle of a is used.
+
+    The factorization is unrolled into scalar operations (about n^3 / 6
+    multiplications and n square roots), operations with constant zeros
+    are eliminated, so banded matrices keep their band. No pivoting is
+    required, the execution time only depends on the size of the matrix.
+    A matrix that is not positive definite results in nan values, a tensor
+    of numbers that is not positive definite raises a ValueError.
+
+    Arguments:
+        a: Symmetric positive definite matrix (2D tensor)
+
+    Returns:
+        Lower triangular factor l as tensor
+    """
+    a = _square_matrix(a)
+    n: int = a.shape[0]
+    values = _cholesky_values(a.values, n)
+    return tensor(values, (n, n))
+
+
+@overload
+def solve_triangular(a: tensor[Any], b: vector[Any], lower: bool = False,
+                     trans: bool = False, unit_diagonal: bool = False) -> vector[float]: ...
+@overload
+def solve_triangular(a: tensor[Any], b: tensor[Any], lower: bool = False,
+                     trans: bool = False, unit_diagonal: bool = False) -> tensor[float]: ...
+def solve_triangular(a: Any, b: Any, lower: bool = False, trans: bool = False, unit_diagonal: bool = False) -> Any:
+    """Solve the linear system a x = b for a triangular matrix a
+    (like scipy.linalg.solve_triangular) by forward or back substitution.
+
+    The substitution is unrolled into scalar operations (about n^2 / 2
+    multiplications per right-hand side), operations with constant zeros
+    are eliminated. Only the triangle of a given by lower is used. A zero
+    on the diagonal results in inf or nan values.
+
+    Arguments:
+        a: Triangular square matrix (2D tensor)
+        b: Right-hand side: a vector or 1D tensor with n elements
+            or a 2D tensor with n rows (one system per column)
+        lower: a is lower triangular, otherwise upper triangular
+        trans: Solve a^T x = b instead
+        unit_diagonal: The diagonal elements of a are assumed to be one and are not used
+
+    Returns:
+        Solution x with the shape of b: a vector if b is a vector,
+        otherwise a tensor
+    """
+    a = _square_matrix(a)
+    n: int = a.shape[0]
+    b = _rhs(b, n)
+    b_values = b.values
+    values = _solve_triangular_values(a.values, b_values, n, len(b_values) // n, lower, trans, unit_diagonal)
+    return _solution(values, b)
+
+
+@overload
+def cho_solve(c: tensor[Any], b: vector[Any]) -> vector[float]: ...
+@overload
+def cho_solve(c: tensor[Any], b: tensor[Any]) -> tensor[float]: ...
+def cho_solve(c: Any, b: Any) -> Any:
+    """Solve the linear system a x = b given the Cholesky factor c of a
+    (a = c c^T, as returned by cholesky) by a forward and a back substitution.
+    Like scipy.linalg.cho_solve((c, True), b).
+
+    For several systems with the same matrix (e.g. the steps of an
+    optimization) the factorization is done once and only the substitutions
+    are repeated.
+
+    Arguments:
+        c: Lower triangular Cholesky factor (2D tensor)
+        b: Right-hand side: a vector or 1D tensor with n elements
+            or a 2D tensor with n rows (one system per column)
+
+    Returns:
+        Solution x with the shape of b: a vector if b is a vector,
+        otherwise a tensor
+    """
+    c = _square_matrix(c)
+    n: int = c.shape[0]
+    b = _rhs(b, n)
+    b_values = b.values
+    r = len(b_values) // n
+    c_values = c.values
+    y = _solve_triangular_values(c_values, b_values, n, r, True, False, False)
+    values = _solve_triangular_values(c_values, y, n, r, True, True, False)
+    return _solution(values, b)

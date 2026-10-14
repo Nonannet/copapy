@@ -1,4 +1,4 @@
-"""Tests for cp.solve: the solve array stencil for arrays and packed tensors and
+"""Tests for cp.solve: the solve array stencil for packed tensors and
 the elimination unrolled into scalar operations with the gtabs, mask and masknot
 stencils for pivoting."""
 from typing import Any, Callable
@@ -65,46 +65,41 @@ ZERO_DIAG = [[0.0, 2.0, 1.0], [1.0, 1.0, 0.5], [4.0, -1.0, 3.0]]
 
 @pytest.mark.parametrize('n', [1, 2, 3, 5, 8, 17])
 @pytest.mark.parametrize('r', [1, 3])
-def test_array_solve(n: int, r: int) -> None:
+def test_array_backed_solve(n: int, r: int) -> None:
     a, b = sample_matrix(n), sample_rhs(n, r)
-    x = cp.solve(cp.array(a), cp.array(b))
-    assert isinstance(x, cp.array) and x.shape == (n, r)
-    assert get_dag_stats([x.element(0).net]).get('solve_floatarr_floatarr') == 1
-    result = evaluate(x)[0]
-    assert flat(result) == pytest.approx(flat(solve_ref(a, b)), rel=1e-3, abs=1e-4)
+    x = cp.solve(cp.tensor(cp.array(a), packed=True), cp.tensor(cp.array(b)))
+    assert isinstance(x, cp.tensor) and x.shape == (n, r)
+    assert uses_array_stencil(x)
+    assert evaluate(*x.values) == pytest.approx(flat(solve_ref(a, b)), rel=1e-3, abs=1e-4)
 
 
-def test_array_solve_vector_rhs() -> None:
+def test_array_backed_solve_vector_rhs() -> None:
     b = sample_rhs(3, 1)
-    x = cp.solve(cp.array(ZERO_DIAG), cp.array(column(b)))
-    assert x.shape == (3,)
-    assert evaluate(x)[0] == pytest.approx(column(solve_ref(ZERO_DIAG, b)), rel=1e-4)
+    x = cp.solve(cp.tensor(cp.array(ZERO_DIAG), packed=True), cp.vector(cp.array(column(b))))
+    assert isinstance(x, cp.vector) and x.shape == (3,)
+    assert evaluate(*x.values) == pytest.approx(column(solve_ref(ZERO_DIAG, b)), rel=1e-4)
 
 
-def test_array_solve_int_operands() -> None:
+def test_array_backed_solve_int_operands() -> None:
     a = [[2, 1, 0], [1, 3, 1], [0, 1, 4]]
     b = [1, 2, 3]
-    x = cp.solve(cp.array(a), cp.array(b))
-    assert evaluate(x)[0] == pytest.approx(column(solve_ref(a, [[v] for v in b])), rel=1e-4)  # type: ignore[arg-type]
+    x = cp.solve(cp.tensor(cp.array(a), packed=True), cp.vector(cp.array(b)))
+    assert evaluate(*x.values) == pytest.approx(column(solve_ref(a, [[v] for v in b])), rel=1e-4)  # type: ignore[arg-type]
 
 
-def test_array_solve_does_not_change_operands() -> None:
+def test_array_backed_solve_does_not_change_operands() -> None:
     a, b = cp.array(ZERO_DIAG), cp.array([1.0, 2.0, 3.0])
-    x = cp.solve(a, b)
-    res = evaluate(x, a, b)
-    assert flat(res[1]) == flat(ZERO_DIAG)
-    assert res[2] == [1.0, 2.0, 3.0]
+    x = cp.solve(cp.tensor(a, packed=True), cp.vector(b))
+    res = evaluate(*x.values, a, b)
+    assert flat(res[-2]) == flat(ZERO_DIAG)
+    assert res[-1] == [1.0, 2.0, 3.0]
 
 
-def test_array_and_tensor_operands() -> None:
-    b = sample_rhs(3, 1)
-    ref = column(solve_ref(ZERO_DIAG, b))
-    x1 = cp.solve(cp.array(ZERO_DIAG), cp.vector(cp.value(v) for v in column(b)))
-    x2 = cp.solve(cp.tensor(values(ZERO_DIAG)), cp.array(column(b)))
-    assert isinstance(x1, cp.array) and isinstance(x2, cp.array)
-    res = evaluate(x1, x2)
-    assert res[0] == pytest.approx(ref, rel=1e-4)
-    assert res[1] == pytest.approx(ref, rel=1e-4)
+def test_array_operands_raise() -> None:
+    a, b = cp.array(ZERO_DIAG), cp.array([1.0, 2.0, 3.0])
+    for args in [(a, b), (a, cp.vector([1.0, 2.0, 3.0])), (cp.tensor(ZERO_DIAG), b)]:
+        with pytest.raises(TypeError, match="cp.tensor"):
+            cp.solve(*args)
 
 
 @pytest.mark.parametrize('n', [1, 2, 3, 4])
@@ -223,8 +218,8 @@ def test_singular_constant_matrix() -> None:
 @pytest.mark.parametrize('a,b', [
     (cp.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), cp.vector([1.0, 2.0])),
     (cp.tensor([[1.0, 2.0], [3.0, 4.0]]), cp.vector([1.0, 2.0, 3.0])),
-    (cp.array([[1.0, 2.0], [3.0, 4.0]]), cp.array([1.0, 2.0, 3.0])),
-    (cp.array([1.0, 2.0]), cp.array([1.0, 2.0]))])
+    (cp.tensor(cp.array([[1.0, 2.0], [3.0, 4.0]])), cp.vector(cp.array([1.0, 2.0, 3.0]))),
+    (cp.tensor(cp.array([1.0, 2.0])), cp.vector(cp.array([1.0, 2.0])))])
 def test_shape_mismatch(a: Any, b: Any) -> None:
     with pytest.raises(ValueError):
         cp.solve(a, b)
@@ -236,7 +231,7 @@ def numeric_grad(func: Callable[[list[float]], float], data: list[float], h: flo
     return [(func(shifted(i, h)) - func(shifted(i, -h))) / (2 * h) for i in range(len(data))]
 
 
-@pytest.mark.parametrize('mode', ['unrolled', 'unrolled_no_pivot', 'packed', 'array'])
+@pytest.mark.parametrize('mode', ['unrolled', 'unrolled_no_pivot', 'packed', 'array_backed'])
 @pytest.mark.parametrize('r', [1, 2])
 def test_grad(mode: str, r: int) -> None:
     """Gradient of a weighted sum of the solution to the matrix and the right-hand side"""
@@ -252,9 +247,10 @@ def test_grad(mode: str, r: int) -> None:
 
     inputs = [cp.value(v) for v in data]
     result: Any
-    if mode == 'array':
-        x = cp.solve(cp.array(inputs[:n * n]).reshape(n, n), cp.array(inputs[n * n:]).reshape(n, r))
-        result = (x.reshape(n * r) * cp.array(weights)).sum()
+    if mode == 'array_backed':
+        x = cp.solve(cp.tensor(cp.array(inputs[:n * n]).reshape(n, n), packed=True),
+                     cp.tensor(cp.array(inputs[n * n:]).reshape(n, r)))
+        result = (x * cp.tensor(weights, (n, r))).sum()
     else:
         packed = True if mode == 'packed' else None
         x = cp.solve(cp.tensor(inputs[:n * n], (n, n), packed=packed), cp.tensor(inputs[n * n:], (n, r)),

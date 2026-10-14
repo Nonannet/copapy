@@ -583,3 +583,25 @@ def test_quaternion_not_packed_or_promoted() -> None:
     assert q.values[0] == 1 and type(q.values[0]) is int  # no type promotion
     assert cp.quaternion.pack_threshold is None
     assert q._get_array() is None and q._get_array(force=True) is None
+
+
+def test_tensor_and_vector_from_array() -> None:
+    arr = cp.array([[1.0, 2.0], [3.0, 4.0]])
+    t = cp.tensor(arr)
+    assert t.shape == (2, 2) and t._array is arr  # No copy of the data
+    assert cp.tensor(arr, (4,)).shape == (4,)
+
+    unpacked = cp.tensor(arr, packed=False)
+    assert unpacked._array is None and unpacked.shape == (2, 2)
+
+    v = cp.vector(cp.array([cp.value(1.0), cp.value(2.0)]))
+    assert isinstance(v, cp.vector) and v.shape == (2,)
+
+    res = evaluate(t @ v, unpacked @ v)
+    assert res[0].values == pytest.approx([5.0, 11.0])  # pyright: ignore[reportUnknownMemberType]
+    assert res[1].values == pytest.approx([5.0, 11.0])  # pyright: ignore[reportUnknownMemberType]
+
+    with pytest.raises(ValueError, match="1D array"):
+        cp.vector(arr)
+    with pytest.raises(ValueError, match="byte"):
+        cp.tensor(cp.array([1, 2, 3], 'byte'))

@@ -3,7 +3,7 @@ from ._mixed import mixed_sum, mixed_homogenize
 from typing import Sequence, TypeVar, Iterable, Any, overload, TypeAlias, Callable, Iterator, cast
 import copapy as cp
 from ._helper_types import TNum
-from ._arrays import ArrayType
+from ._arrays import ArrayType, array
 
 #VecNumLike: TypeAlias = 'vector[int] | vector[float] | value[int] | value[float] | int | float | bool'
 VecNumLike: TypeAlias = 'vector[Any] | value[Any] | int | float | bool'
@@ -25,14 +25,20 @@ class vector(ArrayType[TNum]):
 
     pack_threshold: int | None = 64
 
-    def __init__(self, values: Iterable[TNum | value[TNum]], packed: bool | None = None):
+    def __init__(self, values: 'Iterable[TNum | value[TNum]] | array[TNum]', packed: bool | None = None):
         """Create a vector with given values.
 
         Arguments:
-            values: iterable of constant values
+            values: iterable of constant values or a 1D array (its memory
+                is used by the vector without copying)
             packed: True to always use array stencils for this vector, False to never
                 use them, None to decide by vector.pack_threshold.
         """
+        if isinstance(values, array):
+            if values.ndim != 1:
+                raise ValueError(f"A vector requires a 1D array, got shape {values.shape}")
+            self._init_from_array(values, packed)
+            return
         # 0-d tensors (e.g. from iterating a 1D tensor) are unwrapped to their scalar
         elements = tuple(v.values[0] if isinstance(v, ArrayType) and not v.shape else v for v in values)
         self._set_elements(elements, (len(elements),), packed)

@@ -1,5 +1,5 @@
-"""Tests for cp.inv and cp.det: the solve and det array stencils for arrays and
-packed tensors, the unrolled elimination (inv) and the Laplace expansion (det)
+"""Tests for cp.inv and cp.det: the solve and det array stencils for packed
+tensors, the unrolled elimination (inv) and the Laplace expansion (det)
 for small tensors."""
 from typing import Any, Callable
 
@@ -79,12 +79,12 @@ SINGULAR = [[1.0, 0.0, 2.0], [3.0, 0.0, 1.0], [-2.0, 0.0, 5.0]]
 # --- inv ---
 
 @pytest.mark.parametrize('n', [1, 2, 3, 5, 8])
-def test_array_inv(n: int) -> None:
+def test_array_backed_inv(n: int) -> None:
     a = sample_matrix(n)
-    x = cp.inv(cp.array(a))
-    assert isinstance(x, cp.array) and x.shape == (n, n)
-    assert get_dag_stats([x.element(0).net]).get('solve_floatarr_floatarr') == 1
-    assert flat(evaluate(x)[0]) == pytest.approx(flat(inv_ref(a)), rel=1e-3, abs=1e-4)
+    x = cp.inv(cp.tensor(cp.array(a), packed=True))
+    assert isinstance(x, cp.tensor) and x.shape == (n, n)
+    assert stats(*x.values).get('solve_floatarr_floatarr') == 1
+    assert evaluate(*x.values) == pytest.approx(flat(inv_ref(a)), rel=1e-3, abs=1e-4)
 
 
 @pytest.mark.parametrize('n', [1, 2, 3, 4])
@@ -130,24 +130,26 @@ def test_inv_times_matrix_is_identity() -> None:
 # --- det ---
 
 @pytest.mark.parametrize('n', [1, 2, 3, 5, 8, 17])
-def test_array_det(n: int) -> None:
+def test_array_backed_det(n: int) -> None:
     a = sample_matrix(n)
-    d = cp.det(cp.array(a))
+    d = cp.det(cp.tensor(cp.array(a), packed=True))
     assert isinstance(d, cp.value)
     assert d.net.source.name == 'det_floatarr'
     assert evaluate(d)[0] == pytest.approx(det_ref(a), rel=1e-3)
 
 
-def test_array_det_sign_and_singular() -> None:
+def test_array_backed_det_sign_and_singular() -> None:
+    def det(m: Any) -> Any:
+        return cp.det(cp.tensor(cp.array(m), packed=True))
+
     swapped = [ZERO_DIAG[1], ZERO_DIAG[0], ZERO_DIAG[2]]
-    res = evaluate(cp.det(cp.array(ZERO_DIAG)), cp.det(cp.array(swapped)), cp.det(cp.array(SINGULAR)),
-                   cp.det(cp.array([[2, 1], [1, 3]])))
+    res = evaluate(det(ZERO_DIAG), det(swapped), det(SINGULAR), det([[2, 1], [1, 3]]))
     assert res == pytest.approx([-7.0, 7.0, 0.0, 5.0], rel=1e-5)
 
 
-def test_array_det_does_not_change_operand() -> None:
+def test_array_backed_det_does_not_change_operand() -> None:
     a = cp.array(ZERO_DIAG)
-    res = evaluate(cp.det(a), a)
+    res = evaluate(cp.det(cp.tensor(a, packed=True)), a)
     assert flat(res[1]) == flat(ZERO_DIAG)
 
 
@@ -212,11 +214,17 @@ def test_tensor_det_uses_array_stencil(kwargs: dict[str, Any], n: int) -> None:
 @pytest.mark.parametrize('func', [cp.inv, cp.det])
 @pytest.mark.parametrize('a', [
     cp.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]),
-    cp.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]),
-    cp.array([1.0, 2.0])])
+    cp.tensor(cp.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])),
+    cp.tensor(cp.array([1.0, 2.0]))])
 def test_requires_square_matrix(func: Callable[[Any], Any], a: Any) -> None:
     with pytest.raises(ValueError, match="square matrix"):
         func(a)
+
+
+@pytest.mark.parametrize('func', [cp.inv, cp.det])
+def test_array_operand_raises(func: Callable[[Any], Any]) -> None:
+    with pytest.raises(TypeError, match="cp.tensor"):
+        func(cp.array(ZERO_DIAG))
 
 
 # --- Gradients ---
@@ -231,13 +239,13 @@ def as_matrix(d: list[float], n: int) -> list[list[float]]:
     return [d[i * n:(i + 1) * n] for i in range(n)]
 
 
-@pytest.mark.parametrize('mode', ['unrolled', 'packed', 'array'])
+@pytest.mark.parametrize('mode', ['unrolled', 'packed', 'array_backed'])
 def test_det_grad(mode: str) -> None:
     n = 3
     data = flat(ZERO_DIAG)
     inputs = [cp.value(v) for v in data]
-    if mode == 'array':
-        result = cp.det(cp.array(inputs).reshape(n, n))
+    if mode == 'array_backed':
+        result = cp.det(cp.tensor(cp.array(inputs).reshape(n, n), packed=True))
     else:
         result = cp.det(cp.tensor(inputs, (n, n), packed=True if mode == 'packed' else None))
     out = evaluate(result, *cp.grad(result, inputs))
@@ -245,7 +253,7 @@ def test_det_grad(mode: str) -> None:
     assert out[1:] == pytest.approx(numeric_grad(lambda d: det_ref(as_matrix(d, n)), data), rel=2e-3, abs=2e-3)
 
 
-@pytest.mark.parametrize('mode', ['unrolled', 'packed', 'array'])
+@pytest.mark.parametrize('mode', ['unrolled', 'packed', 'array_backed'])
 def test_inv_grad(mode: str) -> None:
     """Gradient of a weighted sum of the elements of the inverse"""
     n = 3
@@ -257,8 +265,9 @@ def test_inv_grad(mode: str) -> None:
 
     inputs = [cp.value(v) for v in data]
     result: Any
-    if mode == 'array':
-        result = (cp.inv(cp.array(inputs).reshape(n, n)).reshape(n * n) * cp.array(weights)).sum()
+    if mode == 'array_backed':
+        x = cp.inv(cp.tensor(cp.array(inputs).reshape(n, n), packed=True))
+        result = (x * cp.tensor(weights, (n, n))).sum()
     else:
         x = cp.inv(cp.tensor(inputs, (n, n), packed=True if mode == 'packed' else None))
         result = (x * cp.tensor(weights, (n, n))).sum()

@@ -21,18 +21,22 @@ class tensor(ArrayType[TNum]):
 
     pack_threshold: int | None = 64
 
-    def __init__(self, values: 'TNum | value[TNum] | vector[TNum] | tensor[TNum] | TensorSequence[TNum] | Iterable[TNum | value[TNum]]',
+    def __init__(self, values: 'TNum | value[TNum] | vector[TNum] | tensor[TNum] | array[TNum] | TensorSequence[TNum] | Iterable[TNum | value[TNum]]',
                  shape: Sequence[int] | None = None, packed: bool | None = None):
         """Create a tensor with given values.
 
         Arguments:
-            values: Nested sequence of constant values or copapy values or
-                    a flat 1D iterable if shape is provided.
+            values: Nested sequence of constant values or copapy values,
+                    a flat 1D iterable if shape is provided or an array (its
+                    memory is used by the tensor without copying).
             shape: Optional shape of the tensor. If not provided, inferred from values.
             packed: True to always use array stencils for this tensor, False to never
                 use them, None to decide by tensor.pack_threshold.
         """
         flat_values: tuple[Any, ...]
+        if isinstance(values, array):
+            self._init_from_array(values if shape is None else values.reshape(*shape), packed)
+            return
         if shape is not None:
             flat_list: list[Any] = []
             assert isinstance(values, Iterable), "Values must be a sequence of scalars if shape is provided"

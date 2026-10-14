@@ -6,7 +6,7 @@ from typing import Any, Sequence, overload
 import copapy as cp
 from ._arrays import array
 from ._basic_types import Net, Node, unifloat, ArrayNet, ArrayConst, ArrayOp, ArrayPack, ArrayElement, HeadNode, add_op
-from ._linalg import solve_arrays, inv
+from ._linalg import solve_arrays, inv_array
 from ._interp import get_table_delta
 
 # Operations with a derivative of 0 (integer results)
@@ -195,7 +195,7 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
             # The gradient of det(a) is det(a) a^-T (not defined for a singular matrix)
             (n,) = _const_ints(node.args[1])
             assert out_net is not None
-            add_grad(a, inv(a.reshape(n, n).T) * (value(out_net) * g))
+            add_grad(a, inv_array(a.reshape(n, n).T) * (value(out_net) * g))
 
         elif opn in ('lerp', 'bsearch'):
             # a is the table (lerp) or the grid (bsearch), b the position
@@ -330,8 +330,6 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
 
 def _flat_grad(g: Any) -> list[Any]:
     """Elements of a gradient returned by grad as flat list"""
-    if isinstance(g, array):
-        return [g.element(i) for i in range(g.size)]
     if isinstance(g, vector | tensor | quaternion):
         return list(g.values)
     if isinstance(g, list):
@@ -346,10 +344,6 @@ def jacobian(x: value[Any], y: vector[Any]) -> vector[float]: ...
 @overload
 def jacobian(x: value[Any], y: quaternion) -> quaternion: ...
 @overload
-def jacobian(x: Any, y: array[Any]) -> array[float]: ...
-@overload
-def jacobian(x: array[Any], y: Any) -> array[float]: ...
-@overload
 def jacobian(x: vector[Any] | tensor[Any] | quaternion, y: value[Any] | vector[Any] | tensor[Any] | quaternion) -> tensor[float]: ...
 @overload
 def jacobian(x: Any, y: tensor[Any]) -> tensor[float]: ...
@@ -357,15 +351,14 @@ def jacobian(x: Any, y: tensor[Any]) -> tensor[float]: ...
 def jacobian(x: Sequence[Any], y: Sequence[value[Any]]) -> list[list[unifloat]]: ...
 @overload
 def jacobian(x: Sequence[Any], y: value[Any]) -> list[unifloat]: ...
-def jacobian(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any] | array[Any] | quaternion) -> Any:
-    """Returns the Jacobian dx/dy where x might be a scalar, a list of scalars,
-    a vector, matrix or array, and y might be a scalar, a list of scalars, a vector,
-    matrix or array. The result has the shape x.shape + y.shape. It is calculated
-    with one reverse-mode pass of grad per element of x.
+def jacobian(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any] | quaternion) -> Any:
+    """Returns the Jacobian dx/dy where x and y might be a scalar, a list of
+    scalars, a vector or a tensor. The result has the shape x.shape + y.shape.
+    It is calculated with one reverse-mode pass of grad per element of x.
 
     For a scalar x the result is the same as of grad(x, y). The result is
-    an array if x or y is an array, a list of lists if x and y are lists and
-    otherwise a tensor.
+    a list of lists if x and y are lists and otherwise a tensor. Arrays are
+    not supported, an array can be used as tensor by cp.tensor(arr).
 
     Arguments:
         x: Value to return derivative of
@@ -374,15 +367,15 @@ def jacobian(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor
     Returns:
         Derivative of x with the dimensions of x and y
     """
+    if isinstance(x, array) or isinstance(y, array):
+        raise TypeError("jacobian requires values, vectors or tensors, an array can be used "
+                        "as tensor without copying by cp.tensor(arr), for a scalar x use grad")
     if isinstance(x, value):
         return grad(x, y)
 
     x_values: list[Any]
     x_shape: tuple[int, ...]
-    if isinstance(x, array):
-        x_values = [x.element(i) for i in range(x.size)]
-        x_shape = x.shape
-    elif isinstance(x, vector | tensor | quaternion):
+    if isinstance(x, vector | tensor | quaternion):
         x_values = list(x.values)
         x_shape = x.shape
     else:
@@ -393,7 +386,7 @@ def jacobian(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor
     y_shape: tuple[int, ...]
     if isinstance(y, value):
         y_shape = ()
-    elif isinstance(y, array | vector | tensor | quaternion):
+    elif isinstance(y, vector | tensor | quaternion):
         y_shape = y.shape
     else:
         y_shape = (len(y),)
@@ -405,8 +398,6 @@ def jacobian(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor
     # Elements of x that are constants have a derivative of 0
     rows = [_flat_grad(grad(xi, y)) if isinstance(xi, value) else [0.0] * y_size for xi in x_values]
 
-    if isinstance(x, array) or isinstance(y, array):
-        return array([v for row in rows for v in row], 'float').reshape(*(x_shape + y_shape))
     if isinstance(x, vector | tensor | quaternion) or isinstance(y, vector | tensor | quaternion):
         return tensor([v for row in rows for v in row], x_shape + y_shape)
     if isinstance(y, value):

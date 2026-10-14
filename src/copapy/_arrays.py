@@ -655,17 +655,30 @@ class ArrayType(Generic[TNum]):
             self._array = other._array
             self._element_refs = other._element_refs
 
+    def _init_from_array(self, arr: array[Any], packed: bool | None) -> None:
+        """Initialize a new instance from an array without copying the data"""
+        if arr.dtype == 'byte':
+            raise ValueError("A byte array must be converted to int or float first, e.g. by cp.to_int")
+        if packed is False:
+            self._set_elements([arr.element(i) for i in range(arr.size)], arr.shape, packed)
+        else:
+            self._set_array(arr, packed)
+
+    def _set_array(self, arr: array[Any], packed: bool | None = None) -> None:
+        """Back the instance by an array, the elements are references to the array memory"""
+        self._values = None
+        self._array = arr
+        self._element_refs = None
+        self._packed = packed
+        self._dtype = arr.dtype
+        self.shape = arr.shape
+        self.ndim = arr.ndim
+
     @classmethod
     def _from_array(cls: type[TArrayType], arr: array[Any], packed: bool | None = None) -> TArrayType:
         """Instance backed by an array, the elements are references to the array memory"""
         ret = cls.__new__(cls)
-        ret._values = None
-        ret._array = arr
-        ret._element_refs = None
-        ret._packed = packed
-        ret._dtype = arr.dtype
-        ret.shape = arr.shape
-        ret.ndim = arr.ndim
+        ret._set_array(arr, packed)
         return ret
 
     @property

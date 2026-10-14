@@ -76,12 +76,12 @@ def test_jacobian_tensor_shape():
     assert tg.read_value(j).values == pytest.approx(flat(ref))  # pyright: ignore[reportUnknownMemberType]
 
 
-def test_jacobian_array():
-    x = cp.array([cp.value(1.0), cp.value(2.0), cp.value(3.0)])
+def test_jacobian_array_backed():
+    x = cp.tensor(cp.array([cp.value(1.0), cp.value(2.0), cp.value(3.0)]))
     f = x * x
 
     j = cp.jacobian(f, x)
-    assert isinstance(j, cp.array)
+    assert isinstance(j, cp.tensor)
     assert j.shape == (3, 3)
 
     tg = cp.Target()
@@ -89,7 +89,17 @@ def test_jacobian_array():
     tg.run()
 
     ref = [[2.0, 0.0, 0.0], [0.0, 4.0, 0.0], [0.0, 0.0, 6.0]]
-    assert flat(tg.read_value(j)) == pytest.approx(flat(ref))  # pyright: ignore[reportUnknownMemberType]
+    assert tg.read_value(j).values == pytest.approx(flat(ref))  # pyright: ignore[reportUnknownMemberType]
+
+
+def test_jacobian_array_raises():
+    x = cp.array([cp.value(1.0), cp.value(2.0)])
+    with pytest.raises(TypeError, match="cp.tensor"):
+        cp.jacobian(x * x, x)
+    with pytest.raises(TypeError, match="cp.tensor"):
+        cp.jacobian(x.sum(), x)
+    with pytest.raises(TypeError, match="cp.tensor"):
+        cp.jacobian(cp.vector([x.sum()]), x)
 
 
 def test_hessian():
