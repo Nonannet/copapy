@@ -7,7 +7,7 @@ import statistics
 import struct
 import subprocess
 import warnings
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 import pytest
 
@@ -413,7 +413,8 @@ TEST_PROGRAMS = {
 }
 
 
-def run_runner_test(name: str, arch: str, runner: str, qemu: Sequence[str] = (), tol: float = 1e-5) -> None:
+def run_runner_test(name: str, arch: str, runner: str, qemu: Sequence[str] = (), tol: float = 1e-5,
+                    run: Callable[[str, str, Sequence[str]], str | None] = run_program) -> None:
     """Compile the test program name ('ops', 'math' or 'vector') for arch,
     run it on the runner and compare the results with the Python reference
 
@@ -423,6 +424,7 @@ def run_runner_test(name: str, arch: str, runner: str, qemu: Sequence[str] = (),
         runner: path of the runner executable
         qemu: command prefix for running a runner of a foreign architecture
         tol: relative and absolute tolerance of the results
+        run: function running the command file on the runner, returns its output
     """
     ret_test, ret_ref = TEST_PROGRAMS[name]()
     assert len(ret_test) == len(ret_ref)
@@ -431,6 +433,6 @@ def run_runner_test(name: str, arch: str, runner: str, qemu: Sequence[str] = (),
     path = f'build/runner/test-{arch}-{name}.copapy'
     variables = write_program(ret_test, sdb, path)
 
-    result = run_program(runner, path, qemu)
+    result = run(runner, path, qemu)
     if result is not None:
         check_results(result, ret_test, ret_ref, variables, sdb, rel=tol, abs_tol=tol)
