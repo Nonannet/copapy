@@ -1,5 +1,7 @@
 """Tests for tasks on the local target: deployment, Logical Execution Time
 semantics between tasks and inputs, arrays and error cases."""
+from typing import Any
+
 import pytest
 
 import copapy as cp
@@ -7,6 +9,10 @@ import copapy as cp
 
 def approx(v: object) -> object:
     return pytest.approx(v, rel=1e-6, abs=1e-6)  # pyright: ignore[reportUnknownMemberType]
+
+
+def counts(stats: dict[str, Any]) -> tuple[int, int]:
+    return stats['runs'], stats['overruns']
 
 
 def test_single_task_exec() -> None:
@@ -26,7 +32,7 @@ def test_single_task_exec() -> None:
     tg.exec()
     assert tg.read_value(b) == approx(5.0)
     assert tg.read_value(c).values == approx([32.0, 10.0])
-    assert tg.stats() == {'runs': 2, 'overruns': 0}
+    assert counts(tg.stats()) == (2, 0)
 
 
 def test_let_between_tasks() -> None:
@@ -55,8 +61,10 @@ def test_let_between_tasks() -> None:
     assert tg.read_value(result2) == 0.0
     tg.step(0.2)
     assert tg.read_value(result2) == approx(0.495)
-    assert tg.stats(task1) == {'runs': 200, 'overruns': 0}
-    assert tg.stats(task2) == {'runs': 2, 'overruns': 0}
+    assert counts(tg.stats(task1)) == (200, 0)
+    assert counts(tg.stats(task2)) == (2, 0)
+    stats = tg.stats(task1)
+    assert 0 <= stats['exec_time_mean'] <= stats['exec_time_max'] <= stats['response_time_max']
 
     # Inputs are read at the next release
     tg.step(0.3)

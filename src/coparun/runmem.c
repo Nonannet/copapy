@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <time.h>
 #include "runmem.h"
 #include "mem_man.h"
 
@@ -231,6 +232,7 @@ void tasks_publish(runmem_t *context) {
 
 uint32_t tasks_latch(runmem_t *context) {
     uint32_t released = 0;
+    uint32_t now = runmem_timestamp();
     for (uint32_t i = 0; i < context->task_count && i < 32; i++) {
         task_t *task = &context->tasks[i];
         if (!task->period) continue;
@@ -238,6 +240,7 @@ uint32_t tasks_latch(runmem_t *context) {
             if (task->busy) {
                 task->overruns++;
             } else {
+                task->release_time = now;
                 run_copies(context, task->latch_offs, task->latch_count);
                 task->busy = 1;
                 released |= 1u << i;
@@ -249,9 +252,28 @@ uint32_t tasks_latch(runmem_t *context) {
     return released;
 }
 
+/* Runs a job of a task and updates its statistics */
+static int measured_job(runmem_t *context, task_t *task) {
+    uint32_t start = runmem_timestamp();
+    uint32_t cpu_start = runmem_cpu_time();
+    int ret = run_task(context, task);
+    uint32_t exec = runmem_to_ns(runmem_cpu_time() - cpu_start);
+    uint32_t delay = runmem_to_ns(start - task->release_time);
+    uint32_t response = runmem_to_ns(runmem_timestamp() - task->release_time);
+    uint32_t sum_lo = task->exec_sum_lo + exec;
+
+    task->exec_last = exec;
+    if (exec > task->exec_max) task->exec_max = exec;
+    if (sum_lo < exec) task->exec_sum_hi++;
+    task->exec_sum_lo = sum_lo;
+    if (delay > task->delay_max) task->delay_max = delay;
+    if (response > task->response_max) task->response_max = response;
+    return ret;
+}
+
 void task_job(runmem_t *context, uint32_t index) {
     task_t *task = &context->tasks[index];
-    run_task(context, task);
+    measured_job(context, task);
     RUNMEM_LOCK();
     task->pending = 1;
     task->busy = 0;
@@ -280,6 +302,23 @@ void runmem_stop(runmem_t *context) {
 
 void runmem_write_data(const uint8_t *data, uint32_t size) {
     fwrite(data, 1, size, stdout);
+}
+
+/* Time in ns (wall time, also used as CPU time) */
+uint32_t runmem_timestamp(void) {
+#if defined(_WIN32) || defined(__linux__)
+    struct timespec ts;
+    if (timespec_get(&ts, TIME_UTC)) return (uint32_t)ts.tv_sec * 1000000000u + (uint32_t)ts.tv_nsec;
+#endif
+    return 0;
+}
+
+uint32_t runmem_cpu_time(void) {
+    return runmem_timestamp();
+}
+
+uint32_t runmem_to_ns(uint32_t delta) {
+    return delta;
 }
 #endif
 
@@ -520,8 +559,9 @@ int parse_commands(runmem_t *context, uint8_t *bytes, uint32_t lengths) {
                 }
                 {
                     task_t *task = &context->tasks[offs];
+                    task->release_time = runmem_timestamp();
                     run_copies(context, task->latch_offs, task->latch_count);
-                    int ret = run_task(context, task);
+                    int ret = measured_job(context, task);
                     run_copies(context, task->publish_offs, task->publish_count);
                     BLOG("Return value: %i\n", ret);
                 }
@@ -548,9 +588,15 @@ int parse_commands(runmem_t *context, uint8_t *bytes, uint32_t lengths) {
                 LOG("START_TASKS tick_us=%i\n", size);
                 runmem_stop(context);
                 for (uint32_t i = 0; i < context->task_count; i++) {
-                    context->tasks[i].countdown = 0;
-                    context->tasks[i].pending = 0;
-                    context->tasks[i].busy = 0;
+                    task_t *task = &context->tasks[i];
+                    task->countdown = 0;
+                    task->pending = 0;
+                    task->busy = 0;
+                    /* Statistics of the real-time execution */
+                    task->runs = task->overruns = 0;
+                    task->exec_last = task->exec_max = task->exec_sum_lo = task->exec_sum_hi = 0;
+                    task->response_max = task->delay_max = 0;
+                    task->degraded = task->degradations = 0;
                 }
                 if (!context->tasks || !size || !runmem_start(context, size)) context->state_flag = STATE_FLAG_TASK;
                 break;

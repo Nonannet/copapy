@@ -17,6 +17,7 @@ import pytest
 
 import copapy as cp
 from runner_helpers import check_for_qemu
+from test_tasks import counts
 from test_runner_zephyr import QEMU, RUNNER, SERIAL_PORT, TIMEOUT
 
 
@@ -88,7 +89,7 @@ def test_exec(target: cp.SerialTarget) -> None:
     target.exec()
     assert target.read_value([a, b]) == approx([16.0, 5.0])
     assert target.read_value(c) == approx([8.0, 24.0, 40.0])
-    assert target.stats() == {'runs': 2, 'overruns': 0}
+    assert counts(target.stats()) == (2, 0)
 
 
 def control_tasks() -> tuple[cp.value[float], cp.value[int], list[cp.value[float]], cp.Task, cp.Task]:
@@ -117,7 +118,7 @@ def test_step_equals_local(target: cp.SerialTarget) -> None:
             tg.step(t)
             results.append(tg.read_value(outputs))
         assert results[0] == results[1]
-    assert target.stats(task1) == local.stats(task1) == {'runs': 100, 'overruns': 0}
+    assert counts(target.stats(task1)) == counts(local.stats(task1)) == (100, 0)
 
 
 @pytest.mark.runner
@@ -142,14 +143,63 @@ def test_realtime(target: cp.SerialTarget) -> None:
 
     runs1, runs2 = target.stats(task1)['runs'], target.stats(task2)['runs']
     print(f"{elapsed=:.3f} s, {runs1=}, {runs2=}, {target.stats(task1)}")
-    assert target.stats(task1)['overruns'] == 0
     assert 0 < runs1 <= elapsed / 1e-3 + 1
-    if SERIAL_PORT:
-        assert runs1 > 0.8 * elapsed / 1e-3  # qemu (WSL) may run slower than real time
-    assert abs(runs2 - runs1 / 10) <= 1
 
     # Stopped: outputs do not change anymore
     assert target.stats(task1)['runs'] == runs1
+
+    # Execution times
+    for task, period in ((task1, 1e-3), (task2, 0.01)):
+        stats = target.stats(task)
+        print(task, stats)
+        assert 0 <= stats['exec_time_mean'] <= stats['exec_time_max']
+        assert 0 <= stats['exec_time'] <= stats['exec_time_max'] <= stats['response_time_max']
+        assert stats['start_delay_max'] <= stats['response_time_max']
+        if SERIAL_PORT:
+            # Timing in qemu (WSL) is not real time
+            assert stats['overruns'] == 0
+            assert stats['response_time_max'] < period
+            assert stats['exec_time_mean'] > 0
+    if SERIAL_PORT:
+        assert runs1 > 0.8 * elapsed / 1e-3
+        assert abs(runs2 - runs1 / 10) <= 1
+
+
+@pytest.mark.runner
+def test_load_shedding(target: cp.SerialTarget) -> None:
+    if not SERIAL_PORT:
+        pytest.skip("Real-time behaviour is only tested on a board")
+
+    # Heavy task: about 10 ms CPU time per 1 ms period
+    n = 100
+    m = cp.array([[0.01 * ((i * 7 + j * 3) % 11 - 5) for j in range(n)] for i in range(n)])
+    v = cp.array([1.0] * n)
+    x = v
+    for _ in range(100):
+        x = m @ x + v
+    heavy = cp.Task(x.sum(), period=1e-3, priority=1)
+
+    ref = cp.value(1.0)
+    fast_out = ref * 2 + 1
+    fast = cp.Task(fast_out, period=1e-3, priority=2)
+
+    target.deploy(fast, heavy)
+    target.run()
+    start = time.perf_counter()
+    requests = 0
+    while time.perf_counter() - start < 1.0:
+        # The host is served although the tasks need more than the CPU
+        target.write_value(ref, float(requests))
+        target.read_value(fast_out)
+        requests += 1
+    target.stop()
+
+    fast_stats, heavy_stats = target.stats(fast), target.stats(heavy)
+    print(requests, fast_stats, heavy_stats)
+    assert requests > 100
+    assert fast_stats['overruns'] == 0 and not fast_stats['degraded']
+    assert heavy_stats['degraded'] and heavy_stats['degradations'] == 1
+    assert heavy_stats['overruns'] > 0
 
 
 if __name__ == "__main__":
