@@ -51,6 +51,20 @@ config COPARUN_TASK_PRIORITY
 	  Task n runs with this priority + n. The main thread must have a
 	  lower priority (higher number) than all tasks.
 
+config COPARUN_MAX_TASK_LOAD
+	int "Maximum CPU load of the tasks in percent"
+	default 90
+	range 10 100
+	help
+	  If the tasks use more CPU time, the tasks with the lowest priority
+	  run with lower priority than the communication with the host until
+	  the load is below the limit again (load shedding, see tasks.c).
+	  100 disables the load shedding.
+
+config COPARUN_LOAD_WINDOW_MS
+	int "Time window of the load measurement in ms"
+	default 100
+
 config COPARUN_TASK_STACK_SIZE
 	int "Stack size of each task thread in bytes"
 	default 2048

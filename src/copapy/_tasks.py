@@ -16,7 +16,7 @@ from ._compiler import compile_programs, _modified_node_copy
 from ._target import _TargetBase, _LocalMemory, collect_roots
 
 # task_t and copy_t records in runmem.h
-_TASK_FORMAT = 'IIiIIIIIIIII'
+_TASK_FORMAT = 'IIiIIIIIIIIIIIIIIIIII'
 _TASK_SIZE = struct.calcsize('<' + _TASK_FORMAT)
 _COPY_FORMAT = 'III'
 _COPY_SIZE = struct.calcsize('<' + _COPY_FORMAT)
@@ -291,7 +291,7 @@ class _TaskTarget(_TargetBase):
             struct.pack_into(en + _TASK_FORMAT, reserved, task_table + i * _TASK_SIZE,
                              entry_points[i], periods[i], task.priority or 0,
                              latch_offs, len(latch_copies[i]), publish_offs, len(publish),
-                             0, 0, 0, 0, 0)
+                             *[0] * 14)
 
         dw.write_com(binw.Command.COPY_DATA)
         dw.write_int(0)
@@ -330,20 +330,45 @@ class _TaskTarget(_TargetBase):
         dw.write_int(self._task_index(task))
         self._send(dw)
 
-    def stats(self, task: Task | None = None) -> dict[str, int]:
-        """Statistics of a deployed task
+    def stats(self, task: Task | None = None) -> dict[str, Any]:
+        """Statistics of a deployed task. On devices the statistics are reset
+        by run().
 
         Arguments:
             task: Task, can be omitted if only one task is deployed
 
         Returns:
-            Dict with the number of jobs run ("runs") and of skipped
-            releases because the previous job was not finished ("overruns")
+            Dict with:
+                runs: Number of jobs run
+                overruns: Number of skipped releases because the previous
+                    job was not finished
+                exec_time: CPU time of the last job in seconds (without
+                    the time the job was preempted by other tasks)
+                exec_time_max: Maximum CPU time of a job in seconds
+                exec_time_mean: Mean CPU time of the jobs in seconds
+                response_time_max: Maximum time from the release to the end
+                    of a job in seconds (must be below the period)
+                start_delay_max: Maximum time from the release to the start
+                    of a job in seconds
+                degraded: The task currently runs with lower priority than
+                    the communication with the host, because the tasks used
+                    too much CPU time (load shedding on devices)
+                degradations: Number of times the task was degraded
         """
         addr = self._task_table + self._task_index(task) * _TASK_SIZE
         fields = struct.unpack({'little': '<', 'big': '>'}[self.sdb.byteorder] + _TASK_FORMAT,
                                self._read_mem(addr, _TASK_SIZE))
-        return {'runs': fields[9], 'overruns': fields[10]}
+        runs, overruns = fields[9:11]
+        exec_last, exec_max, sum_lo, sum_hi, response_max, delay_max = fields[13:19]
+        return {'runs': runs,
+                'overruns': overruns,
+                'exec_time': exec_last * 1e-9,
+                'exec_time_max': exec_max * 1e-9,
+                'exec_time_mean': (sum_hi << 32 | sum_lo) * 1e-9 / runs if runs else 0.0,
+                'response_time_max': response_max * 1e-9,
+                'start_delay_max': delay_max * 1e-9,
+                'degraded': bool(fields[19]),
+                'degradations': fields[20]}
 
     def _check_writable(self, net: Net) -> None:
         source = net.source.args[0].source if isinstance(net.source, ArrayElement) else net.source

@@ -103,7 +103,7 @@
  * START_TASKS arguments:
  *   uint32 tick   tick in microseconds: starts the real-time execution of
  *                 the periodic tasks (if supported by the runner), all tasks
- *                 are released at the start
+ *                 are released at the start. The statistics are reset.
  * STOP_TASKS: stops the real-time execution after the running jobs
  * READ_MEM arguments:
  *   uint32 offs, uint32 size: writes the line "COPARUN_DATA <size>" followed
@@ -125,6 +125,17 @@ typedef struct task_s {
     uint32_t runs;           /* number of jobs run */
     uint32_t overruns;       /* releases skipped because the last job was not finished */
     uint32_t busy;           /* job released and not finished */
+    uint32_t release_time;   /* time stamp of the last release (runmem_timestamp) */
+    /* Statistics of the jobs in ns, reset by START_TASKS (with runs and overruns) */
+    uint32_t exec_last;      /* CPU time of the last job (without preemption) */
+    uint32_t exec_max;       /* maximum CPU time of a job */
+    uint32_t exec_sum_lo;    /* sum of the CPU times of all jobs (64 bit) */
+    uint32_t exec_sum_hi;
+    uint32_t response_max;   /* maximum time from release to the end of a job */
+    uint32_t delay_max;      /* maximum time from release to the start of a job */
+    /* Load shedding of the real-time execution (if supported by the runner) */
+    uint32_t degraded;       /* task runs with lower priority than the host communication */
+    uint32_t degradations;   /* number of times the task was degraded */
 } task_t;
 
 /* Copy operation inside the data memory */
@@ -192,6 +203,16 @@ void runmem_stop(runmem_t *context);
 
 /* Writes binary data to the output of the runner */
 void runmem_write_data(const uint8_t *data, uint32_t size);
+
+/* Time stamp counter (wrapping) for the execution time measurement */
+uint32_t runmem_timestamp(void);
+
+/* CPU time counter of the current thread (wrapping, same unit as the time
+   stamp counter) */
+uint32_t runmem_cpu_time(void);
+
+/* Converts a difference of counter values to ns */
+uint32_t runmem_to_ns(uint32_t delta);
 
 /* Initialize the run-time memory state (equal to zero-initialization) */
 void runmem_init(runmem_t *context);
