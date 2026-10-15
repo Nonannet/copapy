@@ -192,6 +192,7 @@ void patch_riscv_cj_type(uint8_t *patch_addr, int32_t offset)
 }
 
 void free_memory(runmem_t *context) {
+    runmem_stop(context);
     deallocate_memory(context->executable_memory, context->executable_memory_len);
     deallocate_memory(context->data_memory, context->data_memory_len);
     context->executable_memory_len = 0;
@@ -200,7 +201,87 @@ void free_memory(runmem_t *context) {
     context->data_memory = NULL;
     context->entr_point = NULL;
     context->data_offs = 0;
+    context->tasks = NULL;
+    context->task_count = 0;
 }
+
+static void run_copies(runmem_t *context, uint32_t offs, uint32_t count) {
+    copy_t *copies = (copy_t *)(context->data_memory + offs);
+    RUNMEM_LOCK();
+    for (uint32_t i = 0; i < count; i++) {
+        memcpy(context->data_memory + copies[i].dst, context->data_memory + copies[i].src, copies[i].size);
+    }
+    RUNMEM_UNLOCK();
+}
+
+static int run_task(runmem_t *context, task_t *task) {
+    task->runs++;
+    return call_entry_point((entry_point_t)(context->executable_memory + task->entry));
+}
+
+void tasks_publish(runmem_t *context) {
+    for (uint32_t i = 0; i < context->task_count; i++) {
+        task_t *task = &context->tasks[i];
+        if (task->period && task->countdown == 0 && task->pending) {
+            run_copies(context, task->publish_offs, task->publish_count);
+            task->pending = 0;
+        }
+    }
+}
+
+uint32_t tasks_latch(runmem_t *context) {
+    uint32_t released = 0;
+    for (uint32_t i = 0; i < context->task_count && i < 32; i++) {
+        task_t *task = &context->tasks[i];
+        if (!task->period) continue;
+        if (task->countdown == 0) {
+            if (task->busy) {
+                task->overruns++;
+            } else {
+                run_copies(context, task->latch_offs, task->latch_count);
+                task->busy = 1;
+                released |= 1u << i;
+            }
+            task->countdown = task->period;
+        }
+        task->countdown--;
+    }
+    return released;
+}
+
+void task_job(runmem_t *context, uint32_t index) {
+    task_t *task = &context->tasks[index];
+    run_task(context, task);
+    RUNMEM_LOCK();
+    task->pending = 1;
+    task->busy = 0;
+    RUNMEM_UNLOCK();
+}
+
+void tasks_release(runmem_t *context) {
+    /* Latch copies of all released tasks before the first task runs */
+    uint32_t released = tasks_latch(context);
+    for (uint32_t i = 0; i < 32; i++) {
+        if (released & (1u << i)) task_job(context, i);
+    }
+}
+
+#ifndef __ZEPHYR__
+/* Real-time execution is not supported by this runner */
+int runmem_start(runmem_t *context, uint32_t tick_us) {
+    (void)context;
+    (void)tick_us;
+    return 0;
+}
+
+void runmem_stop(runmem_t *context) {
+    (void)context;
+}
+
+void runmem_write_data(const uint8_t *data, uint32_t size) {
+    fwrite(data, 1, size, stdout);
+}
+#endif
 
 int update_data_offs(runmem_t *context) {
     // Data memory is not allocated if a program has no data
@@ -282,6 +363,10 @@ void runmem_init(runmem_t *context) {
     context->state_flag = STATE_FLAG_NONE;
     context->data_dest = NULL;
     context->data_size = 0;
+    context->tasks = NULL;
+    context->task_count = 0;
+    context->tasks_published = 0;
+    context->running = 0;
 }
 
 /* Size of the arguments following the command word in bytes, without the
@@ -291,10 +376,15 @@ static uint32_t command_header_size(uint32_t command) {
         case ALLOCATE_DATA:
         case ALLOCATE_CODE:
         case ENTRY_POINT:
+        case RUN_TASK:
+        case STEP_TASKS:
+        case START_TASKS:
             return 4;
         case COPY_DATA:
         case COPY_CODE:
         case READ_DATA:
+        case READ_MEM:
+        case TASK_TABLE:
             return 8;
         case PATCH:
             return 16;
@@ -322,7 +412,9 @@ int parse_commands(runmem_t *context, uint8_t *bytes, uint32_t lengths) {
             /* Payload of COPY_DATA or COPY_CODE, may arrive in several parts */
             uint32_t chunk_size = context->data_size;
             if (remaining_bytes < chunk_size) chunk_size = remaining_bytes;
+            RUNMEM_LOCK();  /* Inputs can be written while tasks are running */
             memcpy(context->data_dest, bytes, chunk_size);
+            RUNMEM_UNLOCK();
             context->data_dest += chunk_size;
             context->data_size -= chunk_size;
             bytes += chunk_size;
@@ -406,6 +498,90 @@ int parse_commands(runmem_t *context, uint8_t *bytes, uint32_t lengths) {
                     printf("%02X ", context->data_memory[offs + i]);
                 }
                 printf("\n");
+                break;
+
+            case TASK_TABLE:
+                offs = next_u32(&bytes);
+                size = next_u32(&bytes);
+                LOG("TASK_TABLE offs=%i count=%i\n", offs, size);
+                runmem_stop(context);
+                context->tasks = (task_t *)(context->data_memory + offs);
+                context->task_count = size;
+                context->tasks_published = 0;
+                break;
+
+            case RUN_TASK:
+                offs = next_u32(&bytes);
+                LOG("RUN_TASK index=%i\n", offs);
+                if (offs >= context->task_count || (context->running && context->tasks[offs].period)) {
+                    /* Periodic tasks are only run by RUN_TASK if the tasks are stopped */
+                    context->state_flag = STATE_FLAG_TASK;
+                    break;
+                }
+                {
+                    task_t *task = &context->tasks[offs];
+                    run_copies(context, task->latch_offs, task->latch_count);
+                    int ret = run_task(context, task);
+                    run_copies(context, task->publish_offs, task->publish_count);
+                    BLOG("Return value: %i\n", ret);
+                }
+                break;
+
+            case STEP_TASKS:
+                size = next_u32(&bytes);
+                LOG("STEP_TASKS ticks=%i\n", size);
+                if (context->running) {
+                    context->state_flag = STATE_FLAG_TASK;
+                    break;
+                }
+                for (uint32_t i = 0; i < size; i++) {
+                    if (!context->tasks_published) tasks_publish(context);
+                    tasks_release(context);
+                    context->tasks_published = 0;
+                }
+                tasks_publish(context);
+                context->tasks_published = 1;
+                break;
+
+            case START_TASKS:
+                size = next_u32(&bytes);
+                LOG("START_TASKS tick_us=%i\n", size);
+                runmem_stop(context);
+                for (uint32_t i = 0; i < context->task_count; i++) {
+                    context->tasks[i].countdown = 0;
+                    context->tasks[i].pending = 0;
+                    context->tasks[i].busy = 0;
+                }
+                if (!context->tasks || !size || !runmem_start(context, size)) context->state_flag = STATE_FLAG_TASK;
+                break;
+
+            case STOP_TASKS:
+                LOG("STOP_TASKS\n");
+                runmem_stop(context);
+                break;
+
+            case READ_MEM:
+                offs = next_u32(&bytes);
+                size = next_u32(&bytes);
+                LOG("READ_MEM offs=%i size=%i\n", offs, size);
+                if (!context->data_memory || offs > context->data_memory_len || size > context->data_memory_len - offs) {
+                    context->state_flag = STATE_FLAG_TASK;
+                    break;
+                }
+                printf("COPARUN_DATA %u\n", (unsigned)size);
+                fflush(stdout);
+                while (size) {
+                    /* Copied in parts, each consistent with the publish copies */
+                    uint8_t chunk[64];
+                    uint32_t chunk_size = size < sizeof(chunk) ? size : (uint32_t)sizeof(chunk);
+                    RUNMEM_LOCK();
+                    memcpy(chunk, context->data_memory + offs, chunk_size);
+                    RUNMEM_UNLOCK();
+                    runmem_write_data(chunk, chunk_size);
+                    offs += chunk_size;
+                    size -= chunk_size;
+                }
+                fflush(stdout);
                 break;
 
             case FREE_MEMORY:

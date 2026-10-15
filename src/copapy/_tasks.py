@@ -200,6 +200,8 @@ class _TaskTarget(_TargetBase):
                 of one additional task without period.
         """
         task_list = sorted(_task_list(tasks), key=lambda t: (-(t.priority or 0), t.period or math.inf))
+        if len(task_list) > 32:
+            raise ValueError(f"At most 32 tasks are supported, not {len(task_list)}")
         periods = [self._period_ticks(t) for t in task_list]
 
         owner: dict[Net, Task] = {}  # Net to the task that computes it
@@ -348,31 +350,16 @@ class _TaskTarget(_TargetBase):
         if not isinstance(source, Input | ArrayConst):
             raise ValueError(f"{net} is no input, only copapy values and arrays can be written")
 
-
-class LocalTarget(_LocalMemory, _TaskTarget):
-    """Target running tasks in this process with simulated time"""
-    def __init__(self, arch: str = 'native', optimization: str = 'O3', tick: float = 1e-4) -> None:
-        """Initialize the target
-
-        Arguments:
-            arch: Target architecture
-            optimization: Optimization level
-            tick: Time step of the simulation in seconds, the periods of the tasks
-                must be multiples of it
-        """
-        _LocalMemory.__init__(self, arch, optimization)
-        self._init_tasks(tick)
-
     @property
     def time(self) -> float:
         """Simulated time in seconds since deploy"""
         return self._ticks * self.tick
 
     def step(self, until: float) -> None:
-        """Runs the periodic tasks up to the given time. All tasks released
-        before this time are run. Outputs are published up to this time:
-        inputs written afterwards are read by the tasks released at this time
-        or later.
+        """Runs the periodic tasks in simulated time up to the given time.
+        All tasks released before this time are run. Outputs are published up
+        to this time: inputs written afterwards are read by the tasks released
+        at this time or later.
 
         Arguments:
             until: Simulated time in seconds since deploy, a multiple of the tick
@@ -387,3 +374,18 @@ class LocalTarget(_LocalMemory, _TaskTarget):
         dw.write_int(ticks - self._ticks)
         self._send(dw)
         self._ticks = ticks
+
+
+class LocalTarget(_LocalMemory, _TaskTarget):
+    """Target running tasks in this process with simulated time"""
+    def __init__(self, arch: str = 'native', optimization: str = 'O3', tick: float = 1e-4) -> None:
+        """Initialize the target
+
+        Arguments:
+            arch: Target architecture
+            optimization: Optimization level
+            tick: Time step of the simulation in seconds, the periods of the tasks
+                must be multiples of it
+        """
+        _LocalMemory.__init__(self, arch, optimization)
+        self._init_tasks(tick)

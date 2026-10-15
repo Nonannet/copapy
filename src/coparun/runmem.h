@@ -28,8 +28,14 @@
 #define COPY_CODE         4
 #define PATCH             0x1000
 #define ENTRY_POINT       7
+#define TASK_TABLE        8
 #define RUN_PROG         64
 #define READ_DATA        65
+#define RUN_TASK         66
+#define STEP_TASKS       67
+#define START_TASKS      68
+#define STOP_TASKS       69
+#define READ_MEM         70
 #define END_COM         256
 #define FREE_MEMORY     257
 #define DUMP_CODE       258
@@ -78,6 +84,55 @@
 #define STATE_FLAG_UNKNOWN_COMMAND -1
 #define STATE_FLAG_MEM_DIST        -4  /* code and data memory to far apart */
 #define STATE_FLAG_PATCH           -5  /* unknown patch encoding */
+#define STATE_FLAG_TASK            -6  /* invalid task index or no task table */
+
+/* Tasks (Logical Execution Time): a periodic task is released every period
+ * ticks, starting at tick 0. At its release the latch copies of the task are
+ * executed (inputs into the task memory) and the task is run. Its outputs are
+ * published (publish copies) at the end of its period, i.e. at its next
+ * release. At each tick all publish copies are done before the latch copies.
+ *
+ * TASK_TABLE arguments:
+ *   uint32 offs   offset of the task table (task_t records) in data memory
+ *   uint32 count  number of tasks, in order of descending priority
+ * RUN_TASK arguments:
+ *   uint32 index  runs one job of the task: latch, run, publish
+ * STEP_TASKS arguments:
+ *   uint32 ticks  simulates the given number of ticks and publishes the
+ *                 outputs of the jobs that end at the resulting time
+ * START_TASKS arguments:
+ *   uint32 tick   tick in microseconds: starts the real-time execution of
+ *                 the periodic tasks (if supported by the runner), all tasks
+ *                 are released at the start
+ * STOP_TASKS: stops the real-time execution after the running jobs
+ * READ_MEM arguments:
+ *   uint32 offs, uint32 size: writes the line "COPARUN_DATA <size>" followed
+ *                 by size bytes of the data memory at offs
+ *
+ * While the tasks are running, RUN_TASK is only allowed for tasks without
+ * period and STEP_TASKS is not allowed.
+ */
+typedef struct task_s {
+    uint32_t entry;          /* offset of the entry function in the code memory */
+    uint32_t period;         /* in ticks, 0: task is only run by RUN_TASK */
+    int32_t priority;
+    uint32_t latch_offs;     /* copy_t records executed at the release */
+    uint32_t latch_count;
+    uint32_t publish_offs;   /* copy_t records executed at the end of the period */
+    uint32_t publish_count;
+    uint32_t countdown;      /* ticks until the next release */
+    uint32_t pending;        /* job finished, outputs not published yet */
+    uint32_t runs;           /* number of jobs run */
+    uint32_t overruns;       /* releases skipped because the last job was not finished */
+    uint32_t busy;           /* job released and not finished */
+} task_t;
+
+/* Copy operation inside the data memory */
+typedef struct copy_s {
+    uint32_t dst;
+    uint32_t src;
+    uint32_t size;
+} copy_t;
 
 /* Entry point type */
 typedef int (*entry_point_t)(void);
@@ -107,7 +162,36 @@ typedef struct runmem_s {
     int state_flag;                  // Result of the last parse_commands call (STATE_FLAG_*)
     uint8_t *data_dest;              // Destination of the remaining payload in RX_STATE_DATA
     uint32_t data_size;              // Size of the remaining payload in RX_STATE_DATA
+    task_t *tasks;                   // Task table in data memory (TASK_TABLE)
+    uint32_t task_count;             // Number of tasks
+    int tasks_published;             // Publish copies of the current tick are done
+    volatile int running;            // Real-time execution of the tasks started
 } runmem_t;
+
+/* Protection of the copies between task memory and the memory written and
+   read by the host against the real-time execution of the tasks */
+#ifdef __ZEPHYR__
+#include <zephyr/irq.h>
+#define RUNMEM_LOCK() unsigned int runmem_lock_key = irq_lock()
+#define RUNMEM_UNLOCK() irq_unlock(runmem_lock_key)
+#else
+#define RUNMEM_LOCK()
+#define RUNMEM_UNLOCK()
+#endif
+
+/* Functions of the platform (defaults in runmem.c for runners without
+   real-time execution): */
+
+/* Starts the real-time execution of the tasks with the given tick, sets
+   context->running and returns 1, returns 0 if not supported */
+int runmem_start(runmem_t *context, uint32_t tick_us);
+
+/* Stops the real-time execution and waits for the running jobs, clears
+   context->running */
+void runmem_stop(runmem_t *context);
+
+/* Writes binary data to the output of the runner */
+void runmem_write_data(const uint8_t *data, uint32_t size);
 
 /* Initialize the run-time memory state (equal to zero-initialization) */
 void runmem_init(runmem_t *context);
@@ -123,5 +207,20 @@ int parse_commands(runmem_t *context, uint8_t *bytes, uint32_t lengths);
 
 /* Free program and data memory */
 void free_memory(runmem_t *context);
+
+/* Publish copies of all periodic tasks whose period ends at the current tick */
+void tasks_publish(runmem_t *context);
+
+/* Latch copies of all periodic tasks due at the current tick that are not
+   busy and advances to the next tick, returns a bit mask of the released
+   tasks (only the first 32 tasks are supported) */
+uint32_t tasks_latch(runmem_t *context);
+
+/* Runs the released job of a task */
+void task_job(runmem_t *context, uint32_t index);
+
+/* Releases (latch and run) all periodic tasks due at the current tick and
+   advances to the next tick */
+void tasks_release(runmem_t *context);
 
 #endif /* RUNMEM_H */

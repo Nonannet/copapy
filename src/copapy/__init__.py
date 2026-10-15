@@ -35,6 +35,8 @@ Example usage:
 
 from ._target import Target, jit, map_to_buffer, map_to_numpy
 from ._tasks import Task, LocalTarget
+from ._serial import SerialTarget
+from . import devices
 from ._basic_types import NumLike, value, generic_sdb
 from ._vectors import vector, cross, dot, distance, scalar_projection, angle_between, rotate_vector, vector_projection
 from ._quaternion import quaternion
@@ -65,6 +67,8 @@ __all__ = [
     "Target",
     "Task",
     "LocalTarget",
+    "SerialTarget",
+    "devices",
     "NumLike",
     "value",
     "generic_sdb",
