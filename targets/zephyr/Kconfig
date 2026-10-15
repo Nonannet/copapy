@@ -1,0 +1,71 @@
+menu "coparun"
+
+config COPARUN_HEAP_SIZE
+	int "Size of the heap for copapy programs in bytes"
+	default 262144
+	help
+	  The heap holds the code and data memory of the copapy programs.
+
+config COPARUN_HEAP_SECTION
+	string "Linker section of the heap for copapy programs"
+	default ".noinit.coparun_heap"
+	help
+	  Code is executed from the heap, it must be located in memory that is
+	  not marked execute-never by the MPU. With CONFIG_ARM_MPU the main RAM
+	  is execute-never on targets running from flash: either select the
+	  section of a memory region that is not covered by an MPU region (name
+	  of a devicetree node with zephyr,memory-region) or disable the MPU.
+
+config COPARUN_MAX_FRAME_SIZE
+	int "Maximum size of the command stream part of a frame in bytes"
+	default 4096
+
+config COPARUN_RX_RING_SIZE
+	int "Size of the UART receive ring buffer in bytes"
+	default 2048
+
+config COPARUN_TX_RING_SIZE
+	int "Size of the UART transmit ring buffer in bytes"
+	default 1024
+
+config COPARUN_TX_TIMEOUT_MS
+	int "Time without progress after which output is dropped in ms"
+	default 500
+	help
+	  Output is written blocking. If the host does not read it for this
+	  time, the output is dropped until the host reads again.
+
+config COPARUN_RX_TIMEOUT_MS
+	int "Timeout for receiving the remaining bytes of a frame in ms"
+	default 2000
+
+config COPARUN_MAX_TASKS
+	int "Maximum number of tasks for the real-time execution"
+	default 8
+	range 1 32
+
+config COPARUN_TASK_PRIORITY
+	int "Thread priority of the first (highest priority) task"
+	default 1
+	help
+	  Task n runs with this priority + n. The main thread must have a
+	  lower priority (higher number) than all tasks.
+
+config COPARUN_TASK_STACK_SIZE
+	int "Stack size of each task thread in bytes"
+	default 2048
+
+config COPARUN_LOGGING
+	bool "Log all commands of the command stream"
+	help
+	  Without this option only the return value of the program and the
+	  data of READ_DATA commands are written to the console.
+
+endmenu
+
+source "Kconfig.zephyr"
+
+# mps2/an500 is used for testing in qemu: its Cortex-M7 has an FPU, which is
+# not declared by the SoC definition of Zephyr
+config SOC_AN500
+	select CPU_HAS_FPU
