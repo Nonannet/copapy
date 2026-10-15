@@ -1,0 +1,16 @@
+/*
+ * The runner communicates over USB (CDC ACM), the Zephyr console stays on
+ * LPUART6 (Teensy pins 0 and 1).
+ */
+
+/ {
+	chosen {
+		coparun,uart = &coparun_cdc_acm_uart;
+	};
+};
+
+&zephyr_udc0 {
+	coparun_cdc_acm_uart: coparun_cdc_acm_uart {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};
