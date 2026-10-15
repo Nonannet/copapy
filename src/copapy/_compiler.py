@@ -1,4 +1,4 @@
-from typing import Generator, Iterable, Any
+from typing import Generator, Iterable, Any, Sequence
 from . import _binwrite as binw
 from ._stencils import stencil_database, patch_entry
 from collections import defaultdict
@@ -488,57 +488,78 @@ def get_dag_stats(node_list: Iterable[Node | Net]) -> dict[str, int]:
     return op_stat
 
 
-def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[binw.data_writer, dict[Net, tuple[int, int, str]]]:
-    """Compiles a DAG identified by provided end nodes to binary code
+class _Program():
+    """Operations and variables of one entry point of a compiled program"""
+    def __init__(self, node_list: Iterable[Node], external: dict[Node, int]):
+        self.roots, self.net_map = canonicalize(node_list)
+        self.ordered_ops = stable_toposort(get_all_dag_edges(self.roots))
+        const_net_list = get_const_nets(self.ordered_ops)
+        output_ops = list(add_load_ops(self.ordered_ops))
+        self.extended_output_ops = list(add_store_ops(output_ops, const_net_list))
+        self.external = external
+
+        # Get all nets/variables associated with heap memory
+        variable_list = set(get_nets([const_net_list], self.extended_output_ops))
+
+        # Arguments and results of array ops are accessed in memory
+        variable_list |= {net for _, node in self.extended_output_ops if isinstance(node, ArrayOp)
+                          for net in (*node.args, node.result)}
+
+        # Packed arrays (also if all elements are constants and no store is emitted)
+        variable_list |= {node.result for node in self.ordered_ops if isinstance(node, ArrayPack)}
+
+        # Array elements are aliases into the memory of their arrays
+        self.element_nets = [net for net in variable_list if isinstance(net.source, ArrayElement)]
+        variable_list = {net for net in variable_list if not isinstance(net.source, ArrayElement)}
+        variable_list |= {net.source.args[0] for net in self.element_nets}
+        self.variable_list = variable_list
+
+        self.stencil_names = {node.name for _, node in self.extended_output_ops}
+
+
+def compile_programs(programs: Sequence[tuple[Iterable[Node], dict[Node, int]]], sdb: stencil_database,
+                     reserved: int = 0) -> tuple[binw.data_writer, list[dict[Net, tuple[int, int, str]]], list[int]]:
+    """Compiles several DAGs, each with its own entry point, to one code and
+    one data memory. The DAGs share the auxiliary functions and constants.
 
     Arguments:
-        node_list: List of end nodes of the DAG to compile
+        programs: For each entry point the end nodes of its DAG and the addresses
+            of external head nodes (Input, ArrayConst): they are not allocated and
+            not initialized by the compiler
         sdb: Stencil database
+        reserved: Size of a memory block at the start of the data memory that is
+            not used by the compiler (e.g. for the external head nodes)
 
     Returns:
-        Tuple of data writer with binary code and variable layout dictionary
+        Tuple of data writer with binary code, variable layout dictionary of
+        each program and code offset of each entry point
     """
-    variables: dict[Net, tuple[int, int, str]] = {}
-    data_list: list[bytes] = []
+    data_list: list[bytes] = []  # Binary code of all programs and auxiliary functions
     patch_list: list[patch_entry] = []
 
-    roots, net_map = canonicalize(node_list)
-    ordered_ops = stable_toposort(get_all_dag_edges(roots))
-    const_net_list = get_const_nets(ordered_ops)
-    output_ops = list(add_load_ops(ordered_ops))
-    extended_output_ops = list(add_store_ops(output_ops, const_net_list))
+    # Prepare programs and get the list of all used stencils
+    prepared = [_Program(node_list, external) for node_list, external in programs]
 
     dw = binw.data_writer(sdb.byteorder)
 
     # Deallocate old allocated memory (if existing)
     dw.write_com(binw.Command.FREE_MEMORY)
 
-    # Get all nets/variables associated with heap memory
-    variable_list = set(get_nets([const_net_list], extended_output_ops))
-
-    # Arguments and results of array ops are accessed in memory
-    variable_list |= {net for _, node in extended_output_ops if isinstance(node, ArrayOp)
-                      for net in (*node.args, node.result)}
-
-    # Packed arrays (also if all elements are constants and no store is emitted)
-    variable_list |= {node.result for node in ordered_ops if isinstance(node, ArrayPack)}
-
-    # Array elements are aliases into the memory of their arrays
-    element_nets = [net for net in variable_list if isinstance(net.source, ArrayElement)]
-    variable_list = {net for net in variable_list if not isinstance(net.source, ArrayElement)}
-    variable_list |= {net.source.args[0] for net in element_nets}
-
-    stencil_names = {node.name for _, node in extended_output_ops}
+    stencil_names: set[str] = set().union(*(p.stencil_names for p in prepared))
     aux_function_names = sdb.get_sub_functions(stencil_names)
     used_const_sections = sdb.const_sections_from_functions(aux_function_names | stencil_names)
 
     # Write data
-    section_mem_layout, sections_length = get_section_layout(used_const_sections, sdb)
-    variable_mem_layout, variables_data_lengths = get_data_layout(variable_list, sdb, sections_length)
-    if variables_data_lengths:
+    section_mem_layout, data_length = get_section_layout(used_const_sections, sdb, reserved)
+    variable_mem_layouts: list[list[tuple[Net, int, int]]] = []
+    for p in prepared:
+        layout, data_length = get_data_layout(
+            [net for net in p.variable_list if net.source not in p.external], sdb, data_length)
+        variable_mem_layouts.append(layout)
+    if data_length:
         # Skip for programs without variables or constants
         dw.write_com(binw.Command.ALLOCATE_DATA)
-        dw.write_int(variables_data_lengths)
+        dw.write_int(data_length)
 
     # Heap constants
     for section_id, start, lengths in section_mem_layout:
@@ -547,100 +568,121 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
         dw.write_int(lengths)
         dw.write_bytes(sdb.get_section_data(section_id))
 
-    # Heap variables
-    for net, start, lengths in variable_mem_layout:
-        variables[net] = (start, lengths, net.dtype)
-        if isinstance(net.source, HeadNode):
-            dw.write_com(binw.Command.COPY_DATA)
-            dw.write_int(start)
-            dw.write_int(lengths)
-            dw.write_value(net.source.value, lengths)
-            #print(f'+ {net.dtype} {net.source.value}')
-        elif isinstance(net.source, ArrayConst):
-            dw.write_com(binw.Command.COPY_DATA)
-            dw.write_int(start)
-            dw.write_int(lengths)
-            dw.write_bytes(binw.pack_array(net.source.values, net.dtype, sdb.byteorder))
-        elif isinstance(net.source, ArrayPack) and any(is_pack_constant(a) for a in net.source.args):
-            # Constant elements, the others are stored on each run
-            init = [a.source.value if isinstance(a.source, Constant) else 0
-                    for a in net.source.args]
-            dw.write_com(binw.Command.COPY_DATA)
-            dw.write_int(start)
-            dw.write_int(lengths)
-            dw.write_bytes(binw.pack_array(init, net.dtype, sdb.byteorder))
-
-    object_addr_lookup = {net: offs for net, offs, _ in variable_mem_layout}
-
-    for net in element_nets:
-        element = net.source
-        assert isinstance(element, ArrayElement)
-        size = sdb.get_type_size(transl_type(net.dtype))
-        object_addr_lookup[net] = object_addr_lookup[element.args[0]] + element.index * size
-        variables[net] = (object_addr_lookup[net], size, net.dtype)
-
     # prep auxiliary_functions
     code_section_layout, func_addr_lookup, aux_func_len = get_aux_func_layout(aux_function_names, sdb)
 
     # Prepare program code and relocations
     section_addr_lookup = {id: offs for id, offs, _ in section_mem_layout}
 
-    # assemble stencils to main program and patch stencils
-    data = sdb.get_function_code('entry_function_shell', 'start')
-    data_list.append(data)
-    #print(f"* entry_function_shell (0) " + ' '.join(f'{d:02X}' for d in data))
-    offset = aux_func_len + len(data)
+    all_variables: list[dict[Net, tuple[int, int, str]]] = []
+    entry_points: list[int] = []
+    offset = aux_func_len
 
-    for associated_net, node in extended_output_ops:
-        assert node.name in sdb.stencil_definitions, f"- Warning: {node.name} stencil not found"
-        data = sdb.get_stencil_code(node.name)
+    for p, variable_mem_layout in zip(prepared, variable_mem_layouts):
+        variables: dict[Net, tuple[int, int, str]] = {}
+
+        # Heap variables
+        for net, start, lengths in variable_mem_layout:
+            variables[net] = (start, lengths, net.dtype)
+            if isinstance(net.source, HeadNode):
+                dw.write_com(binw.Command.COPY_DATA)
+                dw.write_int(start)
+                dw.write_int(lengths)
+                dw.write_value(net.source.value, lengths)
+                #print(f'+ {net.dtype} {net.source.value}')
+            elif isinstance(net.source, ArrayConst):
+                dw.write_com(binw.Command.COPY_DATA)
+                dw.write_int(start)
+                dw.write_int(lengths)
+                dw.write_bytes(binw.pack_array(net.source.values, net.dtype, sdb.byteorder))
+            elif isinstance(net.source, ArrayPack) and any(is_pack_constant(a) for a in net.source.args):
+                # Constant elements, the others are stored on each run
+                init = [a.source.value if isinstance(a.source, Constant) else 0
+                        for a in net.source.args]
+                dw.write_com(binw.Command.COPY_DATA)
+                dw.write_int(start)
+                dw.write_int(lengths)
+                dw.write_bytes(binw.pack_array(init, net.dtype, sdb.byteorder))
+
+        # External head nodes
+        for net in p.variable_list:
+            if net.source in p.external:
+                size = sdb.get_type_size(transl_type(net.dtype))
+                variables[net] = (p.external[net.source], size * net.length if isinstance(net, ArrayNet) else size, net.dtype)
+
+        object_addr_lookup = {net: offs for net, (offs, _, _) in variables.items()}
+
+        for net in p.element_nets:
+            element = net.source
+            assert isinstance(element, ArrayElement)
+            size = sdb.get_type_size(transl_type(net.dtype))
+            object_addr_lookup[net] = object_addr_lookup[element.args[0]] + element.index * size
+            variables[net] = (object_addr_lookup[net], size, net.dtype)
+
+        # assemble stencils to main program and patch stencils
+        entry_points.append(offset + sdb.thumb_mode)
+        data = sdb.get_function_code('entry_function_shell', 'start')
         data_list.append(data)
-        #print(f"* {node.name} ({offset}) " + ' '.join(f'{d:02X}' for d in data))
-
-        for reloc in sdb.get_relocations(node.name, stencil=True):
-            if reloc.target_in_code:
-                # Branch to a label inside the stencil
-                label_addr = offset + reloc.target_symbol_offset - reloc.function_offset - reloc.start
-                patches = sdb.get_patch(reloc, label_addr, offset, binw.PatchFlag.CODE)
-
-            elif reloc.target_symbol_info in ('STT_OBJECT', 'STT_NOTYPE', 'STT_SECTION'):
-                #print('-- ' + reloc.target_symbol_name + ' // ' + node.name)
-                if reloc.target_symbol_name.startswith('ref_'):
-                    # Patch addresses of array op arguments (ref_arg<n>) and result (ref_out)
-                    assert isinstance(node, ArrayOp), f"Memory reference in non array op {node.name}"
-                    slot = reloc.target_symbol_name[4:]
-                    ref_net = node.result if slot == 'out' else node.args[int(slot[3:])]
-                    patches = sdb.get_patch(reloc, object_addr_lookup[ref_net], offset, binw.PatchFlag.DATA)
-                elif reloc.target_symbol_name.startswith('dummy_'):
-                    # Patch for write and read addresses to/from heap variables
-                    assert associated_net, f"Relocation found but no net defined for operation {node.name}"
-                    #print(f"Patch for write and read addresses to/from heap variables: {node.name} {patch.target_symbol_info} {patch.target_symbol_name}")
-                    obj_addr = object_addr_lookup[associated_net]
-                    patches = sdb.get_patch(reloc, obj_addr, offset, binw.PatchFlag.DATA)
-                elif reloc.target_symbol_name.startswith('result_'):
-                    # Set return jump address to address of following stencil
-                    patches = sdb.get_patch(reloc, offset + len(data), offset, binw.PatchFlag.CODE)
-                else:
-                    # Patch constants addresses on heap
-                    assert reloc.target_section_index in section_addr_lookup, f"- Function or object in {node.name} missing: {reloc.pelfy_reloc.symbol.name}"
-                    obj_addr = reloc.target_symbol_offset + section_addr_lookup[reloc.target_section_index]
-                    patches = sdb.get_patch(reloc, obj_addr, offset, binw.PatchFlag.DATA)
-                    #print('* constants stancils', patch.type, patch.patch_address, binw.Command.PATCH_OBJECT, node.name)
-
-            elif reloc.target_symbol_info == 'STT_FUNC':
-                func_addr = func_addr_lookup[reloc.target_symbol_name]
-                patches = sdb.get_patch(reloc, func_addr, offset, binw.PatchFlag.CODE)
-                #print(patch.type, patch.addr, binw.Command.PATCH_FUNC, node.name, '->', patch.target_symbol_name)
-            else:
-                raise ValueError(f"Unsupported: {node.name} {reloc.target_symbol_info} {reloc.target_symbol_name}")
-
-            patch_list.extend(patches)
-
+        #print(f"* entry_function_shell ({offset}) " + ' '.join(f'{d:02X}' for d in data))
         offset += len(data)
 
-    data = sdb.get_function_code('entry_function_shell', 'end')
-    data_list.append(data)
-    offset += len(data)
+        for associated_net, node in p.extended_output_ops:
+            assert node.name in sdb.stencil_definitions, f"- Warning: {node.name} stencil not found"
+            data = sdb.get_stencil_code(node.name)
+            data_list.append(data)
+            #print(f"* {node.name} ({offset}) " + ' '.join(f'{d:02X}' for d in data))
+
+            for reloc in sdb.get_relocations(node.name, stencil=True):
+                if reloc.target_in_code:
+                    # Branch to a label inside the stencil
+                    label_addr = offset + reloc.target_symbol_offset - reloc.function_offset - reloc.start
+                    patches = sdb.get_patch(reloc, label_addr, offset, binw.PatchFlag.CODE)
+
+                elif reloc.target_symbol_info in ('STT_OBJECT', 'STT_NOTYPE', 'STT_SECTION'):
+                    #print('-- ' + reloc.target_symbol_name + ' // ' + node.name)
+                    if reloc.target_symbol_name.startswith('ref_'):
+                        # Patch addresses of array op arguments (ref_arg<n>) and result (ref_out)
+                        assert isinstance(node, ArrayOp), f"Memory reference in non array op {node.name}"
+                        slot = reloc.target_symbol_name[4:]
+                        ref_net = node.result if slot == 'out' else node.args[int(slot[3:])]
+                        patches = sdb.get_patch(reloc, object_addr_lookup[ref_net], offset, binw.PatchFlag.DATA)
+                    elif reloc.target_symbol_name.startswith('dummy_'):
+                        # Patch for write and read addresses to/from heap variables
+                        assert associated_net, f"Relocation found but no net defined for operation {node.name}"
+                        #print(f"Patch for write and read addresses to/from heap variables: {node.name} {patch.target_symbol_info} {patch.target_symbol_name}")
+                        obj_addr = object_addr_lookup[associated_net]
+                        patches = sdb.get_patch(reloc, obj_addr, offset, binw.PatchFlag.DATA)
+                    elif reloc.target_symbol_name.startswith('result_'):
+                        # Set return jump address to address of following stencil
+                        patches = sdb.get_patch(reloc, offset + len(data), offset, binw.PatchFlag.CODE)
+                    else:
+                        # Patch constants addresses on heap
+                        assert reloc.target_section_index in section_addr_lookup, f"- Function or object in {node.name} missing: {reloc.pelfy_reloc.symbol.name}"
+                        obj_addr = reloc.target_symbol_offset + section_addr_lookup[reloc.target_section_index]
+                        patches = sdb.get_patch(reloc, obj_addr, offset, binw.PatchFlag.DATA)
+                        #print('* constants stancils', patch.type, patch.patch_address, binw.Command.PATCH_OBJECT, node.name)
+
+                elif reloc.target_symbol_info == 'STT_FUNC':
+                    func_addr = func_addr_lookup[reloc.target_symbol_name]
+                    patches = sdb.get_patch(reloc, func_addr, offset, binw.PatchFlag.CODE)
+                    #print(patch.type, patch.addr, binw.Command.PATCH_FUNC, node.name, '->', patch.target_symbol_name)
+                else:
+                    raise ValueError(f"Unsupported: {node.name} {reloc.target_symbol_info} {reloc.target_symbol_name}")
+
+                patch_list.extend(patches)
+
+            offset += len(data)
+
+        data = sdb.get_function_code('entry_function_shell', 'end')
+        data_list.append(data)
+        offset += len(data)
+
+        # Nets of the given DAG are stored at the address of their canonical nets
+        for net, canonical in p.net_map.items():
+            if canonical in variables:
+                variables[net] = variables[canonical]
+
+        all_variables.append(variables)
 
     # allocate program data
     dw.write_com(binw.Command.ALLOCATE_CODE)
@@ -699,12 +741,20 @@ def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[bi
         dw.write_byte(patch.flags)
         dw.write_byte(0)  # reserved
 
+    return dw, all_variables, entry_points
+
+
+def compile_to_dag(node_list: Iterable[Node], sdb: stencil_database) -> tuple[binw.data_writer, dict[Net, tuple[int, int, str]]]:
+    """Compiles a DAG identified by provided end nodes to binary code
+
+    Arguments:
+        node_list: List of end nodes of the DAG to compile
+        sdb: Stencil database
+
+    Returns:
+        Tuple of data writer with binary code and variable layout dictionary
+    """
+    dw, (variables,), (entry_point,) = compile_programs([(node_list, {})], sdb)
     dw.write_com(binw.Command.ENTRY_POINT)
-    dw.write_int(aux_func_len + sdb.thumb_mode)
-
-    # Nets of the given DAG are stored at the address of their canonical nets
-    for net, canonical in net_map.items():
-        if canonical in variables:
-            variables[net] = variables[canonical]
-
+    dw.write_int(entry_point)
     return dw, variables

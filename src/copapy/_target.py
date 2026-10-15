@@ -6,6 +6,7 @@ import struct
 from ._basic_types import value, Net, Node, Store, Constant, NumLike, stencil_db_from_package, ArrayOp, ArrayElement, ArrayConst, ArrayPack, transl_type
 from ._arrays import array, ArrayType
 from ._compiler import compile_to_dag
+from ._stencils import stencil_database
 
 T = TypeVar("T", int, float)
 Values: TypeAlias = 'Iterable[NumLike] | NumLike'
@@ -155,47 +156,74 @@ def map_to_numpy(arr: array[Any] | ArrayType[Any], copy: bool = False) -> array[
     return _mapped(arr, 'numpy_copy' if copy else 'numpy')
 
 
-class Target():
-    """Target device for compiling for and running on copapy code.
+def collect_roots(values: Any) -> list[Node]:
+    """End nodes of the DAG for computing and storing the given values
+
+    Arguments:
+        values: Values, vectors, tensors and arrays to compute, also in
+            (nested) sequences or as values of dicts
     """
-    def __init__(self, arch: str = 'native', optimization: str = 'O3') -> None:
-        """Initialize Target object
+    nodes: list[Node] = []
 
-        Arguments:
-            arch: Target architecture
-            optimization: Optimization level
-        """
-        self.sdb = stencil_db_from_package(arch, optimization)
-        self._values: dict[Net, tuple[int, int, str]] = {}
-        self._data_mem: Any = None  # Data memory of the target with the buffer protocol
-        self._context = create_target()
+    def add_root(net: Net) -> None:
+        if isinstance(net.source, ArrayElement):
+            # Element is an alias to the array memory
+            net = net.source.args[0]
+        if isinstance(net.source, ArrayOp | ArrayPack):
+            # Result is already written to heap by the array op or pack
+            nodes.append(net.source)
+        elif not isinstance(net.source, ArrayConst):
+            nodes.append(Store(net))
 
-    def __del__(self) -> None:
-        if self._data_mem is not None and self._data_mem.exports:
-            return  # The memory is still in use (e.g. by a numpy array): it is not freed
-        clear_target(self._context)
+    def add(input: Any) -> None:
+        if isinstance(input, array):
+            add_root(input.net)
+        elif isinstance(input, ArrayType):
+            packed = input._packed_array()
+            if packed is not None:
+                add_root(packed.net)
+            else:
+                for v in input.values:
+                    if isinstance(v, value):
+                        add_root(v.net)
+        elif isinstance(input, value):
+            add_root(input.net)
+        elif isinstance(input, dict):
+            add(list(input.values()))
+        elif isinstance(input, Iterable) and not isinstance(input, str | bytes):
+            for v in input:
+                add(v)
+
+    add(values)
+    return nodes
+
+
+class _TargetBase():
+    """Reading and writing of values on a target. The memory of the target is
+    accessed by _read_mem and by commands sent with _send."""
+    sdb: stencil_database
+    _values: dict[Net, tuple[int, int, str]]  # Address, size and type by net
+
+    def _read_mem(self, addr: int, lengths: int) -> bytes:
+        """Reads data memory of the target"""
+        raise NotImplementedError()
+
+    def _send(self, dw: binw.data_writer) -> None:
+        """Sends commands to the target, END_COM is appended"""
+        raise NotImplementedError()
+
+    def _check_writable(self, net: Net) -> None:
+        """Raises an error if the net can not be written by write_value"""
+
+    def _release_memory(self) -> None:
+        """Called before the memory of the target is freed for a new program"""
 
     def buffer(self, variable: array[Any]) -> 'memoryview[Any]':
         """Returns memory of an array on the target as memoryview.
 
-        Only available for the local target. All buffers must be released or
-        deleted before a new program is compiled on the same target.
-
-        Arguments:
-            variable: Array-variable to get the memory of
-
-        Returns:
-            Writable memoryview of the array memory
+        Only available for the local target.
         """
-        net = variable.net
-        if net not in self._values:
-            raise ValueError(f"Array {variable} not found. It might not have been compiled for the target or is not used.")
-        if self._data_mem is None:
-            self._data_mem = data_mem(self._context)
-        addr, lengths, _ = self._values[net]
-        view: Any = memoryview(self._data_mem)[addr:addr + lengths]
-        ret: memoryview[Any] = view.cast(_BUFFER_FORMATS[net.dtype], variable.shape)
-        return ret
+        raise NotImplementedError(f"No buffer access on {type(self).__name__}")
 
     def _locate_element(self, net: Net) -> bool:
         """Returns if the net is stored on the target. An array element that is
@@ -207,61 +235,6 @@ class Target():
                 size = self.sdb.get_type_size(transl_type(array_net.dtype))
                 self._values[net] = (base + net.source.index * size, size, net.dtype)
         return net in self._values
-
-    def compile(self, *values: Any) -> None:
-        """Compiles the code to compute the given values.
-
-        Arguments:
-            values: Values, vectors, tensors and arrays to compute, also in
-                (nested) sequences or as values of dicts
-        """
-        nodes: list[Node] = []
-
-        def add_root(net: Net) -> None:
-            if isinstance(net.source, ArrayElement):
-                # Element is an alias to the array memory
-                net = net.source.args[0]
-            if isinstance(net.source, ArrayOp | ArrayPack):
-                # Result is already written to heap by the array op or pack
-                nodes.append(net.source)
-            elif not isinstance(net.source, ArrayConst):
-                nodes.append(Store(net))
-
-        def add(input: Any) -> None:
-            if isinstance(input, array):
-                add_root(input.net)
-            elif isinstance(input, ArrayType):
-                packed = input._packed_array()
-                if packed is not None:
-                    add_root(packed.net)
-                else:
-                    for v in input.values:
-                        if isinstance(v, value):
-                            add_root(v.net)
-            elif isinstance(input, value):
-                add_root(input.net)
-            elif isinstance(input, dict):
-                add(list(input.values()))
-            elif isinstance(input, Iterable) and not isinstance(input, str | bytes):
-                for v in input:
-                    add(v)
-
-        add(values)
-
-        if self._data_mem is not None and self._data_mem.exports:
-            raise RuntimeError("A buffer or numpy array mapped to the memory of the target is still in use")
-        self._data_mem = None
-        dw, self._values = compile_to_dag(nodes, self.sdb)
-        dw.write_com(binw.Command.END_COM)
-        assert coparun(self._context, dw.get_data()) > 0
-
-    def run(self) -> None:
-        """Runs the compiled code on the target device.
-        """
-        dw = binw.data_writer(self.sdb.byteorder)
-        dw.write_com(binw.Command.RUN_PROG)
-        dw.write_com(binw.Command.END_COM)
-        assert coparun(self._context, dw.get_data()) > 0
 
     @overload
     def read_value(self, variables: value[T]) -> T: ...
@@ -296,7 +269,7 @@ class Target():
         if isinstance(variables, array):
             if variables.net in self._values:
                 addr, lengths, _ = self._values[variables.net]
-                data = read_data_mem(self._context, addr, lengths)
+                data = self._read_mem(addr, lengths)
                 assert data is not None and len(data) == lengths, f"Failed to read array {variables}"
                 flat = struct.unpack(binw.array_format(variables.net.dtype, variables.size, self.sdb.byteorder), data)
             else:
@@ -338,7 +311,7 @@ class Target():
         addr, lengths, _ = self._values[variables.net]
         var_type = variables.dtype
         assert lengths > 0
-        data = read_data_mem(self._context, addr, lengths)
+        data = self._read_mem(addr, lengths)
         assert data is not None and len(data) == lengths, f"Failed to read value {variables}"
         en = {'little': '<', 'big': '>'}[self.sdb.byteorder]
         if var_type == 'float':
@@ -371,6 +344,7 @@ class Target():
         if isinstance(variables, array):
             assert isinstance(data, Iterable), "Data for an array must be a sequence"
             assert variables.net in self._values, f"Array {variables} not found. It might not have been compiled for the target."
+            self._check_writable(variables.net)
             addr, lengths, _ = self._values[variables.net]
             flat = array.flatten_data(data)
             assert len(flat) == variables.size, f"Data size {len(flat)} does not match array size {variables.size}"
@@ -380,8 +354,7 @@ class Target():
             dw.write_int(addr)
             dw.write_int(lengths)
             dw.write_bytes(binw.pack_array([conv(v) for v in flat], variables.net.dtype, self.sdb.byteorder))
-            dw.write_com(binw.Command.END_COM)
-            assert coparun(self._context, dw.get_data()) > 0
+            self._send(dw)
             return
 
         if isinstance(variables, Iterable):
@@ -394,6 +367,7 @@ class Target():
 
         assert isinstance(variables, value), "Argument must be a copapy value"
         assert self._locate_element(variables.net), f"Value {variables} not found. It might not have been compiled for the target."
+        self._check_writable(variables.net)
         addr, lengths, var_type = self._values[variables.net]
         assert lengths > 0
 
@@ -409,12 +383,94 @@ class Target():
         else:
             raise ValueError(f"Unsupported value type: {var_type}")
 
+        self._send(dw)
+
+
+class _LocalMemory(_TargetBase):
+    """Memory access for targets running in this process (coparun_module)"""
+    def __init__(self, arch: str = 'native', optimization: str = 'O3') -> None:
+        self.sdb = stencil_db_from_package(arch, optimization)
+        self._values = {}
+        self._data_mem: Any = None  # Data memory of the target with the buffer protocol
+        self._context = create_target()
+
+    def __del__(self) -> None:
+        if self._data_mem is not None and self._data_mem.exports:
+            return  # The memory is still in use (e.g. by a numpy array): it is not freed
+        clear_target(self._context)
+
+    def _read_mem(self, addr: int, lengths: int) -> bytes:
+        data: bytes = read_data_mem(self._context, addr, lengths)
+        return data
+
+    def _send(self, dw: binw.data_writer) -> None:
         dw.write_com(binw.Command.END_COM)
-        assert coparun(self._context, dw.get_data()) > 0
+        ret = coparun(self._context, dw.get_data())
+        if ret <= 0:
+            raise RuntimeError(f"Runner error {ret}")
+
+    def _release_memory(self) -> None:
+        """Checks that the data memory can be freed for a new program"""
+        if self._data_mem is not None and self._data_mem.exports:
+            raise RuntimeError("A buffer or numpy array mapped to the memory of the target is still in use")
+        self._data_mem = None
+
+    def buffer(self, variable: array[Any]) -> 'memoryview[Any]':
+        """Returns memory of an array on the target as memoryview.
+
+        Only available for the local target. All buffers must be released or
+        deleted before a new program is compiled on the same target.
+
+        Arguments:
+            variable: Array-variable to get the memory of
+
+        Returns:
+            Writable memoryview of the array memory
+        """
+        net = variable.net
+        if net not in self._values:
+            raise ValueError(f"Array {variable} not found. It might not have been compiled for the target or is not used.")
+        if self._data_mem is None:
+            self._data_mem = data_mem(self._context)
+        addr, lengths, _ = self._values[net]
+        view: Any = memoryview(self._data_mem)[addr:addr + lengths]
+        ret: memoryview[Any] = view.cast(_BUFFER_FORMATS[net.dtype], variable.shape)
+        return ret
+
+
+class Target(_LocalMemory):
+    """Target device for compiling for and running on copapy code.
+    """
+    def __init__(self, arch: str = 'native', optimization: str = 'O3') -> None:
+        """Initialize Target object
+
+        Arguments:
+            arch: Target architecture
+            optimization: Optimization level
+        """
+        super().__init__(arch, optimization)
+
+    def compile(self, *values: Any) -> None:
+        """Compiles the code to compute the given values.
+
+        Arguments:
+            values: Values, vectors, tensors and arrays to compute, also in
+                (nested) sequences or as values of dicts
+        """
+        nodes = collect_roots(values)
+        self._release_memory()
+        dw, self._values = compile_to_dag(nodes, self.sdb)
+        self._send(dw)
+
+    def run(self) -> None:
+        """Runs the compiled code on the target device.
+        """
+        dw = binw.data_writer(self.sdb.byteorder)
+        dw.write_com(binw.Command.RUN_PROG)
+        self._send(dw)
 
     def read_value_remote(self, variable: value[Any]) -> None:
         """Reads the raw data of a value by the runner."""
         dw = binw.data_writer(self.sdb.byteorder)
         add_read_value_remote(dw, self._values, variable.net)
-        dw.write_com(binw.Command.END_COM)
-        assert coparun(self._context, dw.get_data()) > 0
+        self._send(dw)
