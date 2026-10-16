@@ -2,12 +2,18 @@
 from typing import Iterator
 
 
+# Type of the values of each kind of channel
+_DTYPES = {'gpio_in': 'int', 'gpio_out': 'int', 'pwm_out': 'float', 'encoder_in': 'int', 'adc_in': 'int'}
+
+
 class IoChannel():
     """I/O channel of a device
 
     Attributes:
         index: Number of the channel on the runner
-        kind: Kind of the channel, e.g. 'gpio_in' or 'gpio_out'
+        kind: Kind of the channel: 'gpio_in', 'gpio_out' (bool), 'pwm_out' (float
+            duty cycle 0..1), 'encoder_in' (int position count), 'adc_in' (int raw
+            conversion result)
         name: Name of the channel (devicetree node name on Zephyr)
     """
     def __init__(self, index: int, kind: str, name: str) -> None:
@@ -19,6 +25,16 @@ class IoChannel():
     def input(self) -> bool:
         """The channel is read by the device"""
         return self.kind.endswith('_in')
+
+    @property
+    def readable(self) -> bool:
+        """The channel can be read: inputs and the level of GPIO outputs"""
+        return self.input or self.kind == 'gpio_out'
+
+    @property
+    def dtype(self) -> str:
+        """Type of the values of the channel"""
+        return _DTYPES.get(self.kind, 'int')
 
     def __repr__(self) -> str:
         return f"IoChannel({self.name!r}, {self.kind})"
@@ -37,8 +53,20 @@ class IoChannels():
         return channel
 
     def gpio(self, name: str) -> IoChannel:
-        """GPIO channel (input or output) by name"""
+        """GPIO channel (input or output, bool values) by name"""
         return self._get(name, ('gpio_in', 'gpio_out'))
+
+    def pwm(self, name: str) -> IoChannel:
+        """PWM output (float duty cycle 0..1) by name"""
+        return self._get(name, ('pwm_out',))
+
+    def encoder(self, name: str) -> IoChannel:
+        """Quadrature encoder input (int position count) by name"""
+        return self._get(name, ('encoder_in',))
+
+    def adc(self, name: str) -> IoChannel:
+        """ADC input (int raw conversion result) by name"""
+        return self._get(name, ('adc_in',))
 
     def __getitem__(self, name: str) -> IoChannel:
         return self._get(name, tuple({c.kind for c in self._channels.values()}))
