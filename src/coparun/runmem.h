@@ -36,6 +36,7 @@
 #define START_TASKS      68
 #define STOP_TASKS       69
 #define READ_MEM         70
+#define LIST_IO          71
 #define END_COM         256
 #define FREE_MEMORY     257
 #define DUMP_CODE       258
@@ -109,8 +110,15 @@
  *   uint32 offs, uint32 size: writes the line "COPARUN_DATA <size>" followed
  *                 by size bytes of the data memory at offs
  *
+ * LIST_IO: writes a line "COPARUN_IO <channel> <kind> <name>" for each I/O
+ *                 channel of the device (kind e.g. "gpio_in", "gpio_out")
+ *
  * While the tasks are running, RUN_TASK is only allowed for tasks without
  * period and STEP_TASKS is not allowed.
+ *
+ * Device I/O: input channels are read into the data memory at the release
+ * of a task before its latch copies (io_in records), output channels are
+ * written from the data memory after its publish copies (io_out records).
  */
 typedef struct task_s {
     uint32_t entry;          /* offset of the entry function in the code memory */
@@ -136,7 +144,17 @@ typedef struct task_s {
     /* Load shedding of the real-time execution (if supported by the runner) */
     uint32_t degraded;       /* task runs with lower priority than the host communication */
     uint32_t degradations;   /* number of times the task was degraded */
+    uint32_t io_in_offs;     /* io_t records of input channels, read at the release */
+    uint32_t io_in_count;
+    uint32_t io_out_offs;    /* io_t records of output channels, written at the publish */
+    uint32_t io_out_count;
 } task_t;
+
+/* Device I/O channel and its value (4 bytes) in the data memory */
+typedef struct io_s {
+    uint32_t channel;
+    uint32_t addr;
+} io_t;
 
 /* Copy operation inside the data memory */
 typedef struct copy_s {
@@ -213,6 +231,14 @@ uint32_t runmem_cpu_time(void);
 
 /* Converts a difference of counter values to ns */
 uint32_t runmem_to_ns(uint32_t delta);
+
+/* Device I/O channels (ISR safe): read a channel into or write a channel from
+   4 bytes of the data memory (GPIO: int32, 0 inactive, else active) */
+void runmem_io_read(uint32_t channel, uint8_t *value);
+void runmem_io_write(uint32_t channel, const uint8_t *value);
+
+/* Writes the list of I/O channels (LIST_IO) */
+void runmem_io_list(void);
 
 /* Initialize the run-time memory state (equal to zero-initialization) */
 void runmem_init(runmem_t *context);

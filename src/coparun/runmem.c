@@ -215,6 +215,20 @@ static void run_copies(runmem_t *context, uint32_t offs, uint32_t count) {
     RUNMEM_UNLOCK();
 }
 
+static void read_inputs(runmem_t *context, const task_t *task) {
+    const io_t *io = (const io_t *)(context->data_memory + task->io_in_offs);
+    for (uint32_t i = 0; i < task->io_in_count; i++) {
+        runmem_io_read(io[i].channel, context->data_memory + io[i].addr);
+    }
+}
+
+static void write_outputs(runmem_t *context, const task_t *task) {
+    const io_t *io = (const io_t *)(context->data_memory + task->io_out_offs);
+    for (uint32_t i = 0; i < task->io_out_count; i++) {
+        runmem_io_write(io[i].channel, context->data_memory + io[i].addr);
+    }
+}
+
 static int run_task(runmem_t *context, task_t *task) {
     task->runs++;
     return call_entry_point((entry_point_t)(context->executable_memory + task->entry));
@@ -225,11 +239,16 @@ void tasks_publish(runmem_t *context) {
         task_t *task = &context->tasks[i];
         if (task->period && task->countdown == 0 && task->pending) {
             run_copies(context, task->publish_offs, task->publish_count);
+            write_outputs(context, task);
             task->pending = 0;
         }
     }
 }
 
+/*
+ * Latches copies of all released tasks and runs the jobs of the released tasks.
+ * Returns a bitmask of the released tasks (bit 0 = task 0, bit 1 = task 1, ...).
+ */
 uint32_t tasks_latch(runmem_t *context) {
     uint32_t released = 0;
     uint32_t now = runmem_timestamp();
@@ -241,6 +260,7 @@ uint32_t tasks_latch(runmem_t *context) {
                 task->overruns++;
             } else {
                 task->release_time = now;
+                read_inputs(context, task);
                 run_copies(context, task->latch_offs, task->latch_count);
                 task->busy = 1;
                 released |= 1u << i;
@@ -319,6 +339,20 @@ uint32_t runmem_cpu_time(void) {
 
 uint32_t runmem_to_ns(uint32_t delta) {
     return delta;
+}
+
+/* No device I/O channels */
+void runmem_io_read(uint32_t channel, uint8_t *value) {
+    (void)channel;
+    (void)value;
+}
+
+void runmem_io_write(uint32_t channel, const uint8_t *value) {
+    (void)channel;
+    (void)value;
+}
+
+void runmem_io_list(void) {
 }
 #endif
 
@@ -560,9 +594,11 @@ int parse_commands(runmem_t *context, uint8_t *bytes, uint32_t lengths) {
                 {
                     task_t *task = &context->tasks[offs];
                     task->release_time = runmem_timestamp();
+                    read_inputs(context, task);
                     run_copies(context, task->latch_offs, task->latch_count);
                     int ret = measured_job(context, task);
                     run_copies(context, task->publish_offs, task->publish_count);
+                    write_outputs(context, task);
                     BLOG("Return value: %i\n", ret);
                 }
                 break;
@@ -628,6 +664,11 @@ int parse_commands(runmem_t *context, uint8_t *bytes, uint32_t lengths) {
                     size -= chunk_size;
                 }
                 fflush(stdout);
+                break;
+
+            case LIST_IO:
+                LOG("LIST_IO\n");
+                runmem_io_list();
                 break;
 
             case FREE_MEMORY:

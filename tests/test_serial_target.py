@@ -202,5 +202,58 @@ def test_load_shedding(target: cp.SerialTarget) -> None:
     assert heavy_stats['overruns'] > 0
 
 
+@pytest.mark.runner
+def test_gpio(target: cp.SerialTarget) -> None:
+    if 'led' not in [c.name for c in target.io]:
+        pytest.skip("No GPIO channels on this device")
+    io = target.io
+    print(io)
+
+    # Inputs with pull-up, open pins read high
+    in24, in25 = cp.value(False), cp.value(False)
+    target.bind(in24, io.gpio('d24'))
+    target.bind(in25, io.gpio('d25'))
+
+    # Outputs from a task, read back by the next job
+    on = cp.value(0)
+    led = on > 0
+    d10 = cp.iif(on > 1, 1, 0)
+    readback = cp.value(False)
+    target.bind(led, io.gpio('led'))
+    target.bind(d10, io.gpio('d10'))
+    target.bind(readback, io.gpio('led'))
+
+    pins = [in24 + 1, in25 + 1, readback + 1]
+    task = cp.Task([led, d10, pins], period=1e-3)
+    target.deploy(task)
+
+    for level, expected_led, expected_d10 in ((0, 0, 0), (1, 1, 0), (2, 1, 1), (0, 0, 0)):
+        target.write_value(on, level)
+        target.exec(task)  # writes the outputs
+        target.exec(task)  # reads back the output
+        assert target.read_value([led, d10]) == [expected_led, expected_d10]
+        assert target.read_value(pins) == [2, 2, expected_led + 1]
+        assert target.read_value([in24, in25, readback]) == [1, 1, expected_led]
+
+    # Real time: the LED follows the input written by the host
+    target.run()
+    for level in (1, 0, 1, 0):
+        target.write_value(on, level)
+        time.sleep(0.05)
+        assert target.read_value(readback) == level
+    target.stop()
+
+    with pytest.raises(ValueError):
+        target.write_value(in24, True)  # read from a channel
+    with pytest.raises(ValueError):
+        target.bind(on > 2, io.gpio('d24'))  # input channel can not be written
+    with pytest.raises(ValueError):
+        target.bind(cp.value(False), io.gpio('d24'))  # already bound
+    with pytest.raises(KeyError):
+        io.gpio('d99')
+    with pytest.raises(ValueError):
+        cp.LocalTarget().bind(cp.value(False), io.gpio('d24'))  # no I/O
+
+
 if __name__ == "__main__":
     pytest.main([__file__, '-v', '-s'])

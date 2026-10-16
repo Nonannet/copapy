@@ -14,12 +14,15 @@ from ._basic_types import Net, Node, Store, Input, HeadNode, ArrayNet, ArrayCons
 from ._arrays import array, ArrayType
 from ._compiler import compile_programs, _modified_node_copy
 from ._target import _TargetBase, _LocalMemory, collect_roots
+from ._io import IoChannel, IoChannels
 
-# task_t and copy_t records in runmem.h
-_TASK_FORMAT = 'IIiIIIIIIIIIIIIIIIIII'
+# task_t, copy_t and io_t records in runmem.h
+_TASK_FORMAT = 'IIiIIIIIIIIIIIIIIIIIIIIII'
 _TASK_SIZE = struct.calcsize('<' + _TASK_FORMAT)
 _COPY_FORMAT = 'III'
 _COPY_SIZE = struct.calcsize('<' + _COPY_FORMAT)
+_IO_FORMAT = 'II'
+_IO_SIZE = struct.calcsize('<' + _IO_FORMAT)
 
 
 class Task():
@@ -181,6 +184,8 @@ class _TaskTarget(_TargetBase):
         self._tasks: list[Task] = []
         self._task_table = 0  # Offset of the task table in the data memory
         self._ticks = 0  # Simulated time
+        self.io = IoChannels([])  # I/O channels of the device
+        self._bindings: dict[tuple[IoChannel, bool], Net] = {}  # Bound value by I/O channel and reading
 
     def _period_ticks(self, task: Task) -> int:
         if task.period is None:
@@ -267,12 +272,32 @@ class _TaskTarget(_TargetBase):
             externals.append(external)
             latch_copies.append(copies)
 
-        # Copy records, the publish records are filled after compiling
+        # Device I/O: input channels are read into the memory of the input at
+        # the release of each task using it, output channels are written from
+        # the published output of the task computing it
+        io_in: list[list[tuple[int, int]]] = [[] for _ in task_list]
+        io_out: list[list[tuple[int, int]]] = [[] for _ in task_list]
+        for (channel, reads), net in self._bindings.items():
+            if reads:
+                users = [i for i, (_, _, heads, _) in enumerate(isolated) if net.source in heads]
+                if not users:
+                    raise ValueError(f"{net} bound to {channel} is not used by a deployed task")
+                for i in users:
+                    io_in[i].append((channel.index, input_addr[net.source][0]))  # type: ignore[index]
+            elif net not in owner:
+                raise ValueError(f"{net} bound to {channel} is no output of a deployed task")
+            else:
+                io_out[task_list.index(owner[net])].append((channel.index, values[net][0]))
+
+        # Copy and I/O records, the publish records are filled after compiling
         copy_offs: list[tuple[int, int]] = []
-        for task, copies in zip(task_list, latch_copies):
+        io_offs: list[tuple[int, int]] = []
+        for i, (task, copies) in enumerate(zip(task_list, latch_copies)):
             offset = (offset + 3) // 4 * 4
             copy_offs.append((offset, offset + _COPY_SIZE * len(copies)))
             offset += _COPY_SIZE * (len(copies) + len(task._output_nets))
+            io_offs.append((offset, offset + _IO_SIZE * len(io_in[i])))
+            offset += _IO_SIZE * (len(io_in[i]) + len(io_out[i]))
 
         self._release_memory()
         dw, variables, entry_points = compile_programs(
@@ -288,10 +313,14 @@ class _TaskTarget(_TargetBase):
             latch_offs, publish_offs = copy_offs[i]
             for j, copy in enumerate(latch_copies[i] + publish):
                 struct.pack_into(en + _COPY_FORMAT, reserved, latch_offs + j * _COPY_SIZE, *copy)
+            io_in_offs, io_out_offs = io_offs[i]
+            for j, io in enumerate(io_in[i] + io_out[i]):
+                struct.pack_into(en + _IO_FORMAT, reserved, io_in_offs + j * _IO_SIZE, *io)
             struct.pack_into(en + _TASK_FORMAT, reserved, task_table + i * _TASK_SIZE,
                              entry_points[i], periods[i], task.priority or 0,
                              latch_offs, len(latch_copies[i]), publish_offs, len(publish),
-                             *[0] * 14)
+                             *[0] * 14,
+                             io_in_offs, len(io_in[i]), io_out_offs, len(io_out[i]))
 
         dw.write_com(binw.Command.COPY_DATA)
         dw.write_int(0)
@@ -374,6 +403,41 @@ class _TaskTarget(_TargetBase):
         source = net.source.args[0].source if isinstance(net.source, ArrayElement) else net.source
         if not isinstance(source, Input | ArrayConst):
             raise ValueError(f"{net} is no input, only copapy values and arrays can be written")
+        for (channel, reads), bound in self._bindings.items():
+            if reads and bound is net:
+                raise ValueError(f"{net} is read from the channel {channel.name}")
+
+    def bind(self, variable: value[Any], channel: IoChannel) -> None:
+        """Binds a value to an I/O channel of the device. Bindings are used by
+        the next deploy.
+
+        A copapy value (input) reads the channel at the release of each task
+        using it, it can not be written by write_value anymore. On an output
+        channel it reads back the level of the output.
+
+        A value computed by a task writes the output channel when the task
+        publishes its outputs. The value must be an output of the task.
+
+        Arguments:
+            variable: Value to bind, GPIO channels take bool or int values
+            channel: Channel of the target, e.g. target.io.gpio('led')
+        """
+        if not isinstance(variable, value):
+            raise TypeError(f"Only copapy values can be bound to channels, not {type(variable).__name__}")
+        if not len(self.io):
+            raise ValueError(f"{type(self).__name__} has no I/O channels")
+        if channel not in self.io:
+            raise ValueError(f"{channel} is no channel of this target, channels: {self.io}")
+        if variable.net.dtype != 'int':
+            raise TypeError(f"{channel} takes bool or int values, not {variable.dtype}")
+        reads = isinstance(variable.net.source, Input)
+        if not reads and channel.input:
+            raise ValueError(f"{channel} is an input, only copapy values (inputs) can be bound to it")
+        if (channel, reads) in self._bindings:
+            raise ValueError(f"{channel} is already bound for {'reading' if reads else 'writing'}")
+        if reads and any(r and net is variable.net for (_, r), net in self._bindings.items()):
+            raise ValueError(f"{variable} is already bound to a channel")
+        self._bindings[(channel, reads)] = variable.net
 
     @property
     def time(self) -> float:

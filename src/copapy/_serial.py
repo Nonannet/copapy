@@ -9,6 +9,7 @@ from . import _binwrite as binw
 from ._basic_types import stencil_db_from_package
 from ._tasks import Task, _TaskTarget
 from .devices import Device, teensy41
+from ._io import IoChannel, IoChannels
 
 CONTROL_ABORT = 0
 CONTROL_RESET = 1
@@ -81,6 +82,7 @@ class SerialTarget(_TaskTarget):
         self.running = False
         self.output: deque[str] = deque(maxlen=1000)  # Last lines of output of the runner
         self._data: list[bytes] = []
+        self._io_lines: list[str] = []
         self._owns_connection = connection is None
         if connection is None:
             import serial  # pyserial
@@ -91,6 +93,23 @@ class SerialTarget(_TaskTarget):
         self._con.write(control_frame(CONTROL_ABORT))
         self._con.flush()
         self._read_until('COPARUN_ABORT')
+
+        self.io = self._list_io()
+
+    def _list_io(self) -> IoChannels:
+        """I/O channels of the device, empty if not supported by the runner"""
+        dw = binw.data_writer(self.sdb.byteorder)
+        dw.write_com(binw.Command.LIST_IO)
+        self._io_lines = []
+        try:
+            self._send(dw)
+        except RuntimeError:
+            return IoChannels([])  # Runner without LIST_IO
+        channels = []
+        for line in self._io_lines:
+            _, index, kind, name = line.split(maxsplit=3)
+            channels.append(IoChannel(int(index), kind, name))
+        return IoChannels(channels)
 
     def close(self) -> None:
         """Closes the serial port. The tasks keep running on the device."""
@@ -116,7 +135,9 @@ class SerialTarget(_TaskTarget):
             line = self._readline()
             if line.startswith(marker) or line.startswith('COPARUN_ERROR'):
                 return line
-            if line.startswith('COPARUN_DATA '):
+            if line.startswith('COPARUN_IO '):
+                self._io_lines.append(line)
+            elif line.startswith('COPARUN_DATA '):
                 size = int(line.split()[1])
                 data = b''
                 while len(data) < size:
