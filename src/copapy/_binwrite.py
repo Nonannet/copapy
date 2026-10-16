@@ -19,7 +19,7 @@ Command = Enum('Command', [('ALLOCATE_DATA', 1), ('COPY_DATA', 2),
                            ('ENTRY_POINT', 7), ('TASK_TABLE', 8),
                            ('RUN_PROG', 64), ('READ_DATA', 65),
                            ('RUN_TASK', 66), ('STEP_TASKS', 67),
-                           ('START_TASKS', 68), ('STOP_TASKS', 69), ('READ_MEM', 70),
+                           ('START_TASKS', 68), ('STOP_TASKS', 69), ('READ_MEM', 70), ('LIST_IO', 71),
                            ('END_COM', 256), ('FREE_MEMORY', 257), ('DUMP_CODE', 258)])
 COMMAND_SIZE = 4
 

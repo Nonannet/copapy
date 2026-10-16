@@ -1,0 +1,28 @@
+description: |
+  GPIO channels of the copapy runner. Each child node is a channel, named by
+  the node name (e.g. "led"). Copapy values are bound to the channels by name
+  with SerialTarget.bind.
+
+    copapy_gpio {
+        compatible = "copapy,gpio-channels";
+        led {
+            gpios = <&gpio2 3 GPIO_ACTIVE_HIGH>;
+            output;
+        };
+        button {
+            gpios = <&gpio1 12 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+        };
+    };
+
+compatible: "copapy,gpio-channels"
+
+child-binding:
+  description: GPIO channel
+  properties:
+    gpios:
+      type: phandle-array
+      required: true
+      description: Pin, active level and pull resistor of the channel
+    output:
+      type: boolean
+      description: Output channel, otherwise input channel

@@ -9,6 +9,7 @@ set(CORE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../src/coparun)
 target_sources(app PRIVATE
     src/main.c
     src/tasks.c
+    src/io.c
     ${CORE_DIR}/runmem.c
     ${CORE_DIR}/mem_man.c
 )

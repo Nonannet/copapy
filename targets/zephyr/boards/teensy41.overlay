@@ -3,9 +3,40 @@
  * LPUART6 (Teensy pins 0 and 1).
  */
 
+#include <zephyr/dt-bindings/gpio/gpio.h>
+
 / {
 	chosen {
 		coparun,uart = &coparun_cdc_acm_uart;
+	};
+
+	/* I/O channels for copapy, named by the Teensy pin numbers. Pins 2-9
+	 * are kept free for PWM, 0/1 are the console, 22/23 CAN. */
+	copapy_gpio {
+		compatible = "copapy,gpio-channels";
+
+		led {
+			gpios = <&gpio2 3 GPIO_ACTIVE_HIGH>;    /* pin 13, GPIO_B0_03 */
+			output;
+		};
+		d10 {
+			gpios = <&gpio2 0 GPIO_ACTIVE_HIGH>;    /* GPIO_B0_00 */
+			output;
+		};
+		d11 {
+			gpios = <&gpio2 2 GPIO_ACTIVE_HIGH>;    /* GPIO_B0_02 */
+			output;
+		};
+		d12 {
+			gpios = <&gpio2 1 GPIO_ACTIVE_HIGH>;    /* GPIO_B0_01 */
+			output;
+		};
+		d24 {
+			gpios = <&gpio1 12 (GPIO_ACTIVE_HIGH | GPIO_PULL_UP)>;  /* GPIO_AD_B0_12 */
+		};
+		d25 {
+			gpios = <&gpio1 13 (GPIO_ACTIVE_HIGH | GPIO_PULL_UP)>;  /* GPIO_AD_B0_13 */
+		};
 	};
 };
 
