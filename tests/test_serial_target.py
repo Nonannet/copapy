@@ -255,5 +255,47 @@ def test_gpio(target: cp.SerialTarget) -> None:
         cp.LocalTarget().bind(cp.value(False), io.gpio('d24'))  # no I/O
 
 
+@pytest.mark.runner
+def test_pwm_encoder_adc(target: cp.SerialTarget) -> None:
+    if 'enc0' not in [c.name for c in target.io]:
+        pytest.skip("No PWM, encoder and ADC channels on this device")
+    io = target.io
+
+    duty = cp.value(0.0)
+    pwm = cp.clamp(duty, 0.0, 1.0)
+    pos, a0, a1 = cp.value(0), cp.value(0), cp.value(0)
+    target.bind(pwm, io.pwm('pwm2'))
+    target.bind(pos, io.encoder('enc0'))
+    target.bind(a0, io.adc('a0'))
+    target.bind(a1, io.adc('a1'))
+    task = cp.Task([pwm, pos + 1, a0 + 1, a1 + 1], period=1e-3)
+    target.deploy(task)
+
+    for d in (0.0, 0.25, 1.0, 2.0):
+        target.write_value(duty, d)
+        target.exec(task)
+        assert target.read_value(pwm) == min(d, 1.0)
+        # Encoder inputs with pull-up do not move, open ADC inputs give any value
+        position, adc0, adc1 = target.read_value([pos, a0, a1])
+        assert position == 0
+        assert 0 <= adc0 <= 4095 and 0 <= adc1 <= 4095
+
+    target.run()
+    time.sleep(0.2)
+    target.stop()
+    stats = target.stats(task)
+    print(stats)
+    assert stats['overruns'] == 0 and stats['runs'] > 150
+
+    with pytest.raises(TypeError):
+        target.bind(cp.value(0.0), io.encoder('enc0'))  # int channel
+    with pytest.raises(TypeError):
+        target.bind(pos + 1, io.pwm('pwm3'))  # float channel
+    with pytest.raises(ValueError):
+        target.bind(cp.value(0.0), io.pwm('pwm3'))  # PWM can not be read
+    with pytest.raises(KeyError):
+        io.adc('enc0')
+
+
 if __name__ == "__main__":
     pytest.main([__file__, '-v', '-s'])

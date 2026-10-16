@@ -419,7 +419,7 @@ class _TaskTarget(_TargetBase):
         publishes its outputs. The value must be an output of the task.
 
         Arguments:
-            variable: Value to bind, GPIO channels take bool or int values
+            variable: Value to bind, of the type of the channel (see IoChannel.kind)
             channel: Channel of the target, e.g. target.io.gpio('led')
         """
         if not isinstance(variable, value):
@@ -428,9 +428,11 @@ class _TaskTarget(_TargetBase):
             raise ValueError(f"{type(self).__name__} has no I/O channels")
         if channel not in self.io:
             raise ValueError(f"{channel} is no channel of this target, channels: {self.io}")
-        if variable.net.dtype != 'int':
-            raise TypeError(f"{channel} takes bool or int values, not {variable.dtype}")
+        if variable.net.dtype != channel.dtype:
+            raise TypeError(f"{channel} takes {channel.dtype} values, not {variable.dtype}")
         reads = isinstance(variable.net.source, Input)
+        if reads and not channel.readable:
+            raise ValueError(f"{channel} can not be read")
         if not reads and channel.input:
             raise ValueError(f"{channel} is an input, only copapy values (inputs) can be bound to it")
         if (channel, reads) in self._bindings:

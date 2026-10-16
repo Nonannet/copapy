@@ -1,0 +1,42 @@
+description: |
+  I/O channels of the copapy runner. Each child node is a channel, named by
+  the node name. Copapy values are bound to the channels by name with
+  SerialTarget.bind. The kind of a channel follows from its property:
+
+    copapy_io {
+        compatible = "copapy,io-channels";
+        led {
+            gpios = <&gpio2 3 GPIO_ACTIVE_HIGH>;
+            output;
+        };
+        motor {
+            pwms = <&flexpwm4_pwm2 0 PWM_USEC(50) PWM_POLARITY_NORMAL>;
+        };
+        enc0 {
+            encoder = <&qdec1>;
+        };
+        a0 {
+            io-channels = <&adc1 7>;
+        };
+    };
+
+compatible: "copapy,io-channels"
+
+child-binding:
+  description: I/O channel
+  properties:
+    gpios:
+      type: phandle-array
+      description: GPIO pin, active level and pull resistor
+    output:
+      type: boolean
+      description: GPIO output, otherwise GPIO input
+    pwms:
+      type: phandle-array
+      description: PWM output with period and polarity, the duty cycle is written
+    encoder:
+      type: phandle
+      description: Quadrature decoder, the position count is read
+    io-channels:
+      type: phandle-array
+      description: ADC and its input, the raw conversion result is read
