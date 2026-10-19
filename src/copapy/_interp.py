@@ -230,7 +230,7 @@ def interp(x: Any, xp: TableLike, fp: TableLike, method: str = 'linear') -> Any:
         arr = None if x._is_constant() else x._get_array()
         if arr is not None:
             return type(x)._from_array(evaluate(arr))
-        results = [evaluate(v) for v in x.values]
+        results: list[value[float] | float] = [evaluate(v) for v in x.values]
         return vector(results) if isinstance(x, vector) else tensor(results, x.shape)
     if not isinstance(x, value | int | float):
         raise TypeError(f"Can not interpolate at {type(x).__name__}")
