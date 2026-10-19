@@ -222,7 +222,7 @@ def solve(a: Any, b: Any, pivot: bool = True) -> Any:
             packed = solve_arrays(a._force_array(), b._force_array())
             return vector._from_array(packed) if isinstance(b, vector) else tensor._from_array(packed)
 
-    values = _solve_values(a.values, b.values, n, len(b.values) // n, pivot)
+    values: list[value[float] | float] = _solve_values(a.values, b.values, n, len(b.values) // n, pivot)
     return vector(values) if isinstance(b, vector) else tensor(values, b.shape)
 
 
