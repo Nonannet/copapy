@@ -4,6 +4,7 @@
 :hidden:
 stencil_doc
 example_asm
+runner_transfer
 ```
 
 ```{include} ../build/compiler.md
