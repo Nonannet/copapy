@@ -15,8 +15,19 @@ shift || true
 NAME=${BOARD//\//_}
 BUILD_DIR=build/zephyr/$NAME
 
-cmake -GNinja -B $BUILD_DIR -S targets/zephyr -DBOARD=$BOARD "$@"
-ninja -C $BUILD_DIR
+# WSL1: depending on the address space layout, CMake (KWSys) discards
+# directory listings because errno is left at ENOMEM by allocations while
+# reading the directory. The glob of the NXP HAL drivers is then empty and
+# the build fails (e.g. "fsl_gpc.h: No such file or directory"). Address
+# space randomization is disabled to get a working layout. ninja is included
+# since it reruns cmake if the configuration changed.
+RUN=()
+if [[ "$(uname -r)" == *-Microsoft ]]; then
+    RUN=(setarch "$(uname -m)" -R)
+fi
+
+${RUN[@]+"${RUN[@]}"} cmake -GNinja -B $BUILD_DIR -S targets/zephyr -DBOARD=$BOARD "$@"
+${RUN[@]+"${RUN[@]}"} ninja -C $BUILD_DIR
 
 mkdir -p build/runner
 cp $BUILD_DIR/zephyr/zephyr.elf build/runner/coparun-zephyr-$NAME.elf
