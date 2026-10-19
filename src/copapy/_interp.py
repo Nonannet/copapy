@@ -93,11 +93,11 @@ def _floor_index(t: Any, n: int) -> Any:
 def get_table_delta(table: array[Any], t: Any) -> tuple[Any, Any]:
     """Get difference of the two elements of a table around the fractional index
     t and the int flag (1 or 0) if t is inside of the table and not clamped.
-    
+
     Arguments:
         table: 1D float array with at least two elements
         t: Fractional index (value, array or number) in the table
-    
+
     Returns:
         diff: Difference of the two elements around t, with the shape of t
         inside: Boolean flag indicating if t is inside the table and not clamped

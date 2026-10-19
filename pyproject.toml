@@ -41,6 +41,7 @@ version_file = "src/copapy/_version.py"
 dev = [
     "ruff",
     "mypy",
+    "types-pyserial",
     "pytest",
     "pelfy>=1.0.10",
     "scipy"
