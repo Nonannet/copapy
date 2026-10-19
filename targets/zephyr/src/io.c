@@ -20,11 +20,17 @@
 #include <zephyr/init.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/pwm.h>
+#include <zephyr/sys/byteorder.h>
 #include "runmem.h"
+#include "protocol.h"
 
-enum kind { GPIO_IN, GPIO_OUT, PWM_OUT, ENCODER_IN, ADC_IN };
-
-static const char *const kind_names[] = {"gpio_in", "gpio_out", "pwm_out", "encoder_in", "adc_in"};
+enum kind {
+    GPIO_IN = IO_KIND_GPIO_IN,
+    GPIO_OUT = IO_KIND_GPIO_OUT,
+    PWM_OUT = IO_KIND_PWM_OUT,
+    ENCODER_IN = IO_KIND_ENCODER_IN,
+    ADC_IN = IO_KIND_ADC_IN
+};
 
 struct channel {
     const char *name;
@@ -192,6 +198,15 @@ void runmem_io_write(uint32_t channel, const uint8_t *value) {
 
 void runmem_io_list(void) {
     for (uint32_t i = 0; i < CHANNEL_COUNT; i++) {
-        if (channel_ready[i]) printf("COPARUN_IO %u %s %s\n", (unsigned)i, kind_names[channels[i].kind], channels[i].name);
+        if (!channel_ready[i]) continue;
+        /* uint16 channel, uint8 kind, name */
+        uint8_t payload[MSG_MAX_PAYLOAD];
+        uint32_t len = (uint32_t)strlen(channels[i].name);
+
+        if (len > sizeof(payload) - 3) len = sizeof(payload) - 3;
+        sys_put_le16((uint16_t)i, payload);
+        payload[2] = (uint8_t)channels[i].kind;
+        memcpy(payload + 3, channels[i].name, len);
+        send_message(MSG_IO, payload, len + 3);
     }
 }

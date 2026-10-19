@@ -1,9 +1,10 @@
 /*
  * file: main.c
  * Description: Runner for Zephyr targets. Command streams are received
- * framed over a UART, the output of the runner is written as text to the
- * same UART. The UART is selected by the chosen devicetree node
- * "coparun,uart" (e.g. a USB CDC ACM device), by default it is the console.
+ * framed over a UART, the output of the runner is sent in binary messages
+ * (protocol.h) over the same UART. The UART is selected by the chosen
+ * devicetree node "coparun,uart" (e.g. a USB CDC ACM device), by default it
+ * is the console. The protocol is described in docs/source/runner_transfer.md.
  *
  * Stream frame (integers little endian):
  *   4 bytes  magic "CPY1"
@@ -13,25 +14,26 @@
  *   uint32   CRC-32 (IEEE 802.3, as zlib.crc32) of the n bytes
  *
  * A command stream can be split at any position into several frames. Each
- * frame is answered with the output of the runner followed by the line
- * "COPARUN_DONE ret=<n>", with n the state flag of the parser (0: command
- * stream is continued by the next frame, 1: END_COM reached, 2: DUMP_CODE
- * reached, negative: error), or by "COPARUN_ERROR <reason>" if the frame was
- * not valid. A frame is processed only after its checksum was verified, a
- * frame answered with COPARUN_ERROR can be sent again. The next frame must
- * not be sent before the answer was received. The run-time memory state is
- * kept between frames and command streams.
+ * frame is answered with the output of the runner followed by a MSG_DONE
+ * message with the state flag of the parser (0: command stream is continued
+ * by the next frame, 1: END_COM reached, 2: DUMP_CODE reached, negative:
+ * error), or by MSG_ERROR if the frame was not valid. A frame is processed
+ * only after its checksum was verified, a frame answered with ERR_TIMEOUT or
+ * ERR_CHECKSUM can be sent again. The next frame must not be sent before the
+ * answer was received. The run-time memory state is kept between frames and
+ * command streams.
  *
  * Control frame:
  *   4 bytes  magic "CPYC"
  *   uint32   0: abort the current command stream, the next frame starts a
- *               new one (answer "COPARUN_ABORT")
- *            1: reset the device (answer "COPARUN_RESET")
- *            2: enter the bootloader, Teensy only (answer "COPARUN_BOOTLOADER")
+ *               new one
+ *            1: reset the device
+ *            2: enter the bootloader, Teensy only
+ *            answered by MSG_CONTROL with the code before it is executed
  *
- * Bytes in front of a magic are ignored. After start up the line
- * "COPARUN_READY" is written. Lines end with "\r\n". The command READ_MEM
- * writes the line "COPARUN_DATA <n>" followed by n bytes of binary data.
+ * Bytes in front of a magic are ignored. After start up MSG_READY is sent.
+ * Text written to stdout is sent in MSG_TEXT messages, the data of READ_MEM
+ * in MSG_DATA messages.
  *
  * Periodic tasks are run in real time after START_TASKS (see tasks.c), the
  * communication with the host continues meanwhile.
@@ -46,9 +48,11 @@
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/sys/crc.h>
 #include <zephyr/sys/libc-hooks.h>
+#include <zephyr/sys/printk.h>
 #include <zephyr/sys/reboot.h>
 #include <zephyr/sys/ring_buffer.h>
 #include "runmem.h"
+#include "protocol.h"
 
 #define RX_TIMEOUT K_MSEC(CONFIG_COPARUN_RX_TIMEOUT_MS)
 
@@ -82,6 +86,11 @@ static volatile bool tx_stalled;
 #define MAX_PENDING 20
 static uint8_t frame_buffer[MAX_PENDING + CONFIG_COPARUN_MAX_FRAME_SIZE];
 static uint32_t pending;
+
+/* Text output, sent at the end of a line, if the buffer is full or before
+   the next message */
+static uint8_t text_buffer[MSG_MAX_PAYLOAD];
+static uint32_t text_len;
 
 static runmem_t targ;
 
@@ -141,18 +150,47 @@ static void tx_put(const uint8_t *data, uint32_t len) {
     }
 }
 
-static int stdout_write(int c) {
-    uint8_t byte = (uint8_t)c;
+static void put_message(uint8_t type, const void *payload, uint32_t len) {
+    uint8_t header[4] = {MSG_SYNC, type, (uint8_t)len, (uint8_t)(type ^ len ^ 0xFF)};
+    uint8_t crc[2];
 
-    if (c == '\n') stdout_write('\r');
-    tx_put(&byte, 1);
-    if (c == '\n') uart_irq_tx_enable(uart_dev);
+    sys_put_le16(crc16_itu_t(crc16_itu_t(0, header + 1, 3), payload, len), crc);
+    tx_put(header, sizeof(header));
+    tx_put(payload, len);
+    tx_put(crc, sizeof(crc));
+    uart_irq_tx_enable(uart_dev);
+}
+
+static void text_flush(void) {
+    if (text_len) {
+        put_message(MSG_TEXT, text_buffer, text_len);
+        text_len = 0;
+    }
+}
+
+void send_message(uint8_t type, const void *payload, uint32_t len) {
+    text_flush();
+    put_message(type, payload, len);
+}
+
+static void send_byte(uint8_t type, uint8_t value) {
+    send_message(type, &value, 1);
+}
+
+static int stdout_write(int c) {
+    text_buffer[text_len++] = (uint8_t)c;
+    if (c == '\n' || text_len == sizeof(text_buffer)) text_flush();
     return c;
 }
 
 void runmem_write_data(const uint8_t *data, uint32_t size) {
-    tx_put(data, size);
-    uart_irq_tx_enable(uart_dev);
+    while (size) {
+        uint32_t len = size < MSG_MAX_PAYLOAD ? size : MSG_MAX_PAYLOAD;
+
+        send_message(MSG_DATA, data, len);
+        data += len;
+        size -= len;
+    }
 }
 
 /* Reads len bytes, returns 0 if no data was received for the time of timeout */
@@ -192,26 +230,26 @@ static uint8_t wait_for_magic(void) {
 }
 
 /* Receives the remaining stream frame after the magic and appends the
-   command stream to frame_buffer, returns the reason on failure */
-static const char *receive_frame(uint32_t *len) {
+   command stream to frame_buffer, returns ERR_* on failure, else 0 */
+static uint8_t receive_frame(uint32_t *len) {
     uint8_t word[4];
 
-    if (!read_bytes(word, sizeof(word), RX_TIMEOUT)) return "timeout";
+    if (!read_bytes(word, sizeof(word), RX_TIMEOUT)) return ERR_TIMEOUT;
     *len = sys_get_le32(word);
 
-    if (*len > CONFIG_COPARUN_MAX_FRAME_SIZE) return "frame too large";
+    if (*len > CONFIG_COPARUN_MAX_FRAME_SIZE) return ERR_FRAME_TOO_LARGE;
     if (!read_bytes(frame_buffer + pending, *len, RX_TIMEOUT) ||
-        !read_bytes(word, sizeof(word), RX_TIMEOUT)) return "timeout";
-    if (sys_get_le32(word) != crc32_ieee(frame_buffer + pending, *len)) return "checksum";
-    return NULL;
+        !read_bytes(word, sizeof(word), RX_TIMEOUT)) return ERR_TIMEOUT;
+    if (sys_get_le32(word) != crc32_ieee(frame_buffer + pending, *len)) return ERR_CHECKSUM;
+    return 0;
 }
 
 static void process_stream_frame(void) {
     uint32_t len;
-    const char *error = receive_frame(&len);
+    uint8_t error = receive_frame(&len);
 
     if (error) {
-        printf("COPARUN_ERROR %s\n", error);
+        send_byte(MSG_ERROR, error);
         return;
     }
 
@@ -227,14 +265,14 @@ static void process_stream_frame(void) {
         targ.rx_state = RX_STATE_IDLE;
     }
     fflush(stdout);
-    printf("COPARUN_DONE ret=%d\n", targ.state_flag);
+    send_byte(MSG_DONE, (uint8_t)(int8_t)targ.state_flag);
 }
 
 static void process_control_frame(void) {
     uint8_t word[4];
 
     if (!read_bytes(word, sizeof(word), RX_TIMEOUT)) {
-        printf("COPARUN_ERROR timeout\n");
+        send_byte(MSG_ERROR, ERR_TIMEOUT);
         return;
     }
 
@@ -242,18 +280,18 @@ static void process_control_frame(void) {
         case CONTROL_ABORT:
             pending = 0;
             targ.rx_state = RX_STATE_IDLE;
-            printf("COPARUN_ABORT\n");
+            send_byte(MSG_CONTROL, CONTROL_ABORT);
             break;
 
         case CONTROL_RESET:
-            printf("COPARUN_RESET\n");
+            send_byte(MSG_CONTROL, CONTROL_RESET);
             k_msleep(100);  /* Let the output drain */
             sys_reboot(SYS_REBOOT_COLD);
             break;
 
 #ifdef CONFIG_BOARD_TEENSY41
         case CONTROL_BOOTLOADER:
-            printf("COPARUN_BOOTLOADER\n");
+            send_byte(MSG_CONTROL, CONTROL_BOOTLOADER);
             k_msleep(100);
             /* Request of the bootloader chip of the Teensy (HalfKay) */
             __asm__ volatile("bkpt #251");
@@ -261,14 +299,14 @@ static void process_control_frame(void) {
 #endif
 
         default:
-            printf("COPARUN_ERROR unknown control code\n");
+            send_byte(MSG_ERROR, ERR_CONTROL_CODE);
             break;
     }
 }
 
 int main(void) {
     if (!device_is_ready(uart_dev)) {
-        printf("COPARUN_ERROR console UART not ready\n");
+        printk("coparun: UART not ready\n");
         return 0;
     }
 
@@ -276,7 +314,7 @@ int main(void) {
     uart_irq_rx_enable(uart_dev);
     __stdout_hook_install(stdout_write);
 
-    printf("COPARUN_READY\n");
+    send_byte(MSG_READY, PROTOCOL_VERSION);
 
     for (;;) {
         if (wait_for_magic() == FRAME_TYPE_STREAM) {
