@@ -6,6 +6,7 @@ from typing import Any, Callable
 import pytest
 
 import copapy as cp
+from runner_helpers import trig_tol
 
 A = [-1.5, -0.25, 0.0, 0.5, 0.75, 2.0, 3.5, -4.0]
 B = [0.5, -0.25, 1.0, -2.0, 0.75, 4.0, -3.5, 0.25]
@@ -105,7 +106,7 @@ def test_elementwise(kind: str, name: str) -> None:
     assert type(result) is type(x) and result.shape == x.shape
     # Only single scalar operations (e.g. the comparison of a float condition)
     assert len(scalar_ops(result)) < 2, scalar_ops(result)
-    assert run(result)[0] == pytest.approx([float(ref(a, b)) for a, b in zip(A, B)], rel=1e-5, abs=1e-6)
+    assert run(result)[0] == pytest.approx([float(ref(a, b)) for a, b in zip(A, B)], rel=1e-5, abs=trig_tol(1e-6))
 
 
 @pytest.mark.parametrize('name', ['gt', 'le', 'eq', 'ne', 'gt scalar', 'eq scalar'])
@@ -138,7 +139,7 @@ def test_small_vectors_are_not_packed() -> None:
             [a == b for a, b in zip(A, B)], [(a > 0) - (a < 0) for a in A], [min(max(a, -0.5), 1.0) for a in A],
             A]
     for res, ref in zip(run(*results), refs):
-        assert res == pytest.approx(ref, rel=1e-5, abs=1e-6)
+        assert res == pytest.approx(ref, rel=1e-5, abs=trig_tol(1e-6))
 
 
 def test_clamp_numbers_and_values() -> None:
@@ -228,7 +229,7 @@ def test_grad(kind: str) -> None:
     }
     grads = [cp.grad(term, x) for term, _ in terms.values()]
     for res, (_, ref) in zip(run(*grads), terms.values()):
-        assert res == pytest.approx(ref, rel=1e-5, abs=1e-6)
+        assert res == pytest.approx(ref, rel=1e-5, abs=trig_tol(1e-6))
 
 
 def test_grad_sum_axis() -> None:
