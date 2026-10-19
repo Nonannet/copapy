@@ -3,7 +3,7 @@
  * Description: Real-time execution of the periodic tasks of a copapy
  * program on Zephyr. A timer with the period of the tick publishes the
  * outputs and latches the inputs of the tasks in its interrupt (see
- * tasks_publish and tasks_latch in runmem.c). The released jobs run on one
+ * tasks_publish and tasks_latch in src/coparun/tasks.c). The released jobs run on one
  * thread per task with preemptive priorities in the order of the task table
  * (first task: highest priority). The main thread (communication with the
  * host) has a lower priority than all tasks.
@@ -21,6 +21,7 @@
 
 #include <zephyr/kernel.h>
 #include "runmem.h"
+#include "tasks.h"
 
 #define MAX_TASKS CONFIG_COPARUN_MAX_TASKS
 #define LOAD_LIMIT CONFIG_COPARUN_MAX_TASK_LOAD  /* percent */

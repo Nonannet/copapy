@@ -37,6 +37,7 @@ ext = Extension(
     sources=[
         "src/coparun/coparun_module.c",
         "src/coparun/runmem.c",
+        "src/coparun/tasks.c",
         "src/coparun/mem_man.c",
     ],
 )
