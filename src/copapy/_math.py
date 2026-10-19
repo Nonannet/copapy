@@ -592,7 +592,8 @@ def _min_max(x: Any, op: str) -> Any:
         return arr._min_max(op)
     constants = [v for v in x.values if not isinstance(v, value)]
     start: list[Any] = [getattr(builtins, op)(constants)] if constants else []
-    func = lambda x, y: add_op(op, [x, y])
+    def func(a: Any, b: Any) -> Any:
+        return add_op(op, [a, b])
     return reduce(func, start + [v for v in x.values if isinstance(v, value)])
 
 

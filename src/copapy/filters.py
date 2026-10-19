@@ -1,6 +1,6 @@
 from ._vectors import vector
 from ._tensors import tensor
-from ._basic_types import value, unifloat, NumLike
+from ._basic_types import value, unifloat
 from ._arrays import array, ArrayType, _size
 from .nn import _float_array, _conv
 from ._casts import to_float

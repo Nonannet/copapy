@@ -3,7 +3,7 @@ from . import _binwrite as binw
 from coparun_module import coparun, read_data_mem, data_mem, create_target, clear_target
 import importlib
 import struct
-from ._basic_types import value, Net, Node, Store, Constant, NumLike, stencil_db_from_package, ArrayOp, ArrayElement, ArrayConst, ArrayPack, transl_type
+from ._basic_types import value, Net, Node, Store, NumLike, stencil_db_from_package, ArrayOp, ArrayElement, ArrayConst, ArrayPack, transl_type
 from ._arrays import array, ArrayType
 from ._compiler import compile_to_dag
 from ._stencils import stencil_database
