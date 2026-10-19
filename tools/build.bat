@@ -49,6 +49,7 @@ python tools\hexdump_annotated.py -r src\coparun\x86_64_abi_shim.hex build\runne
 echo - Compile and link runner...
 cl /Zi /O2 /DENABLE_LOGGING /Fobuild\runner\ ^
     src\coparun\runmem.c ^
+    src\coparun\tasks.c ^
     src\coparun\coparun.c ^
     src\coparun\mem_man.c ^
     build\runner\x86_64_abi_shim.obj ^
@@ -76,6 +77,7 @@ call "%~dp0vcvars.bat" x86
 REM echo - Build runner for Windows 32 bit...
 REM cl /Zi /Od /DENABLE_LOGGING ^
 REM     src\coparun\runmem.c ^
+REM     src\coparun\tasks.c ^
 REM     src\coparun\coparun.c ^
 REM     src\coparun\mem_man.c ^
 REM     /Fe:build\runner\coparun-x86.exe
