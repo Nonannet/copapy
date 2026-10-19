@@ -44,6 +44,7 @@ dev = [
     "types-pyserial",
     "pytest",
     "pelfy>=1.0.10",
+    "numpy",
     "scipy"
 ]
 mindev = [
