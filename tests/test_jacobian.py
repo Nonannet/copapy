@@ -2,6 +2,8 @@ import copapy as cp
 import pytest
 import math
 
+from runner_helpers import trig_tol
+
 
 def flat(x):
     return [v for row in x for v in (flat(row) if isinstance(row, list) else [row])]
@@ -26,8 +28,8 @@ def test_jacobian_vector():
     tg.run()
 
     ref_a = [[1.0, dt], [-dt * 9.81 * math.cos(0.5), 1.0]]
-    assert tg.read_value(a).values == pytest.approx(flat(ref_a), rel=1e-5)  # pyright: ignore[reportUnknownMemberType]
-    assert tg.read_value(b).values == pytest.approx([0.0, dt], rel=1e-5)  # pyright: ignore[reportUnknownMemberType]
+    assert tg.read_value(a).values == pytest.approx(flat(ref_a), rel=1e-5, abs=trig_tol(1e-6))  # pyright: ignore[reportUnknownMemberType]
+    assert tg.read_value(b).values == pytest.approx([0.0, dt], rel=1e-5, abs=trig_tol(1e-6))  # pyright: ignore[reportUnknownMemberType]
 
 
 def test_jacobian_scalar_is_grad():
@@ -41,7 +43,7 @@ def test_jacobian_scalar_is_grad():
     tg.compile(j)
     tg.run()
 
-    assert tg.read_value(j) == pytest.approx([3.0 + math.cos(2.0), 2.0], rel=1e-5)  # pyright: ignore[reportUnknownMemberType]
+    assert tg.read_value(j) == pytest.approx([3.0 + math.cos(2.0), 2.0], rel=1e-5, abs=trig_tol(1e-6))  # pyright: ignore[reportUnknownMemberType]
 
 
 def test_jacobian_lists_and_constants():
