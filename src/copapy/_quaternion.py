@@ -12,8 +12,9 @@ epsilon = 1e-20
 class quaternion(ArrayType[float]):
     """Mathematical quaternion class for representing 3D rotations.
 
+    The components are stored in the order (w, x, y, z) in values.
+
     Attributes:
-        values (tuple[unifloat, ...]): Internal storage of the (w, x, y, z) components.
         w, x, y, z (unifloat): Property accessors to individual components.
     """
     def __init__(

@@ -367,22 +367,23 @@ class _TaskTarget(_TargetBase):
             task: Task, can be omitted if only one task is deployed
 
         Returns:
-            Dict with:
-                runs: Number of jobs run
-                overruns: Number of skipped releases because the previous
-                    job was not finished
-                exec_time: CPU time of the last job in seconds (without
-                    the time the job was preempted by other tasks)
-                exec_time_max: Maximum CPU time of a job in seconds
-                exec_time_mean: Mean CPU time of the jobs in seconds
-                response_time_max: Maximum time from the release to the end
-                    of a job in seconds (must be below the period)
-                start_delay_max: Maximum time from the release to the start
-                    of a job in seconds
-                degraded: The task currently runs with lower priority than
-                    the communication with the host, because the tasks used
-                    too much CPU time (load shedding on devices)
-                degradations: Number of times the task was degraded
+            Dict with the keys:
+
+            - ``runs``: Number of jobs run
+            - ``overruns``: Number of skipped releases because the previous
+              job was not finished
+            - ``exec_time``: CPU time of the last job in seconds (without
+              the time the job was preempted by other tasks)
+            - ``exec_time_max``: Maximum CPU time of a job in seconds
+            - ``exec_time_mean``: Mean CPU time of the jobs in seconds
+            - ``response_time_max``: Maximum time from the release to the end
+              of a job in seconds (must be below the period)
+            - ``start_delay_max``: Maximum time from the release to the start
+              of a job in seconds
+            - ``degraded``: The task currently runs with lower priority than
+              the communication with the host, because the tasks used
+              too much CPU time (load shedding on devices)
+            - ``degradations``: Number of times the task was degraded
         """
         addr = self._task_table + self._task_index(task) * _TASK_SIZE
         fields = struct.unpack({'little': '<', 'big': '>'}[self.sdb.byteorder] + _TASK_FORMAT,

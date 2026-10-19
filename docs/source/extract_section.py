@@ -92,7 +92,8 @@ if __name__ == '__main__':
             ['Copapy', 'Current state', 'Install', 'License'], readme, {'Copapy'}))
 
     with open(os.path.join(build_dir, 'examples.md'), 'wt') as f:
-        f.write(section_text(['Basic example', 'IMU Sensor fusion', 'Inverse kinematics'], readme))
+        f.write(section_text(['Basic example', 'IMU Sensor fusion', 'Inverse kinematics',
+                              'Real-time tasks on a device'], readme))
 
     with open(os.path.join(build_dir, 'compiler.md'), 'wt') as f:
         f.write(section_text(['How it works'], readme))

@@ -16,11 +16,7 @@ epsilon = 1e-20
 
 class vector(ArrayType[TNum]):
     """Mathematical vector class supporting basic operations and interactions with values.
-
-    Attributes:
-        values (tuple[value[TNum] | TNum, ...]): The elements of the vector.
-        ndim (int): Number of dimensions (always 1 for vector).
-        shape (tuple[int, ...]): Shape of the vector as a tuple.
+    A vector has one dimension: ndim is 1 and shape is (number of elements,).
     """
 
     pack_threshold: int | None = 64

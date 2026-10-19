@@ -618,7 +618,9 @@ class ArrayType(Generic[TNum]):
     or constants other than zero, None disables packing and type promotion"""
 
     shape: tuple[int, ...]
+    """Shape of the elements, e.g. (n,) for a vector"""
     ndim: int
+    """Number of dimensions (length of shape)"""
 
     # The elements are defined by _values if set, otherwise by _array
     _values: tuple[TNum | value[TNum], ...] | None  # Element values

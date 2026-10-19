@@ -31,7 +31,9 @@ The Copapy framework also includes a runner as a Python module built from the sa
 
 ## Current state
 
-While hardware I/O is obviously a core aspect of the project it is not yet available. However the computation engine is already fully functional - for all above mentioned target architectures - and available for testing and experimentation simply by installing the package. The project focuses now on integration into the first demonstration hardware platform.
+The computation engine is fully functional - for all above mentioned target architectures - and available for testing and experimentation simply by installing the package.
+
+Hardware I/O and real-time execution are available with the runner for the Zephyr RTOS. It executes periodic tasks with deterministic timing (logical execution time): a task reads its inputs at its release and publishes its outputs at the end of its period. The host is connected over a serial port (e.g. USB) by `cp.SerialTarget` to deploy the tasks, start and stop them, and to read and write values while they are running. Device I/O channels - GPIO, PWM, quadrature encoder and ADC - are bound to the values of the tasks. If the tasks need more CPU time than available, the tasks with the lowest priority are degraded to keep the connection to the host responsive. Supported boards are currently the Teensy 4.1 (Cortex-M7).
 
 Array stencils for handling large arrays - e.g., for machine vision and neural network applications - are available and use auto-vectorizing of the C compiler. Automatic differentiation covers element-wise array operations, reductions and matrix products, but not yet convolutions, pooling, sorting, transposing and slicing of arrays.
 
@@ -39,7 +41,7 @@ Furthermore in development is currently constant regrouping for further symbolic
 
 Even without using the array stencils, benchmark performance shows promising numbers. The following chart was measured with scalar stencils only (one stencil per element) and plots the results in comparison to NumPy 2.3.5:
 
-![Copapy architecture](docs/source/media/benchmark_results_001.svg)
+![Benchmark results](docs/source/media/benchmark_results_001.svg)
 
 For the benchmark (`tests/benchmark.py`) timings for 30,000 iterations of calculating the term `sum((v1 + i) @ v2 for i in range(10))` were measured on a Ryzen 5 3400G. The vectors `v1` and `v2` both have lengths of `v_size`, which was varied from 10 to 500 according to the chart. For the NumPy case the `i in range(10)` loop was vectorized like this: `np.sum((v1 + i) @ v2)` with `i` being an `NDArray` of shape `[10, 1]`. The number of calculated scalar operations is the same for both implementations. Copapy benefits from lower overhead by calling a single function from Python per iteration, whereas the NumPy variant requires three. Interestingly, the chart shows no indication that for increasing `v_size` the calling overhead for NumPy will be compensated by faster SIMD instructions. Note that in this benchmark the Copapy case does not move any data between Python and the compiled code.
 
@@ -186,6 +188,42 @@ End-effector position: vector((0.6998459100723267, 0.7006908655166626))
 quadratic error = 5.010516588299652e-07
 ```
 
+### Real-time tasks on a device
+
+Periodic tasks run in real time on a device with the Zephyr runner. This example deploys a position controller to a Teensy 4.1. Every millisecond it reads an encoder and sets the duty cycle of a PWM output, while the host changes the setpoint:
+
+```python
+import time
+import copapy as cp
+
+# Connect to a Teensy 4.1 running the Zephyr runner (port found by USB id)
+tg = cp.SerialTarget(device=cp.devices.teensy41)
+
+# Position controller: encoder in, PWM duty cycle out
+setpoint = cp.value(0.0)  # written by the host while running
+position = cp.value(0)    # read from the encoder at each release
+tg.bind(position, tg.io.encoder('enc0'))
+
+error = setpoint - position * 0.01
+duty = cp.clamp(0.5 + error * 2.0, 0.0, 1.0)
+tg.bind(duty, tg.io.pwm('pwm2'))
+
+controller = cp.Task(duty, period=1e-3)  # released every millisecond
+tg.deploy(controller)
+tg.run()  # real-time execution on the device
+
+tg.write_value(setpoint, 0.1)
+time.sleep(1.0)
+print(f"Duty cycle: {tg.read_value(duty)}")
+print(f"Jobs run: {tg.stats(controller)['runs']}")
+tg.stop()
+```
+
+```
+Duty cycle: 0.699999988079071
+Jobs run: 1002
+```
+
 ## How it works
 
 The compilation step starts with tracing the Python code to generate an acyclic directed graph (DAG) of variables and operations. The code can contain functions, closures, branching, and so on, but conditional branching is only allowed when the condition is known at tracing time (a `cp.iif` function exists to work around this). In the next step, this DAG is optimized and linearized into a sequence of operations. Each operation is mapped to a precompiled stencil or a combination of several stencils. A stencil is a piece of machine code with placeholders for memory addresses pointing to other code or data. The compiler generates patch instructions that fill these placeholders with the correct memory addresses.
@@ -293,6 +331,15 @@ Run the tests:
 ```bash
 pytest
 ```
+
+The runner for the Zephyr RTOS (`targets/zephyr`) is built in a Zephyr workspace (tested with Zephyr 4.4 and the Zephyr SDK, `ZEPHYR_BASE` set):
+
+```bash
+bash tools/build_zephyr.sh mps2/an500  # Cortex-M7 in qemu-system-arm
+bash tools/build_zephyr.sh teensy41    # Teensy 4.1, runner on the USB port
+```
+
+The tests `tests/test_runner_zephyr.py` and `tests/test_serial_target.py` run it in qemu (path of `qemu-system-arm` in the environment variable `QEMU_SYSTEM_ARM`) or on a board (serial port in `COPARUN_SERIAL_PORT`).
 
 ## License
 
