@@ -18,27 +18,7 @@ import pytest
 import copapy as cp
 from runner_helpers import check_for_qemu
 from test_tasks import counts
-from test_runner_zephyr import QEMU, RUNNER, SERIAL_PORT, TIMEOUT
-
-
-class PipeConnection():
-    """Connection to the runner in qemu over stdin and stdout"""
-    def __init__(self, proc: 'subprocess.Popen[bytes]') -> None:
-        assert proc.stdin and proc.stdout
-        self.stdin = proc.stdin
-        self.stdout = proc.stdout
-
-    def write(self, data: bytes) -> None:
-        self.stdin.write(data)
-
-    def flush(self) -> None:
-        self.stdin.flush()
-
-    def read(self, size: int) -> bytes:
-        return self.stdout.read(size)
-
-    def readline(self) -> bytes:
-        return self.stdout.readline()
+from test_runner_zephyr import QEMU, RUNNER, SERIAL_PORT, TIMEOUT, PipeConnection
 
 
 @pytest.fixture

@@ -650,15 +650,19 @@ int parse_commands(runmem_t *context, uint8_t *bytes, uint32_t lengths) {
                     context->state_flag = STATE_FLAG_TASK;
                     break;
                 }
-                printf("COPARUN_DATA %u\n", (unsigned)size);
                 fflush(stdout);
                 while (size) {
-                    /* Copied in parts, each consistent with the publish copies */
-                    uint8_t chunk[64];
+                    /* Sent in parts (one message each on the serial runners),
+                       copied in pieces of 64 bytes, each consistent with the
+                       publish copies */
+                    uint8_t chunk[252];
                     uint32_t chunk_size = size < sizeof(chunk) ? size : (uint32_t)sizeof(chunk);
-                    RUNMEM_LOCK();
-                    memcpy(chunk, context->data_memory + offs, chunk_size);
-                    RUNMEM_UNLOCK();
+                    for (uint32_t i = 0; i < chunk_size; i += 64) {
+                        uint32_t n = chunk_size - i < 64 ? chunk_size - i : 64;
+                        RUNMEM_LOCK();
+                        memcpy(chunk + i, context->data_memory + offs + i, n);
+                        RUNMEM_UNLOCK();
+                    }
                     runmem_write_data(chunk, chunk_size);
                     offs += chunk_size;
                     size -= chunk_size;

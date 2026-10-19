@@ -1,6 +1,8 @@
 """Target on a device running the Zephyr runner (targets/zephyr),
 connected over a serial port. The command stream is sent in frames with
-checksum, see targets/zephyr/src/main.c for the protocol."""
+checksum, the runner answers with binary messages, see
+docs/source/runner_transfer.md for the protocol."""
+import binascii
 import struct
 from collections import deque
 import zlib
@@ -15,8 +17,21 @@ CONTROL_ABORT = 0
 CONTROL_RESET = 1
 CONTROL_BOOTLOADER = 2
 
-# Frames are sent again after these errors of the runner
-_RETRY_ERRORS = ('checksum', 'timeout')
+# Messages of the runner (targets/zephyr/src/protocol.h)
+MSG_SYNC = 0xCA
+MSG_READY = 0x01    # uint8 protocol version
+MSG_DONE = 0x02     # int8 state flag of the parser
+MSG_ERROR = 0x03    # uint8 error code (ERRORS)
+MSG_CONTROL = 0x04  # uint8 control code
+MSG_DATA = 0x05     # part of the data of READ_MEM
+MSG_TEXT = 0x06     # part of the text output
+MSG_IO = 0x07       # uint16 channel, uint8 kind (IO_KINDS), name
+
+ERRORS = {1: 'timeout', 2: 'checksum', 3: 'frame too large', 4: 'unknown control code'}
+IO_KINDS = ('gpio_in', 'gpio_out', 'pwm_out', 'encoder_in', 'adc_in')
+
+# Frames are sent again after these errors of the runner (timeout, checksum)
+_RETRY_ERRORS = (1, 2)
 _RETRIES = 3
 
 
@@ -25,7 +40,6 @@ class Connection(Protocol):
     def write(self, data: bytes, /) -> Any: ...
     def flush(self) -> None: ...
     def read(self, size: int, /) -> bytes: ...
-    def readline(self) -> bytes: ...
 
 
 def frame(data: bytes) -> bytes:
@@ -36,6 +50,70 @@ def frame(data: bytes) -> bytes:
 def control_frame(code: int) -> bytes:
     """Control frame (CONTROL_ABORT, CONTROL_RESET, CONTROL_BOOTLOADER)"""
     return b'CPYC' + struct.pack('<I', code)
+
+
+def message(msg_type: int, payload: bytes = b'') -> bytes:
+    """Message of the runner to the host (encoder of the backchannel)"""
+    assert len(payload) <= 255
+    header = bytes((MSG_SYNC, msg_type, len(payload), msg_type ^ len(payload) ^ 0xFF))
+    return header + payload + struct.pack('<H', binascii.crc_hqx(header[1:] + payload, 0))
+
+
+class MessageReader():
+    """Decodes the messages of the runner from a byte stream. Text output of
+    the runner and bytes outside of messages (e.g. Zephyr console output) are
+    collected as lines in output."""
+    def __init__(self, con: Connection, output: 'deque[str] | list[str] | None' = None) -> None:
+        self._con = con
+        self._buffer = bytearray()  # Bytes received but not decoded
+        self._line = bytearray()  # Incomplete line of text output
+        self.output: deque[str] | list[str] = deque(maxlen=1000) if output is None else output
+
+    def _read(self, size: int) -> bytes:
+        while len(self._buffer) < size:
+            part = self._con.read(size - len(self._buffer))
+            if not part:
+                raise TimeoutError(f"No answer from the runner, output: {list(self.output)[-10:]}")
+            self._buffer += part
+        data = bytes(self._buffer[:size])
+        del self._buffer[:size]
+        return data
+
+    def _add_text(self, text: bytes) -> None:
+        self._line += text
+        *lines, rest = self._line.split(b'\n')
+        for line in lines:
+            self.output.append(line.decode('utf8', errors='replace').rstrip('\r'))
+        self._line = bytearray(rest)
+
+    def read(self) -> tuple[int, bytes]:
+        """Reads the next message that is not text output
+
+        Returns:
+            Message type and payload
+        """
+        while True:
+            sync = self._read(1)
+            if sync[0] != MSG_SYNC:
+                self._add_text(sync)
+                continue
+            header = self._read(3)
+            if header[0] ^ header[1] ^ header[2] != 0xFF:
+                # No message: search the next sync byte after this one
+                self._buffer[:0] = header
+                self._add_text(sync)
+                continue
+            rest = self._read(header[1] + 2)
+            payload = rest[:-2]
+            if binascii.crc_hqx(header + payload, 0) != struct.unpack('<H', rest[-2:])[0]:
+                # Corrupted message: search the next sync byte after this one
+                self._buffer[:0] = header + rest
+                self._add_text(sync)
+                continue
+            if header[0] == MSG_TEXT:
+                self._add_text(payload)
+                continue
+            return header[0], payload
 
 
 def find_port(device: Device) -> str:
@@ -80,19 +158,18 @@ class SerialTarget(_TaskTarget):
         self._values = {}
         self._init_tasks(device.tick)
         self.running = False
-        self.output: deque[str] = deque(maxlen=1000)  # Last lines of output of the runner
-        self._data: list[bytes] = []
-        self._io_lines: list[str] = []
+        self._data = bytearray()
+        self._io_channels: list[IoChannel] = []
         self._owns_connection = connection is None
         if connection is None:
             import serial  # pyserial
             connection = serial.Serial(port or find_port(device), 115200, timeout=timeout)
         self._con: Connection = connection
+        self._rx = MessageReader(connection)
+        self.output = self._rx.output  # Last lines of output of the runner
 
         # The runner may be in the middle of a command stream of an aborted session
-        self._con.write(control_frame(CONTROL_ABORT))
-        self._con.flush()
-        self._read_until('COPARUN_ABORT')
+        self._control(CONTROL_ABORT)
 
         self.io = self._list_io()
 
@@ -100,16 +177,12 @@ class SerialTarget(_TaskTarget):
         """I/O channels of the device, empty if not supported by the runner"""
         dw = binw.data_writer(self.sdb.byteorder)
         dw.write_com(binw.Command.LIST_IO)
-        self._io_lines = []
+        self._io_channels = []
         try:
             self._send(dw)
         except RuntimeError:
             return IoChannels([])  # Runner without LIST_IO
-        channels = []
-        for line in self._io_lines:
-            _, index, kind, name = line.split(maxsplit=3)
-            channels.append(IoChannel(int(index), kind, name))
-        return IoChannels(channels)
+        return IoChannels(self._io_channels)
 
     def close(self) -> None:
         """Closes the serial port. The tasks keep running on the device."""
@@ -122,32 +195,32 @@ class SerialTarget(_TaskTarget):
     def __exit__(self, *args: Any) -> None:
         self.close()
 
-    def _readline(self) -> str:
-        raw = self._con.readline()
-        if not raw.endswith(b'\n'):
-            raise TimeoutError(f"No answer from the runner, output: {list(self.output)[-10:]}")
-        return raw.decode('utf8', errors='replace').rstrip('\r\n')
+    def _control(self, code: int) -> None:
+        """Sends a control frame and waits for its acknowledgement, other
+        messages (e.g. of an aborted session) are skipped"""
+        self._con.write(control_frame(code))
+        self._con.flush()
+        while self._rx.read() != (MSG_CONTROL, bytes((code,))):
+            pass
 
-    def _read_until(self, marker: str) -> str:
-        """Reads the answer of the runner up to the line starting with marker or
-        COPARUN_ERROR, returns this line"""
+    def _receive(self) -> tuple[int, int]:
+        """Reads the answer of the runner to a stream frame
+
+        Returns:
+            MSG_DONE and the state flag or MSG_ERROR and the error code
+        """
         while True:
-            line = self._readline()
-            if line.startswith(marker) or line.startswith('COPARUN_ERROR'):
-                return line
-            if line.startswith('COPARUN_IO '):
-                self._io_lines.append(line)
-            elif line.startswith('COPARUN_DATA '):
-                size = int(line.split()[1])
-                data = b''
-                while len(data) < size:
-                    part = self._con.read(size - len(data))
-                    if not part:
-                        raise TimeoutError("Incomplete data from the runner")
-                    data += part
-                self._data.append(data)
-            else:
-                self.output.append(line)
+            msg_type, payload = self._rx.read()
+            if msg_type == MSG_DONE:
+                return msg_type, struct.unpack('<b', payload)[0]
+            if msg_type == MSG_ERROR:
+                return msg_type, payload[0]
+            if msg_type == MSG_DATA:
+                self._data += payload
+            elif msg_type == MSG_IO:
+                index, kind = struct.unpack_from('<HB', payload)
+                name = payload[3:].decode('utf8', errors='replace')
+                self._io_channels.append(IoChannel(index, IO_KINDS[kind] if kind < len(IO_KINDS) else f'kind{kind}', name))
 
     def _send(self, dw: binw.data_writer) -> None:
         dw.write_com(binw.Command.END_COM)
@@ -155,24 +228,27 @@ class SerialTarget(_TaskTarget):
         size = self.device.frame_size
         for i in range(0, len(data), size):
             last = i + size >= len(data)
+            answer = (MSG_ERROR, 0)
             for _ in range(_RETRIES):
                 self._con.write(frame(data[i:i + size]))
                 self._con.flush()
-                line = self._read_until('COPARUN_DONE')
-                if not any(line == 'COPARUN_ERROR ' + e for e in _RETRY_ERRORS):
+                answer = self._receive()
+                if answer[0] != MSG_ERROR or answer[1] not in _RETRY_ERRORS:
                     break
-            if line != f"COPARUN_DONE ret={1 if last else 0}":
-                raise RuntimeError(f"Runner error: {line}, output: {list(self.output)[-10:]}")
+            if answer != (MSG_DONE, 1 if last else 0):
+                msg_type, value = answer
+                reason = f"state flag {value}" if msg_type == MSG_DONE else ERRORS.get(value, f"error {value}")
+                raise RuntimeError(f"Runner error: {reason}, output: {list(self.output)[-10:]}")
 
     def _read_mem(self, addr: int, lengths: int) -> bytes:
         dw = binw.data_writer(self.sdb.byteorder)
         dw.write_com(binw.Command.READ_MEM)
         dw.write_int(addr)
         dw.write_int(lengths)
-        self._data = []
+        self._data = bytearray()
         self._send(dw)
-        assert len(self._data) == 1 and len(self._data[0]) == lengths
-        return self._data[0]
+        assert len(self._data) == lengths
+        return bytes(self._data)
 
     def deploy(self, *tasks: Any) -> None:
         """Compiles the tasks for the device and loads them. Previously
@@ -225,7 +301,5 @@ class SerialTarget(_TaskTarget):
 
     def reset(self) -> None:
         """Resets the device, the connection must be opened again afterwards"""
-        self._con.write(control_frame(CONTROL_RESET))
-        self._con.flush()
-        self._read_until('COPARUN_RESET')
+        self._control(CONTROL_RESET)
         self.running = False

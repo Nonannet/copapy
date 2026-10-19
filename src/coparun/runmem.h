@@ -107,11 +107,10 @@
  *                 are released at the start. The statistics are reset.
  * STOP_TASKS: stops the real-time execution after the running jobs
  * READ_MEM arguments:
- *   uint32 offs, uint32 size: writes the line "COPARUN_DATA <size>" followed
- *                 by size bytes of the data memory at offs
+ *   uint32 offs, uint32 size: sends size bytes of the data memory at offs
+ *                 in parts of at most 252 bytes (runmem_write_data)
  *
- * LIST_IO: writes a line "COPARUN_IO <channel> <kind> <name>" for each I/O
- *                 channel of the device (kind e.g. "gpio_in", "gpio_out")
+ * LIST_IO: sends the list of the I/O channels of the device (runmem_io_list)
  *
  * While the tasks are running, RUN_TASK is only allowed for tasks without
  * period and STEP_TASKS is not allowed.
@@ -219,7 +218,7 @@ int runmem_start(runmem_t *context, uint32_t tick_us);
    context->running */
 void runmem_stop(runmem_t *context);
 
-/* Writes binary data to the output of the runner */
+/* Sends a part of the data read by READ_MEM to the host (binary) */
 void runmem_write_data(const uint8_t *data, uint32_t size);
 
 /* Time stamp counter (wrapping) for the execution time measurement */
