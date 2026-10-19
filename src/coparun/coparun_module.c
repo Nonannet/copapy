@@ -7,6 +7,13 @@
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
+#if PY_VERSION_HEX < 0x030C0000
+/* Before Python 3.12 PyMemberDef and its constants are in structmember.h
+   and have names without the Py_ prefix */
+#include <structmember.h>
+#define Py_T_PYSSIZET T_PYSSIZET
+#define Py_READONLY READONLY
+#endif
 #include "runmem.h"
 #include <stdlib.h>
 #include <stddef.h>
