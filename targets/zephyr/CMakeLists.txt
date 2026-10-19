@@ -11,6 +11,7 @@ target_sources(app PRIVATE
     src/tasks.c
     src/io.c
     ${CORE_DIR}/runmem.c
+    ${CORE_DIR}/tasks.c
     ${CORE_DIR}/mem_man.c
 )
 target_include_directories(app PRIVATE ${CORE_DIR})

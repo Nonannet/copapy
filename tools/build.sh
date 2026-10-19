@@ -37,7 +37,7 @@ if [[ "$ARCH" == "x86_64" || "$ARCH" == "all" ]]; then
     gcc -Wall -Wextra -Wconversion -Wsign-conversion \
         -Wshadow -Wstrict-overflow -Werror -g -O3 \
         -DENABLE_LOGGING \
-        src/coparun/runmem.c \
+        src/coparun/runmem.c src/coparun/tasks.c \
         src/coparun/coparun.c \
         src/coparun/mem_man.c \
         -o build/runner/coparun
@@ -78,7 +78,7 @@ EOF
         > build/stencils/stencils_x86_O3.asm
 
     "$X86_CC" $X86_EXTRA_FLAGS -static -O3 -DENABLE_LOGGING \
-        src/coparun/runmem.c \
+        src/coparun/runmem.c src/coparun/tasks.c \
         src/coparun/coparun.c \
         src/coparun/mem_man.c \
         -o build/runner/coparun-x86
@@ -109,7 +109,7 @@ if [[ "$ARCH" == "arm64" || "$ARCH" == "all" ]]; then
         -Wall -Wextra -Wconversion -Wsign-conversion -static \
         -Wshadow -Wstrict-overflow -O3 \
         -DENABLE_LOGGING \
-        src/coparun/runmem.c \
+        src/coparun/runmem.c src/coparun/tasks.c \
         src/coparun/coparun.c \
         src/coparun/mem_man.c \
         -o build/runner/coparun-arm64
@@ -142,7 +142,7 @@ if [[ "$ARCH" == "arm-v6" || "$ARCH" == "all" ]]; then
         -Wall -Wextra -Wconversion -Wsign-conversion \
         -Wshadow -Wstrict-overflow -O3 \
         -DENABLE_LOGGING \
-        src/coparun/runmem.c \
+        src/coparun/runmem.c src/coparun/tasks.c \
         src/coparun/coparun.c \
         src/coparun/mem_man.c \
         -o build/runner/coparun-armv6
@@ -176,7 +176,7 @@ if [[ "$ARCH" == "arm-v7" || "$ARCH" == "all" ]]; then
         -Wall -Wextra -Wconversion -Wsign-conversion \
         -Wshadow -Wstrict-overflow -O3 \
         -DENABLE_LOGGING \
-        src/coparun/runmem.c \
+        src/coparun/runmem.c src/coparun/tasks.c \
         src/coparun/coparun.c \
         src/coparun/mem_man.c \
         -o build/runner/coparun-armv7
@@ -210,7 +210,7 @@ if [[ "$ARCH" == "arm-v7-thumb" || "$ARCH" == "all" ]]; then
         -Wall -Wextra -Wconversion -Wsign-conversion \
         -Wshadow -Wstrict-overflow -O3 \
         -DENABLE_LOGGING \
-        src/coparun/runmem.c \
+        src/coparun/runmem.c src/coparun/tasks.c \
         src/coparun/coparun.c \
         src/coparun/mem_man.c \
         -o build/runner/coparun-armv7thumb
@@ -250,7 +250,7 @@ if [[ "$ARCH" == "arm-v7m-thumb" || "$ARCH" == "all" ]]; then
         -Wall -Wextra -Wconversion -Wsign-conversion \
         -Wshadow -Wstrict-overflow -O3 \
         -DENABLE_LOGGING \
-        src/coparun/runmem.c \
+        src/coparun/runmem.c src/coparun/tasks.c \
         src/coparun/coparun.c \
         src/coparun/mem_man.c \
         -o build/runner/coparun-armv7thumb

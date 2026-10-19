@@ -82,7 +82,7 @@ REM     /Fe:build\runner\coparun-x86.exe
 
 echo - Build runner for Linux x86 32 bit...
 wsl i686-linux-gnu-gcc-12 -static -O3 -DENABLE_LOGGING ^
-    src/coparun/runmem.c ^
+    src/coparun/runmem.c src/coparun/tasks.c ^
     src/coparun/coparun.c ^
     src/coparun/mem_man.c ^
     -o build/runner/coparun-x86
@@ -110,7 +110,7 @@ wsl aarch64-linux-gnu-objdump -d -x src/copapy/obj/stencils_arm64_O3.o > build/s
 
 echo - Build runner for AArch64...
 wsl aarch64-linux-gnu-gcc-12 -static -O3 -DENABLE_LOGGING ^
-    src/coparun/runmem.c ^
+    src/coparun/runmem.c src/coparun/tasks.c ^
     src/coparun/coparun.c ^
     src/coparun/mem_man.c ^
     -o build/runner/coparun-aarch64
@@ -159,7 +159,7 @@ wsl arm-none-eabi-objdump -d -x src/copapy/obj/stencils_armv7_O3.o > build/stenc
 
 echo - Build runner for ARM v7...
 wsl arm-linux-gnueabihf-gcc -static -O3 -DENABLE_LOGGING ^
-    src/coparun/runmem.c ^
+    src/coparun/runmem.c src/coparun/tasks.c ^
     src/coparun/coparun.c ^
     src/coparun/mem_man.c ^
     -o build/runner/coparun-armv7
@@ -187,7 +187,7 @@ wsl arm-none-eabi-objdump -d -x src/copapy/obj/stencils_armv7thumb_O3.o > build/
 
 echo - Build runner for ARM v7 thumb...
 wsl arm-linux-gnueabihf-gcc -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -static -O3 -DENABLE_LOGGING ^
-    src/coparun/runmem.c ^
+    src/coparun/runmem.c src/coparun/tasks.c ^
     src/coparun/coparun.c ^
     src/coparun/mem_man.c ^
     -o build/runner/coparun-armv7thumb
@@ -225,7 +225,7 @@ wsl arm-none-eabi-objdump -d -x src/copapy/obj/stencils_armv7mthumb_O3.o > build
 REM The same runner for all ARM7
 echo - Build runner for ARM v7 thumb...
 wsl arm-linux-gnueabihf-gcc -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -static -O3 -DENABLE_LOGGING ^
-    src/coparun/runmem.c ^
+    src/coparun/runmem.c src/coparun/tasks.c ^
     src/coparun/coparun.c ^
     src/coparun/mem_man.c ^
     -o build/runner/coparun-armv7thumb
@@ -304,7 +304,7 @@ wsl riscv64-linux-gnu-objdump -d -x src/copapy/obj/stencils_riscv64_O3.o > build
 
 echo - Build runner for RISC-V 64 bit...
 wsl riscv64-linux-gnu-gcc-12 -static -O3 -DENABLE_LOGGING ^
-    src/coparun/runmem.c ^
+    src/coparun/runmem.c src/coparun/tasks.c ^
     src/coparun/coparun.c ^
     src/coparun/mem_man.c ^
     -o build/runner/coparun-riscv64
@@ -329,7 +329,7 @@ wsl build/riscv_gcc/riscv/bin/riscv32-unknown-linux-musl-objdump -d -x src/copap
 
 echo - Build runner for RISC-V 32 bit...
 wsl build/riscv_gcc/riscv/bin/riscv32-unknown-linux-musl-gcc -static -O3 -DENABLE_LOGGING ^
-    src/coparun/runmem.c ^
+    src/coparun/runmem.c src/coparun/tasks.c ^
     src/coparun/coparun.c ^
     src/coparun/mem_man.c ^
     -o build/runner/coparun-riscv32

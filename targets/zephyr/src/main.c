@@ -52,6 +52,7 @@
 #include <zephyr/sys/reboot.h>
 #include <zephyr/sys/ring_buffer.h>
 #include "runmem.h"
+#include "tasks.h"
 #include "protocol.h"
 
 #define RX_TIMEOUT K_MSEC(CONFIG_COPARUN_RX_TIMEOUT_MS)

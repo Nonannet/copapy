@@ -22,6 +22,7 @@
 #include <zephyr/drivers/pwm.h>
 #include <zephyr/sys/byteorder.h>
 #include "runmem.h"
+#include "tasks.h"
 #include "protocol.h"
 
 enum kind {

@@ -16,7 +16,7 @@ from ._compiler import compile_programs, _modified_node_copy
 from ._target import _TargetBase, _LocalMemory, collect_roots
 from ._io import IoChannel, IoChannels
 
-# task_t, copy_t and io_t records in runmem.h
+# task_t, copy_t and io_t records in tasks.h
 _TASK_FORMAT = 'IIiIIIIIIIIIIIIIIIIIIIIII'
 _TASK_SIZE = struct.calcsize('<' + _TASK_FORMAT)
 _COPY_FORMAT = 'III'
