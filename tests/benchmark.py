@@ -5,74 +5,78 @@ import os
 import subprocess
 import sys
 import numpy as np
-from numpy.core._multiarray_umath import __cpu_features__
+try:
+    from numpy._core._multiarray_umath import __cpu_features__
+except ImportError:  # NumPy < 2
+    from numpy.core._multiarray_umath import __cpu_features__
 
 CPU_SIMD_FEATURES = "SSE SSE2 SSE3 SSSE3 SSE41 SSE42 AVX AVX2 AVX512F FMA3"
+
+# Benchmark variants in plot order with color (categorical slots 1-4) and marker
+VARIANTS = {
+    'NumPy': ('#eb6834', 's'),
+    'Copapy scalar': ('#2a78d6', 'o'),
+    'Copapy packed': ('#1baf7a', '^'),
+    'Copapy jit': ('#eda100', 'D'),
+}
+
+
+def _timed(func, iter_size: int) -> float:
+    """Elapsed time for iter_size calls of func"""
+    func()  # Warm up
+    time.sleep(0.05)
+    t0 = time.perf_counter()
+    for _ in range(iter_size):
+        func()
+    return time.perf_counter() - t0
 
 
 def cp_vs_python(path: str):
     os.environ.get("NPY_DISABLE_CPU_FEATURES")
     cpu_f = CPU_SIMD_FEATURES.split(' ')
     print('\n'.join(f"> {k}: {v}" for k, v in __cpu_features__.items() if k in cpu_f))
-
+    print(f"> NumPy {np.__version__}, Copapy {cp.__version__}")
 
     results: list[dict[str, str | float | int]] = []
+    sum_size = 10
+    iter_size = 30000
+
+    def add(benchmark: str, elapsed: float, v_size: int) -> None:
+        results.append({'benchmark': benchmark, 'iter_size': iter_size, 'elapsed_time': elapsed,
+                        'sum_size': sum_size, 'v_size': v_size})
+
+    @cp.jit
+    def calculation(v1, v2):
+        return sum((v1 + i) @ v2 for i in range(sum_size))
 
     for _ in range(15):
         for v_size in [10, 30, 60] + list(range(100, 600, 100)):
+            timings: list[float] = []
 
-            sum_size = 10
-            #v_size = 400
-            iter_size = 30000
-
-            v1 = cp.vector(cp.value(float(v)) for v in range(v_size))
-            v2 = cp.vector(cp.value(float(v)) for v in [5]*v_size)
-
-            v3 = sum((v1 + i) @ v2 for i in range(sum_size))
-
-            tg = cp.Target()
-            tg.compile(v3)
-
-            time.sleep(0.1)
-            t0 = time.perf_counter()
-            for _ in range(iter_size):
-                tg.run()
-            elapsed_cp = time.perf_counter() - t0
-
-            #print(f"Copapy: {elapsed_cp:.4f} s")
-            results.append({'benchmark': 'Copapy', 'iter_size': iter_size, 'elapsed_time': elapsed_cp, 'sum_size': sum_size, 'v_size': v_size})
-
-
-
-            v1 = cp.vector(float(v) for v in range(v_size))
-            v2 = cp.vector(float(v) for v in [5]*v_size)
-
-            time.sleep(0.1)
-            t0 = time.perf_counter()
-            for _ in range(iter_size//100):
+            # Copapy with one stencil per element (packed=False) and with array stencils (packed=True)
+            for packed in (False, True):
+                v1 = cp.vector((cp.value(float(v)) for v in range(v_size)), packed=packed)
+                v2 = cp.vector((cp.value(5.0) for _ in range(v_size)), packed=packed)
                 v3 = sum((v1 + i) @ v2 for i in range(sum_size))
 
-            elapsed_python = time.perf_counter() - t0
+                tg = cp.Target()
+                tg.compile(v3)
+                timings.append(_timed(tg.run, iter_size))
+                add('Copapy packed' if packed else 'Copapy scalar', timings[-1], v_size)
 
-            #print(f"Python: {elapsed_python:.4f} s")
-            results.append({'benchmark': 'Python','iter_size': iter_size//10, 'elapsed_time': elapsed_python, 'sum_size': sum_size, 'v_size': v_size})
+            a1 = np.array(list(range(v_size)), dtype=np.float32)
+            a2 = np.array([5] * v_size, dtype=np.float32)
+            i = np.array(list(range(sum_size)), dtype=np.float32).reshape([sum_size, 1])
 
-            v1 = np.array(list(range(v_size)), dtype=np.float32)
-            v2 = np.array([5]*v_size, dtype=np.float32)
-            i = np.array(list(range(sum_size)), dtype=np.int32).reshape([sum_size, 1])
+            # NumPy with the sum loop vectorized
+            timings.append(_timed(lambda: np.sum((a1 + i) @ a2), iter_size))
+            add('NumPy', timings[-1], v_size)
 
-            time.sleep(0.1)
-            t0 = time.perf_counter()
-            for _ in range(iter_size):
-                v3 = np.sum((v1 + i) @ v2)
+            # Copapy jit, including transfer of the NumPy arrays and the result
+            timings.append(_timed(lambda: calculation(a1, a2), iter_size))
+            add('Copapy jit', timings[-1], v_size)
 
-            elapsed_np = time.perf_counter() - t0
-
-            #print(f"Numpy 2: {elapsed_np2:.4f} s")
-            results.append({'benchmark': 'NumPy', 'iter_size': iter_size, 'elapsed_time': elapsed_np, 'sum_size': sum_size, 'v_size': v_size})
-
-
-            print(f"{v_size} {elapsed_cp}, {elapsed_python}, {elapsed_np}")
+            print(v_size, ', '.join(f"{t / iter_size * 1e6:.2f} us" for t in timings))
 
     with open(path, 'w') as f:
         json.dump(results, f)
@@ -169,42 +173,45 @@ def plot_results(path: str):
         v_size = entry['v_size']
         elapsed_time = entry['elapsed_time']
         data_by_benchmark[benchmark][v_size].append(elapsed_time)
+        data_by_benchmark[benchmark]['iter_size'] = entry['iter_size']
 
     # Calculate medians
     medians_by_benchmark = {}
     for benchmark, v_sizes in data_by_benchmark.items():
         medians_by_benchmark[benchmark] = {
             v_size: np.median(times)
-            for v_size, times in v_sizes.items()
+            for v_size, times in v_sizes.items() if v_size != 'iter_size'
         }
-
-    # Sort by v_size for plotting
-    benchmarks = sorted(medians_by_benchmark.keys())
 
     # Create the plot
     plt.figure(figsize=(6, 4))
 
-    for benchmark in benchmarks:
-        if benchmark != 'Python':
+    series_css = ''
+    for n, (benchmark, (color, marker)) in enumerate(VARIANTS.items()):
+        if benchmark in medians_by_benchmark:
             v_sizes = sorted(medians_by_benchmark[benchmark].keys())
-            elapsed_times = [medians_by_benchmark[benchmark][v] for v in v_sizes]
-            plt.plot(v_sizes, elapsed_times, '.', label=benchmark, markersize=10)
+            iter_size = data_by_benchmark[benchmark]['iter_size']
+            # Time per iteration in microseconds
+            elapsed_times = [medians_by_benchmark[benchmark][v] / iter_size * 1e6 for v in v_sizes]
+            plt.plot(v_sizes, elapsed_times, marker=marker, color=color, label=benchmark,
+                     markersize=6, markeredgewidth=0, linewidth=2, gid=f'series_{n}')
+            # Series keep their color with the theme styles
+            series_css += f'#series_{n} path {{ stroke: {color} !important; }}\n'
 
     plt.xlabel('Vector Size (v_size)')
-    plt.ylabel('Elapsed Time (seconds)')
-    #plt.title('Benchmark Results: Elapsed Time vs Vector Size')
-    plt.legend(frameon=False)
-    #plt.grid(True, alpha=0.3)
+    plt.ylabel('Time per iteration (µs)')
+    legend = plt.legend(frameon=False, loc='lower center', bbox_to_anchor=(0.5, 1.0), ncol=2)
+    for handle, line in zip(legend.legend_handles, plt.gca().get_lines()):
+        handle.set_gid(line.get_gid())
     plt.ylim(bottom=0)
     plt.tight_layout()
 
-    # Save to PNG
     mpl.rcParams['svg.fonttype'] = 'none'
-    save_svg_with_theme_styles(plt, path.replace('.json', '') + '.svg')
+    save_svg_with_theme_styles(plt, path.replace('.json', '') + '.svg', series_css)
     print("Plot saved")
 
 
-def save_svg_with_theme_styles(pyplot_obj, path):
+def save_svg_with_theme_styles(pyplot_obj, path, extra_css=''):
     import io
     import re
     """
@@ -253,6 +260,7 @@ def save_svg_with_theme_styles(pyplot_obj, path):
     #patch_1 path {
         stroke: none !important;
     }
+    """ + extra_css + """
     </style>
     """
 

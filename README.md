@@ -53,31 +53,48 @@ Array stencils for handling large arrays - e.g., for machine vision and neural n
 
 Furthermore in development is currently constant regrouping for further symbolic optimization of the computation graph.
 
-Even without using the array stencils, benchmark performance shows promising numbers. The following chart was measured with scalar stencils only (one stencil per element) and plots the results in comparison to NumPy 2.3.5:
+Benchmark performance shows promising numbers. The following chart compares three ways of running the same computation with Copapy and NumPy 2.0.1:
 
 ![Benchmark results](docs/source/media/benchmark_results_001.svg)
 
-For the benchmark (`tests/benchmark.py`) timings for 30,000 iterations of calculating the term `sum((v1 + i) @ v2 for i in range(10))` were measured on a Ryzen 5 3400G. The vectors `v1` and `v2` both have lengths of `v_size`, which was varied from 10 to 500 according to the chart. For the NumPy case the `i in range(10)` loop was vectorized like this: `np.sum((v1 + i) @ v2)` with `i` being an `NDArray` of shape `[10, 1]`. The number of calculated scalar operations is the same for both implementations. Copapy benefits from lower overhead by calling a single function from Python per iteration, whereas the NumPy variant requires three. Interestingly, the chart shows no indication that for increasing `v_size` the calling overhead for NumPy will be compensated by faster SIMD instructions. Note that in this benchmark the Copapy case does not move any data between Python and the compiled code.
+For the benchmark (`tests/benchmark.py`) the median time per iteration of calculating the term `sum((v1 + i) @ v2 for i in range(10))` was measured on a Ryzen 5 3400G (15 runs of 30,000 iterations each). The vectors `v1` and `v2` both have lengths of `v_size`, which was varied from 10 to 500 according to the chart. For the NumPy case the `i in range(10)` loop was vectorized like this: `np.sum((v1 + i) @ v2)` with `i` being an `NDArray` of shape `[10, 1]`. The number of calculated scalar operations is the same for all implementations. The Copapy variants are:
+
+- **Copapy scalar**: `cp.vector(..., packed=False)`, one scalar stencil per element. The code grows with `v_size` but they profit from sparcity (no benefit in this benchmark).
+- **Copapy packed**: `cp.vector(..., packed=True)`, array stencils that are auto-vectorized by the C compiler. They compile much faster for large arrays. Without the `packed` argument, vectors with more than 64 elements are packed automatically.
+- **Copapy jit**: the term as a function decorated with `@cp.jit`, called with the two NumPy arrays. Unlike the other variants, this includes copying the input arrays and reads back the result.
 
 Furthermore, for many applications Copapy performance will benefit by reducing the actual number of operations significantly compared to a NumPy implementation, by precomputing constant values known at compile time and benefiting from sparsity. Multiplying by zero (e.g., in a diagonal matrix) eliminates a whole branch in the computation graph. Operations with no effect, like multiplications by 1 or additions with zero, get eliminated at compile time.
 
 For testing and using Copapy to speed up computations in conventional Python programs there is also the `@cp.jit` decorator available, to compile functions on first use and cache the compiled version for later calls:
 
 ```python
+import numpy as np
 import copapy as cp
 
 @cp.jit
-def calculation(x: float, y: float) -> float:
-    return sum(x ** 2 + y ** 2 + i for i in range(10))
+def rms_error(measured, reference):
+    error = measured - reference
+    return cp.sqrt((error * error).sum() / error.size)
+
+@cp.jit
+def normalize(v):
+    return cp.map_to_numpy(v / cp.sqrt((v * v).sum()))
+
+measured = np.array([1.0, 2.1, 2.9, 4.2], dtype=np.float32)
+reference = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32)
 
 # Compile and run:
-result1 = calculation(2.5, 1.2)
+rms = rms_error(measured, reference)  # 0.1225
 
 # Run cached compiled version:
-result2 = calculation(3.1, 4.7)
+rms = rms_error(measured * 2, reference)
+
+# Array result as NumPy array:
+unit = normalize(reference)  # array([0.183, 0.365, 0.548, 0.730], dtype=float32)
 ```
 
-Note that `cp.jit` is not currently highly optimized for data transfer between Python and the compiled code.
+Arguments can be numbers, sequences of numbers, or arrays with the buffer protocol, such as NumPy arrays. A function is compiled again for each new combination of argument types and array shapes. NumPy arrays of byte, 32 bit int or 32 bit float are copied to the compiled code as they are, other numeric types are converted to 32 bit. Array results are returned as nested lists, or as NumPy arrays if marked with `cp.map_to_numpy`. Such a NumPy array is a view of the memory of the compiled code and changes with the next call, unless `copy=True` is passed.
+
 
 
 ## Install
