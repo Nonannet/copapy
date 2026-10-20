@@ -49,7 +49,7 @@ from ._autograd import grad, jacobian
 from ._tensors import tensor as matrix
 from ._arrays import array
 from ._flow import iif
-from ._temporal import delay, integrate, rate, feedback, dt
+from ._temporal import delay, integrate, rate, integrate_rotation, angular_rate, feedback, dt
 from ._sorting import sort, argsort
 from . import nn
 from . import filters
@@ -77,6 +77,8 @@ __all__ = [
     "delay",
     "integrate",
     "rate",
+    "integrate_rotation",
+    "angular_rate",
     "feedback",
     "dt",
     "vector",

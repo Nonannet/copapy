@@ -422,11 +422,14 @@ class Delay(HeadNode):
 
 
 class TimeStep(HeadNode):
-    """Period of the task in seconds (cp.dt), written to the memory of each
-    task using it at deployment."""
-    def __init__(self) -> None:
+    """Time constant factor * period^exponent of the task (cp.dt for the
+    period in seconds), written to the memory of each task using it at
+    deployment."""
+    def __init__(self, factor: float = 1.0, exponent: int = 1) -> None:
         super().__init__(0.0)
         self.name = 'dt'
+        self.factor = factor
+        self.exponent = exponent
 
 
 class Store(Node):
