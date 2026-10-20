@@ -12,7 +12,7 @@ T = TypeVar("T", int, float)
 Values: TypeAlias = 'Iterable[NumLike] | NumLike'
 
 # Cached programs by function and the kinds, types and shapes of the arguments
-_jit_cache: dict[Any, tuple['Target', tuple[Any, ...], Any]] = {}
+_jit_cache: dict[Any, '_JitProgram'] = {}
 
 # struct format characters of the elements of arrays
 _BUFFER_FORMATS = {'float': 'f', 'int': 'i', 'byte': 'B'}
@@ -78,31 +78,114 @@ def jit(func: Callable[..., Any]) -> Callable[..., Any]:
         A callable that runs the compiled function.
     """
     def call_helper(*args: Any) -> Any:
-        buffers = [None if isinstance(a, int | float) else _as_buffer(a) for a in args]
-        signature = tuple((b.format, b.shape) if b is not None else
-                          tuple(type(ai) for ai in a) if isinstance(a, Iterable) else type(a)
-                          for a, b in zip(args, buffers))
-        key = (func, signature)
-        if key in _jit_cache:
-            tg, inputs, out = _jit_cache[key]
-        else:
-            tg = Target()
-            inputs = tuple(
-                _placeholder(b) if b is not None else
-                tuple(value(ai) for ai in a) if isinstance(a, Iterable) else value(a)
-                for a, b in zip(args, buffers))
-            out = func(*inputs)
-            tg.compile(out)
-            _jit_cache[key] = (tg, inputs, out)
-        for input, arg, buffer in zip(inputs, args, buffers):
-            if buffer is None:
-                tg.write_value(input, arg)
-            elif input.net in tg._values:  # Otherwise not used by the function
-                tg.buffer(input).cast('B')[:] = buffer.cast('B') if buffer.c_contiguous else buffer.tobytes()
-        tg.run()
-        return tg.read_value(out)
+        buffers: list['memoryview[Any] | None'] = []
+        signature: list[Any] = []
+        for a in args:
+            if isinstance(a, int | float):
+                buffers.append(None)
+                signature.append(type(a))
+                continue
+            b = _as_buffer(a)
+            buffers.append(b)
+            signature.append((b.format, b.shape) if b is not None else
+                             tuple(type(ai) for ai in a) if isinstance(a, Iterable) else type(a))
+        key = (func, tuple(signature))
+        program = _jit_cache.get(key)
+        if program is None:
+            program = _JitProgram(func, args, buffers)
+            _jit_cache[key] = program
+        return program(args, buffers)
 
     return call_helper
+
+
+class _JitProgram:
+    """Program of a jit function compiled for one signature of the arguments.
+
+    The data memory of the target is not replaced after compiling, so the
+    arguments are written directly into it and scalar results read from it.
+    """
+    def __init__(self, func: Callable[..., Any], args: tuple[Any, ...], buffers: 'list[memoryview[Any] | None]') -> None:
+        tg = Target()
+        inputs = tuple(
+            _placeholder(b) if b is not None else
+            tuple(value(ai) for ai in a) if isinstance(a, Iterable) else value(a)
+            for a, b in zip(args, buffers))
+        out = func(*inputs)
+        tg.compile(out)
+        self.tg = tg
+        self.out = out
+        self._mem = tg._memory()
+        self._writers = [self._writer(input) for input in inputs]
+        self._reader = self._result_reader(out)
+
+    def _slot(self, input: value[Any]) -> 'tuple[struct.Struct, int] | None':
+        """Format and address of a scalar input, None if it is not used"""
+        net = input.net
+        if net not in self.tg._values:
+            return None
+        addr, size, dtype = self.tg._values[net]
+        en = {'little': '<', 'big': '>'}[self.tg.sdb.byteorder]
+        fmt = {4: 'f', 8: 'd'}[size] if dtype == 'float' else {1: 'b', 2: 'h', 4: 'i', 8: 'q'}[size]
+        return struct.Struct(en + fmt), addr
+
+    def _writer(self, input: Any) -> Callable[[Any, Any], None] | None:
+        """Function for writing an argument to the data memory, None if the
+        argument is not used by the function"""
+        mem = self._mem
+        if isinstance(input, array):
+            if input.net not in self.tg._values:
+                return None
+            dest = self.tg.buffer(input).cast('B')
+
+            def write_buffer(arg: Any, buffer: 'memoryview[Any]') -> None:
+                dest[:] = buffer.cast('B') if buffer.c_contiguous else buffer.tobytes()
+            return write_buffer
+
+        if isinstance(input, tuple):
+            slots = [self._slot(v) for v in input]
+            if not any(slots):
+                return None
+
+            def write_items(arg: Any, buffer: None) -> None:
+                for slot, item in zip(slots, arg):
+                    if slot is not None:
+                        slot[0].pack_into(mem, slot[1], item)
+            return write_items
+
+        slot = self._slot(input)
+        if slot is None:
+            return None
+        pack_into, addr = slot[0].pack_into, slot[1]
+
+        def write_scalar(arg: Any, buffer: None) -> None:
+            pack_into(mem, addr, arg)
+        return write_scalar
+
+    def _result_reader(self, out: Any) -> Callable[[], Any]:
+        """Function for reading the result of a run"""
+        if isinstance(out, value) and out.net in self.tg._values:
+            unpack_from, addr = self._slot(out) or (None, 0)
+            assert unpack_from is not None
+            mem = self._mem
+            if out.dtype == 'bool':
+                return lambda: bool(unpack_from.unpack_from(mem, addr)[0])
+            return lambda: unpack_from.unpack_from(mem, addr)[0]
+        if isinstance(out, array) and not out._export and out.net in self.tg._values:
+            addr, _, _ = self.tg._values[out.net]
+            unpack_array = struct.Struct(binw.array_format(out.net.dtype, out.size, self.tg.sdb.byteorder)).unpack_from
+            mem = self._mem
+            if out.dtype == 'bool':
+                return lambda: out.get_values([bool(v) for v in unpack_array(mem, addr)])
+            return lambda: out.get_values(unpack_array(mem, addr))
+        return lambda: self.tg.read_value(out)
+
+    def __call__(self, args: tuple[Any, ...], buffers: 'list[memoryview[Any] | None]') -> Any:
+        for writer, arg, buffer in zip(self._writers, args, buffers):
+            if writer is not None:
+                writer(arg, buffer)
+        self.tg.run()
+        return self._reader()
 
 
 def _placeholder(buffer: 'memoryview[Any]') -> array[Any]:
@@ -430,12 +513,17 @@ class _LocalMemory(_TargetBase):
         net = variable.net
         if net not in self._values:
             raise ValueError(f"Array {variable} not found. It might not have been compiled for the target or is not used.")
-        if self._data_mem is None:
-            self._data_mem = data_mem(self._context)
         addr, lengths, _ = self._values[net]
-        view: Any = memoryview(self._data_mem)[addr:addr + lengths]
+        view: Any = self._memory()[addr:addr + lengths]
         ret: memoryview[Any] = view.cast(_BUFFER_FORMATS[net.dtype], variable.shape)
         return ret
+
+    def _memory(self) -> 'memoryview[Any]':
+        """Writable memoryview of the whole data memory, like buffer
+        it must be released before a new program is compiled"""
+        if self._data_mem is None:
+            self._data_mem = data_mem(self._context)
+        return memoryview(self._data_mem)
 
 
 class Target(_LocalMemory):
@@ -449,6 +537,10 @@ class Target(_LocalMemory):
             optimization: Optimization level
         """
         super().__init__(arch, optimization)
+        dw = binw.data_writer(self.sdb.byteorder)
+        dw.write_com(binw.Command.RUN_PROG)
+        dw.write_com(binw.Command.END_COM)
+        self._run_command = dw.get_data()
 
     def compile(self, *values: Any) -> None:
         """Compiles the code to compute the given values.
@@ -468,9 +560,9 @@ class Target(_LocalMemory):
     def run(self) -> None:
         """Runs the compiled code on the target device.
         """
-        dw = binw.data_writer(self.sdb.byteorder)
-        dw.write_com(binw.Command.RUN_PROG)
-        self._send(dw)
+        ret = coparun(self._context, self._run_command)
+        if ret <= 0:
+            raise RuntimeError(f"Runner error {ret}")
 
     def read_value_remote(self, variable: value[Any]) -> None:
         """Reads the raw data of a value by the runner."""

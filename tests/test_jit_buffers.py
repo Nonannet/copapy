@@ -153,3 +153,35 @@ def test_jit_numpy() -> None:
     assert func(frame.astype(np.int64), weights)[1].tolist() == product.tolist()
     with pytest.raises(TypeError):
         func(frame > 0, weights)
+
+
+def test_jit_direct_memory_access() -> None:
+    """Arguments are written to and results read from the data memory directly"""
+    @cp.jit
+    def func(x: Any, unused: Any, flag: Any, values: Any) -> Any:
+        return x * 2 + sum(values) + flag
+
+    assert func(1.5, 7, True, [1, 2]) == 7.0
+    assert func(2.5, 8, False, [3, 4]) == 12.0  # Same program with new values
+
+    @cp.jit
+    def compare(x: Any, y: Any) -> Any:
+        return x > y
+
+    assert compare(2, 1) is True and compare(1, 2) is False
+
+    @cp.jit
+    def arrays(a: Any, b: Any) -> Any:
+        return a * 2, a > 2.0, b + 1
+
+    data = float_view([1, 2, 3, 4], (2, 2))
+    ints = memoryview(pyarray.array('i', [5, -6, 7]))
+    assert arrays(data, ints) == [[[2.0, 4.0], [6.0, 8.0]], [[False, False], [True, True]], [6, -5, 8]]
+    scaled, flags, plus = arrays(float_view([0, 0, 5, 5], (2, 2)), ints)
+    assert scaled == [[0.0, 0.0], [10.0, 10.0]] and flags == [[False, False], [True, True]]
+
+    @cp.jit
+    def single(a: Any) -> Any:
+        return a > 2.0
+
+    assert single(float_view([1, 2, 3, 4], (4,))) == [False, False, True, True]
