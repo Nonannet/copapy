@@ -482,9 +482,33 @@ class ArrayOp(Op):
     Attributes:
         result: Net the operation writes to (array or scalar)
     """
-    def __init__(self, typed_op_name: str, args: Sequence[Net], result_dtype: str, length: int | None = None):
+    def __init__(self, typed_op_name: str, args: Sequence[Net], result_dtype: str, length: int | None = None,
+                 inplace: bool = False):
         super().__init__(typed_op_name, args)
         self.result: Net = ArrayNet(result_dtype, self, length) if length else Net(result_dtype, self)
+        self.inplace = inplace
+        """The result is the memory of the first argument, which the operation
+        modifies. It must be the only operation using the first argument."""
+
+
+class ArrayDelay(Node):
+    """Array state of a task, the array counterpart of Delay: the value of an
+    array net at the previous run of the task. The memory is initialized with
+    the initial values and updated by the task after each run. If the delayed
+    net is the result of an in-place operation on the state, the update needs
+    no copy.
+
+    Attributes:
+        values: Initial values
+        dtype: Element type
+        input: The delayed array net, None until it is set
+    """
+    def __init__(self, values: Sequence[int | float], dtype: str, input: 'ArrayNet | None' = None):
+        self.values = tuple(values)
+        self.dtype = dtype
+        self.name = 'delay_' + dtype + 'arr'
+        self.args = ()
+        self.input = input
 
 
 class ArrayPack(Node):

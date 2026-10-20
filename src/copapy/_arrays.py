@@ -117,10 +117,12 @@ COPY_DIMS = 4
 COMPARISONS = ('gt', 'ge', 'eq', 'ne')
 
 
-def _add_array_op(typed_op: str, args: list[Net], length: int | None = None, dtype: str | None = None) -> ArrayOp:
+def _add_array_op(typed_op: str, args: list[Net], length: int | None = None, dtype: str | None = None,
+                  inplace: bool = False) -> ArrayOp:
     """Add an array stencil, the result is an array of the given length or a scalar.
     The type of the result is defined by the stencil, dtype is only required for
-    stencils independent of the element type.
+    stencils independent of the element type. An inplace op modifies its first
+    argument, the result is the memory of the first argument.
 
     Byte arrays are only stored: for operations without a stencil for bytes they
     are converted to float if the operation has a float operand, otherwise to int."""
@@ -134,7 +136,7 @@ def _add_array_op(typed_op: str, args: list[Net], length: int | None = None, dty
     if result_type == 'void':
         assert dtype, f"Result type of {typed_op} is not defined, stencils might need to be rebuilt"
         result_type = dtype
-    return ArrayOp(typed_op, args, result_type, length)
+    return ArrayOp(typed_op, args, result_type, length, inplace)
 
 
 def _from_bytes(net: ArrayNet, dtype: str) -> ArrayNet:

@@ -50,6 +50,13 @@ REF_OBJ(ref_out);
 #else
 #define NO_LIBCALLS
 #endif
+// Short loop inside a stencil (a few elements): no libc calls, not vectorized
+// to keep the stencil code small
+#if defined(__GNUC__) && !defined(__clang__)
+#define SHORT_LOOP __attribute__((optimize("no-tree-loop-distribute-patterns", "no-tree-vectorize")))
+#else
+#define SHORT_LOOP
+#endif
 #if defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
 #define KERNEL __attribute__((noinline, force_align_arg_pointer, NO_LIBCALLS))
 #elif defined(__GNUC__)

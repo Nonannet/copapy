@@ -4,7 +4,7 @@ from ._stencils import stencil_database, patch_entry, TRICORE_BRANCH_RELOCATIONS
 from collections import defaultdict
 import heapq
 import struct
-from ._basic_types import Net, Node, Store, HeadNode, Constant, Op, transl_type, ArrayNet, ArrayConst, ArrayOp, ArrayElement, ArrayPack
+from ._basic_types import Net, Node, Store, HeadNode, Constant, Op, transl_type, ArrayNet, ArrayConst, ArrayDelay, ArrayOp, ArrayElement, ArrayPack
 
 # Pseudo operation: store register 0 to an array element of an ArrayPack
 PACK_STORE = "pack_store"
@@ -246,7 +246,7 @@ def get_all_dag_edges(nodes: Iterable[Node]) -> Generator[tuple[Node, Node], Non
                 emitted_edges.add(edge)
 
 
-def get_head_nets(roots: Iterable[Node], node_type: type[HeadNode] | tuple[type[HeadNode], ...]) -> dict[Node, Net]:
+def get_head_nets(roots: Iterable[Node], node_type: type[Node] | tuple[type[Node], ...]) -> dict[Node, Net]:
     """Head nodes of the given type in the DAG and the net of each
 
     Arguments:
@@ -314,7 +314,7 @@ def add_load_ops(node_list: list[Node]) -> Generator[tuple[Net | None, Node], No
                     yield net, Op(f"load_{transl_type(net.dtype)}_reg0_" + '_'.join(type_list), [])
                     registers[0] = net
                 yield element, Op(PACK_STORE, [])
-        elif not isinstance(node, HeadNode | ArrayConst | ArrayElement):
+        elif not isinstance(node, HeadNode | ArrayConst | ArrayDelay | ArrayElement):
             for i, net in enumerate(node.args):
                 if id(net) != id(registers[i]):  # TODO: consider register swap and commutative ops
                     #if net in registers:
@@ -536,6 +536,15 @@ class _Program():
         self.element_nets = [net for net in variable_list if isinstance(net.source, ArrayElement)]
         variable_list = {net for net in variable_list if not isinstance(net.source, ArrayElement)}
         variable_list |= {net.source.args[0] for net in self.element_nets}
+
+        # Results of in-place array ops are aliases to the memory of their first argument
+        self.inplace_ops = [node for node in self.ordered_ops if isinstance(node, ArrayOp) and node.inplace]
+        modified = {node.args[0]: node for node in self.inplace_ops}
+        for node in self.ordered_ops:
+            for net in node.args:
+                assert modified.get(net, node) is node, \
+                    f"{modified[net].name} modifies {net}, which is also used by {node.name}"
+        variable_list -= {node.result for node in self.inplace_ops}
         self.variable_list = variable_list
 
         self.stencil_names = {node.name for _, node in self.extended_output_ops}
@@ -614,7 +623,7 @@ def compile_programs(programs: Sequence[tuple[Iterable[Node], dict[Node, int]]],
                 dw.write_int(lengths)
                 dw.write_value(net.source.value, lengths)
                 #print(f'+ {net.dtype} {net.source.value}')
-            elif isinstance(net.source, ArrayConst):
+            elif isinstance(net.source, ArrayConst | ArrayDelay):
                 dw.write_com(binw.Command.COPY_DATA)
                 dw.write_int(start)
                 dw.write_int(lengths)
@@ -633,6 +642,10 @@ def compile_programs(programs: Sequence[tuple[Iterable[Node], dict[Node, int]]],
             if net.source in p.external:
                 size = sdb.get_type_size(transl_type(net.dtype))
                 variables[net] = (p.external[net.source], size * net.length if isinstance(net, ArrayNet) else size, net.dtype)
+
+        # In-place results (in the order of execution, an in-place op can modify an in-place result)
+        for op in p.inplace_ops:
+            variables[op.result] = variables[op.args[0]]
 
         object_addr_lookup = {net: offs for net, (offs, _, _) in variables.items()}
 

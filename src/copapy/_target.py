@@ -3,7 +3,7 @@ from . import _binwrite as binw
 from coparun_module import coparun, read_data_mem, data_mem, create_target, clear_target
 import importlib
 import struct
-from ._basic_types import value, Net, Node, Store, NumLike, stencil_db_from_package, ArrayOp, ArrayElement, ArrayConst, ArrayPack, Delay, TimeStep, transl_type
+from ._basic_types import value, Net, Node, Store, NumLike, stencil_db_from_package, ArrayOp, ArrayElement, ArrayConst, ArrayPack, Delay, ArrayDelay, TimeStep, transl_type
 from ._arrays import array, ArrayType
 from ._compiler import compile_to_dag, get_head_nets
 from ._stencils import stencil_database
@@ -458,7 +458,7 @@ class Target(_LocalMemory):
                 (nested) sequences or as values of dicts
         """
         nodes = collect_roots(values)
-        if get_head_nets(nodes, (Delay, TimeStep)):
+        if get_head_nets(nodes, (Delay, ArrayDelay, TimeStep)):
             raise ValueError("delay, integrate, feedback and dt require tasks: "
                              "deploy the values on a LocalTarget or SerialTarget")
         self._release_memory()

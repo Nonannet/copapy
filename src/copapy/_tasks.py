@@ -10,7 +10,7 @@ import math
 import struct
 from typing import Any, Iterable
 from . import _binwrite as binw
-from ._basic_types import Net, Node, Store, Input, HeadNode, Delay, TimeStep, ArrayNet, ArrayConst, ArrayOp, ArrayPack, ArrayElement, value, transl_type
+from ._basic_types import Net, Node, Store, Input, HeadNode, Delay, ArrayDelay, TimeStep, ArrayNet, ArrayConst, ArrayOp, ArrayPack, ArrayElement, value, transl_type
 from ._arrays import array, ArrayType
 from ._compiler import compile_programs, get_head_nets, _modified_node_copy
 from ._target import _TargetBase, _LocalMemory, collect_roots
@@ -154,16 +154,21 @@ def _isolate_task(task: Task, foreign: set[Net]) -> tuple[tuple[list[Node], dict
     stored: set[Node] = set()
     while True:
         isolated = _isolate(roots, foreign)
-        delays = get_head_nets(isolated[0], Delay)
+        delays = get_head_nets(isolated[0], (Delay, ArrayDelay))
         new = [d for d in delays if d not in stored]
         if not new:
             return isolated, delays
         for node in new:
-            assert isinstance(node, Delay)
+            assert isinstance(node, Delay | ArrayDelay)
             if node.input is None:
                 raise ValueError(f"The feedback of {delays[node]} is not closed")
             stored.add(node)
-            roots.append(Store(node.input))
+            if isinstance(node, ArrayDelay):
+                # Arrays are computed in memory
+                assert isinstance(node.input.source, ArrayOp | ArrayPack)
+                roots.append(node.input.source)
+            else:
+                roots.append(Store(node.input))
 
 
 def _sort_state_copies(copies: list[tuple[int, int, int]]) -> list[tuple[int, int, int]]:

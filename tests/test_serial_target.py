@@ -102,6 +102,31 @@ def test_step_equals_local(target: cp.SerialTarget) -> None:
 
 
 @pytest.mark.runner
+def test_ringbuffer_equals_local(target: cp.SerialTarget) -> None:
+    # Ring buffers written in place by a task, read by it and by a slower task
+    u, lag = cp.value(0.0), cp.value(3)
+    rb = cp.ringbuffer(u, 64)
+    rv = cp.ringbuffer(cp.vector([u, u * 2.0]), 5)
+    total = cp.feedback(lambda s: s + u - rb[63], init=0.0)
+    window = rb.window()
+    delayed, delayed_vector = rb[lag], rv[2]
+    fast = cp.Task([rb.data, rb.index, delayed, delayed_vector, total], period=1e-3)
+    slow = cp.Task([window, cp.filters.mean(cp.vector(rb.data))], period=0.01)
+    local = cp.LocalTarget()
+    for tg in (target, local):
+        tg.deploy(fast, slow)
+
+    outputs = [delayed, delayed_vector, total, window]
+    for t, x in [(0.0035, 1.5), (0.02, -2.0), (0.07, 0.25), (0.15, 3.0)]:
+        results = []
+        for tg in (target, local):
+            tg.write_value(u, x)
+            tg.step(t)
+            results.append([r.values if isinstance(r, cp.vector) else r for r in tg.read_value(outputs)])
+        assert results[0] == results[1]
+
+
+@pytest.mark.runner
 def test_realtime(target: cp.SerialTarget) -> None:
     speed_ref, encoder, outputs, task1, task2 = control_tasks()
     target.deploy(task1, task2)

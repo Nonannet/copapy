@@ -487,6 +487,29 @@ def get_arr_copy_code() -> str:
 
 
 @norm_indent
+def get_arr_ring_code() -> str:
+    """Ring buffer of 32 bit elements: put32_arr writes the m elements of
+    ref_arg1 in place to the elements i * m to i * m + m - 1 of the buffer
+    (ref_out is the memory of the buffer ref_arg0, i = ref_arg2, m = ref_arg3),
+    roll32_arr copies the buffer ref_arg0 of n elements (ref_arg2) starting at
+    the element ref_arg1, the kernel aux_arr_roll32 is in aux_functions.c"""
+    return """
+    SHORT_LOOP STENCIL void put32_arr(void) {
+        const int *a = REF(ref_arg1);
+        int m = *(int *)REF(ref_arg3);
+        int *o = (int *)REF(ref_out) + *(int *)REF(ref_arg2) * m;
+        for (int i = 0; i < m; i++) o[i] = a[i];
+        result_void();
+    }
+
+    STENCIL void roll32_arr(void) {
+        aux_arr_roll32(REF(ref_arg0), REF(ref_out), *(int *)REF(ref_arg1), *(int *)REF(ref_arg2));
+        result_void();
+    }
+    """
+
+
+@norm_indent
 def get_arr_conv_code() -> str:
     """2D convolution, the kernel aux_arr_conv2d is in aux_functions.c"""
     return """
@@ -821,6 +844,7 @@ if __name__ == "__main__":
     code += get_arr_cast_code('byte', 'float', '(byte)(a[i] > 255.0f ? 255.0f : a[i] > 0.0f ? a[i] : 0.0f)', 'byte')
 
     code += get_arr_copy_code()
+    code += get_arr_ring_code()
     code += get_arr_conv_code()
     code += get_arr_pool_code('max')
     code += get_arr_pool_code('avg')

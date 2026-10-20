@@ -15,6 +15,8 @@ import copapy as cp
 import copapy.backend as backend
 from copapy import NumLike, iif, value, vector, _binwrite, filters
 from copapy._stencils import stencil_database
+from copapy._arrays import _add_array_op
+from copapy._basic_types import value_from_number
 from copapy.backend import Store, add_read_value_remote, compile_to_dag
 
 # Relative path with native separators, on Windows .exe is appended automatically
@@ -401,6 +403,25 @@ def array_test_values() -> tuple[list[NumLike], list[NumLike]]:
     add(arrays[id(ia)] >= 2, [int(p >= 2) for p in ia])
     add(arrays[id(fa)] < fs, [int(p < 1.5) for p in fa])
     add(arrays[id(ia)] <= arrays[id(ib)], [int(p <= q) for p, q in zip(ia, ib)])
+
+    # Ring buffer stencils: in-place write of an element and of a block of
+    # elements (runtime index), copy rotated by a runtime start element
+    def put(values: list[Any], sample: Any, index: value[int], m: int) -> cp.array[Any]:
+        buffer = cp.array(values)
+        node = _add_array_op('put32_arr', [buffer.net, sample.net, index.net, value_from_number(m).net],
+                             buffer.size, buffer.net.dtype, inplace=True)
+        return cp.array._from_net(node.result, buffer.shape)  # type: ignore[arg-type]
+
+    def roll(values: list[Any], start: value[int]) -> cp.array[Any]:
+        buffer = cp.array(values)
+        node = _add_array_op('roll32_arr', [buffer.net, start.net, value_from_number(buffer.size).net],
+                             buffer.size, buffer.net.dtype)
+        return cp.array._from_net(node.result, buffer.shape)  # type: ignore[arg-type]
+
+    add(put(fa, fs, i_s, 1), [1.5 if i == 3 else p for i, p in enumerate(fa)])
+    add(put(ia, cp.array([7, 8]), i_s, 2), [7 if i == 6 else 8 if i == 7 else p for i, p in enumerate(ia)])
+    add(roll(fa, i_s), [p for p in fa[3:] + fa[:3]])
+    add(roll(ia, i_s + 7), [p for p in ia[10:] + ia[:10]])
 
     return ret_test, ret_ref
 

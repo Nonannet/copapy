@@ -50,6 +50,7 @@ from ._tensors import tensor as matrix
 from ._arrays import array
 from ._flow import iif
 from ._temporal import delay, integrate, rate, integrate_rotation, angular_rate, feedback, dt
+from ._ringbuffer import ringbuffer
 from ._sorting import sort, argsort
 from . import nn
 from . import filters
@@ -82,6 +83,7 @@ __all__ = [
     "angular_rate",
     "feedback",
     "dt",
+    "ringbuffer",
     "vector",
     "tensor",
     "matrix",
