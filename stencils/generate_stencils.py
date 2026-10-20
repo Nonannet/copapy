@@ -252,7 +252,7 @@ def get_store_code(type1: str, type2: str) -> str:
 def arr_operand_type(op: str, type1: str, type2: str) -> str:
     """Returns type of both operands of an array operation they must be casted to
     before the operation."""
-    return 'float' if op in ('div', 'pow', 'atan2') or type1 != type2 else type1
+    return 'float' if op in ('div', 'atan2') or type1 != type2 else type1
 
 
 def arr_out_type(op: str, type1: str, type2: str) -> str:
@@ -758,6 +758,7 @@ if __name__ == "__main__":
 
     for fn in ['atan2', 'pow']:
         code += get_math_func2(fn, 'float', 'float')
+    code += get_custom_stencil('pow_int_int(int arg1, int arg2)', 'result_int_int(aux_ipow(arg1, arg2), arg2);')
 
     # Branch-free selection: gtabs returns the int mask -1 if |arg1| > |arg2| else 0,
     # mask and masknot keep a value where the mask is set / not set, otherwise 0
@@ -812,7 +813,8 @@ if __name__ == "__main__":
         code += get_arr_op_code(op, t1, t2)
 
     for fn, t1, t2 in permutate(['pow', 'atan2'], types, types):
-        code += get_arr_op_code(fn, t1, t2, fn + 'f')
+        int_pow = fn == 'pow' and t1 == t2 == 'int'
+        code += get_arr_op_code(fn, t1, t2, 'aux_ipow' if int_pow else fn + 'f')
 
     fnames = ['sqrt', 'exp', 'log', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan']
     for fn, t in permutate(fnames, types):

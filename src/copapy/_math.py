@@ -1,11 +1,11 @@
 from . import vector
 from . import tensor
-from ._vectors import VecNumLike
-from ._tensors import TensorNumLike
+from ._vectors import VecNumLike, VecIntLike
+from ._tensors import TensorNumLike, TensorIntLike
 from ._arrays import array, ArrayType
 from . import value, NumLike
 from typing import TypeVar, Any, overload, Callable
-from ._basic_types import add_op
+from ._basic_types import add_op, uniint, value_from_number
 from functools import reduce
 import builtins
 import math
@@ -67,28 +67,50 @@ def log(x: Any) -> Any:
 
 
 @overload
+def pow(x: int, y: int) -> int: ...  # type: ignore[overload-overlap]  # int is also a float for mypy
+@overload
 def pow(x: float | int, y: float | int) -> float: ...
+@overload
+def pow(x: value[int], y: uniint) -> value[int]: ...
+@overload
+def pow(x: int, y: value[int]) -> value[int]: ...
 @overload
 def pow(x: value[Any], y: NumLike) -> value[float]: ...
 @overload
 def pow(x: NumLike, y: value[Any]) -> value[float]: ...
 @overload
+def pow(x: vector[int], y: VecIntLike) -> vector[int]: ...
+@overload
+def pow(x: value[int] | int, y: vector[int]) -> vector[int]: ...
+@overload
 def pow(x: vector[Any], y: VecNumLike) -> vector[float]: ...
 @overload
 def pow(x: VecNumLike, y: vector[Any]) -> vector[float]: ...
+@overload
+def pow(x: tensor[int], y: TensorIntLike) -> tensor[int]: ...
+@overload
+def pow(x: TensorIntLike, y: tensor[int]) -> tensor[int]: ...
 @overload
 def pow(x: tensor[Any], y: TensorNumLike) -> tensor[float]: ...
 @overload
 def pow(x: TensorNumLike, y: tensor[Any]) -> tensor[float]: ...
 @overload
-def pow(x: array[Any], y: array[Any] | NumLike) -> array[Any]: ...
+def pow(x: array[int], y: array[int] | uniint) -> array[int]: ...
+@overload
+def pow(x: uniint, y: array[int]) -> array[int]: ...
+@overload
+def pow(x: array[Any], y: array[Any] | NumLike) -> array[float]: ...
 @overload
 def pow(x: NumLike, y: array[Any]) -> array[float]: ...
 def pow(x: Any, y: Any) -> Any:
-    """x to the power of y
+    """x to the power of y. The result is an int if both operands are
+    int, otherwise a float. An int power is exact up to the wrap around of
+    32 bit ints on overflow, a negative int exponent gives 1 / x^-y truncated
+    towards zero (0 for |x| > 1 and for x = 0).
 
     Arguments:
         x: Input value
+        y: Exponent
 
     Returns:
         result of x**y
@@ -103,17 +125,29 @@ def pow(x: Any, y: Any) -> Any:
         return _map2_vector(x, y, pow, 'pow')
     if isinstance(y, int) and 0 <= y < 8:
         if y == 0:
-            return 1
+            one = 1.0 if isinstance(x, float) or (isinstance(x, value) and x.dtype == 'float') else 1
+            return value_from_number(one) if isinstance(x, value) else one
         m = x
         for _ in range(y - 1):
             m *= x
         return m
     if isinstance(x, value) or isinstance(y, value):
         return add_op('pow', [x, y])
-    elif y == -1:
+    if isinstance(x, int) and isinstance(y, int):
+        return _int_pow(x, y)
+    if y == -1.0:
         return 1 / x
-    else:
-        return float(x ** y)
+    return float(x ** y)
+
+
+def _int_pow(x: int, y: int) -> int:
+    """Int power of numbers like the pow_int_int stencil (without the
+    wrap around): a negative exponent gives 1 / x^-y truncated towards zero"""
+    if y >= 0:
+        return int(x ** y)
+    if x == -1:
+        return -1 if y % 2 else 1
+    return 1 if x == 1 else 0
 
 
 @overload

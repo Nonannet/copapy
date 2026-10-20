@@ -193,6 +193,16 @@ TRIG_VALS = [0.0, 0.0001, 0.5, 1.5, 2.5, 3.5, 6.28318530718, 8.25, 100.0, 100000
              -0.0001, -0.5, -1.5, -2.5, -3.5, -6.28318530718, -8.25, -100.0, -100000.0]
 ARC_VALS = [-1.0, -0.95, -0.5, -0.01, 0.0, 0.01, 0.5, 0.95, 1.0]
 SIGNED_VALS = [-1000.5, -2.5, 0.0, 2.5, 1000.5]
+def int_pow(x: int, y: int) -> int:
+    """Reference of the int power stencil: 1 / x^-y truncated towards zero for
+    negative exponents, wrap around of 32 bit ints on overflow"""
+    if y < 0:
+        r = 1 if x == 1 else (-1 if y % 2 else 1) if x == -1 else 0
+    else:
+        r = x ** y
+    return (r + 2**31) % 2**32 - 2**31
+
+
 BINARY_VALS = [(1.0, 3.0), (-1.0, -3.0), (-1.0, 3.0), (1.0, 0.0), (0.0, 3.0), (0.5, -3.0), (2.5, 2.111)]
 
 
@@ -229,7 +239,7 @@ def math_program(val: Any) -> list[NumLike]:
     ret += [cp.clamp(val(x), 0.0, 1.0) for x in (-2.5, 0.3, 2.5)]
     ret += [cp.clamp(val(-7.0), val(-5.0), -1.0), cp.clamp(val(0.5), -1.0, val(0.25))]
 
-    ret += [val(2.5) ** 2, val(9) ** 2, val(9) ** -1, val(9) ** 0.5, val(9) ** 2.111, val(2.5) ** -2, 2 ** val(2.5)]
+    ret += [val(2.5) ** 2, val(9) ** 2, cp.pow(val(9), -1), val(9) ** 0.5, val(9) ** 2.111, val(2.5) ** -2, 2 ** val(2.5)]
     return ret
 
 
@@ -365,7 +375,7 @@ def array_test_values() -> tuple[list[NumLike], list[NumLike]]:
     add(arrays[id(fb)] ** arrays[id(fa)], [p ** q for p, q in zip(fb, fa)])
     add(apos ** fs, [p ** 1.5 for p in pos])
     add(i_s ** arrays[id(fa)], [3 ** q for q in fa])
-    add(arrays[id(ib)] ** arrays[id(ia)], [float(p) ** q for p, q in zip(ib, ia)])
+    add(arrays[id(ib)] ** arrays[id(ia)], [int_pow(p, q) for p, q in zip(ib, ia)])
     add(cp.atan2(arrays[id(fa)], arrays[id(ib)]), [math.atan2(p, q) for p, q in zip(fa, ib)])
     add(cp.atan2(arrays[id(ia)], fs), [math.atan2(p, 1.5) for p in ia])
     add(cp.atan2(fs, arrays[id(fa)]), [math.atan2(1.5, q) for q in fa])

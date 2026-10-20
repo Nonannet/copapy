@@ -256,7 +256,7 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
             add_grad(a, g * cp.exp(a))
 
         elif opn == 'pow':
-            add_grad(a, g * cp.pow(a, b - 1) * b)
+            add_grad(a, g * cp.pow(a, b - 1.0) * b)
             add_grad(b, g * cp.pow(a, b) * cp.log(a))
 
         elif opn == 'sqrt':

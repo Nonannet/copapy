@@ -467,9 +467,13 @@ class array(Generic[TNum]):
         return self._binary_op('mul', -1)
 
     @overload
-    def __pow__(self: 'array[int]', other: int) -> 'array[Any]': ...  # int for exponents 1 to 7, else float
+    def __pow__(self: 'array[int]', other: 'array[int] | value[int] | int') -> 'array[int]': ...
     @overload
-    def __pow__(self, other: 'array[Any] | NumLike') -> 'array[float]': ...
+    def __pow__(self, other: 'array[float] | value[float] | float') -> 'array[float]': ...
+    @overload
+    def __pow__(self: 'array[float]', other: 'array[Any] | NumLike') -> 'array[float]': ...
+    @overload
+    def __pow__(self, other: 'array[Any] | NumLike') -> 'array[Any]': ...
     def __pow__(self, other: 'array[Any] | NumLike') -> Any:
         if isinstance(other, int) and not isinstance(other, bool) and 1 <= other < 8:
             ret: array[Any] = self._computed()
@@ -478,7 +482,15 @@ class array(Generic[TNum]):
             return ret
         return self._binary_op('pow', other)
 
-    def __rpow__(self, other: NumLike) -> 'array[float]':
+    @overload
+    def __rpow__(self: 'array[int]', other: 'value[int] | int') -> 'array[int]': ...
+    @overload
+    def __rpow__(self, other: 'value[float] | float') -> 'array[float]': ...
+    @overload
+    def __rpow__(self: 'array[float]', other: 'NumLike') -> 'array[float]': ...
+    @overload
+    def __rpow__(self, other: 'NumLike') -> 'array[Any]': ...
+    def __rpow__(self, other: NumLike) -> Any:
         return self._binary_op('pow', other, reverse=True)
 
     def __gt__(self, other: 'array[Any] | NumLike') -> 'array[int]':

@@ -102,7 +102,8 @@ def test_power_operator():
     c_f = value(a_f)
 
     ret_test = (c_f ** 2, c_i ** 2, c_i ** -1, c_i ** 0.5, c_i ** 2.111, c_f ** 2.111, c_f ** -2, 2 ** c_f)
-    ret_refe = (a_f ** 2, a_i ** 2, a_i ** -1, a_i ** 0.5, a_i ** 2.111, a_f ** 2.111, a_f ** -2, 2 ** a_f)
+    # int ** int is an int: 9 ** -1 is 1 / 9 truncated towards zero
+    ret_refe = (a_f ** 2, a_i ** 2, 0, a_i ** 0.5, a_i ** 2.111, a_f ** 2.111, a_f ** -2, 2 ** a_f)
 
     for test, ref in zip(ret_test, ret_refe):
         assert isinstance(test, value)

@@ -25,6 +25,20 @@ NOINLINE float aux_tanh(float x) {
     return x < 0.0f ? -t : t;
 }
 
+// Integer power by squaring, exact up to the wrap around on overflow (like int
+// multiplication). A negative exponent gives 1 / x^-e truncated towards zero:
+// 0 for |x| > 1 and for x = 0
+NOINLINE int aux_ipow(int x, int e) {
+    if (e < 0) return x == 1 ? 1 : x == -1 ? ((e & 1) ? -1 : 1) : 0;
+    unsigned int r = 1, b = (unsigned int)x;
+    while (e) {
+        if (e & 1) r *= b;
+        b *= b;
+        e >>= 1;
+    }
+    return (int)r;
+}
+
 // Array kernels without variants for the element types, the kernels generated
 // for each type are in generate_stencils.py
 

@@ -7,7 +7,7 @@ from typing import Any, Callable
 import pytest
 
 import copapy as cp
-from runner_helpers import trig_tol
+from runner_helpers import trig_tol, int_pow
 
 
 def evaluate(*exprs: Any) -> list[Any]:
@@ -116,13 +116,19 @@ def test_binary_functions(t1: str, t2: str) -> None:
 
     res = [a ** b, a ** sb, sa ** b, cp.pow(a, 0.5), cp.pow(2, b), 2.5 ** b,
            cp.atan2(a, b), cp.atan2(a, sb), cp.atan2(sa, b), cp.atan2(a, -1.5), cp.atan2(-2, b)]
-    ref = [[x ** y for x, y in zip(va, vb)], [x ** vb[4] for x in va], [va[3] ** y for y in vb],
-           [x ** 0.5 for x in va], [2 ** y for y in vb], [2.5 ** y for y in vb],
+
+    def pw(x: Any, y: Any) -> Any:
+        return int_pow(x, y) if isinstance(x, int) and isinstance(y, int) else x ** y
+
+    ref = [[pw(x, y) for x, y in zip(va, vb)], [pw(x, vb[4]) for x in va], [pw(va[3], y) for y in vb],
+           [x ** 0.5 for x in va], [pw(2, y) for y in vb], [2.5 ** y for y in vb],
            [math.atan2(x, y) for x, y in zip(va, vb)], [math.atan2(x, vb[4]) for x in va],
            [math.atan2(va[3], y) for y in vb], [math.atan2(x, -1.5) for x in va], [math.atan2(-2, y) for y in vb]]
+    both_int = t1 == t2 == 'int'
+    dtypes = [both_int, both_int, both_int, False, t2 == 'int'] + [False] * 6  # Int result of the powers
 
-    for r, o, e in zip(res, evaluate(*res), ref):
-        assert r.dtype == 'float'
+    for r, o, e, is_int in zip(res, evaluate(*res), ref, dtypes):
+        assert r.dtype == ('int' if is_int else 'float')
         assert o == pytest.approx(e, rel=1e-5, abs=1e-6)
 
 
