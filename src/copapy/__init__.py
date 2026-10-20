@@ -53,6 +53,7 @@ from ._temporal import delay, integrate, rate, integrate_rotation, angular_rate,
 from ._sorting import sort, argsort
 from . import nn
 from . import filters
+from . import controller
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -142,6 +143,7 @@ __all__ = [
     "argsort",
     "nn",
     "filters",
+    "controller",
     "jit",
     "map_to_buffer",
     "map_to_numpy"

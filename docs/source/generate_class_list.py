@@ -109,6 +109,8 @@ if __name__ == "__main__":
 
         write_functions(f, ['*'], 'copapy.filters', title='Filter functions', path_patterns=['*filters.py'], api_dir=api_dir)
 
+        write_functions(f, ['*'], 'copapy.controller', title='Controller functions', path_patterns=['*controller.py'], api_dir=api_dir)
+
         #write_manual(f, ['NumLike'], title='Types')
 
     with open(f'{api_dir}/backend.md', 'w') as f:
