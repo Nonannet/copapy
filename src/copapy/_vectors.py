@@ -1,6 +1,6 @@
 from . import value
 from ._mixed import mixed_sum, mixed_homogenize
-from typing import Sequence, TypeVar, Iterable, Any, overload, TypeAlias, Callable, Iterator, cast
+from typing import Sequence, TypeVar, Iterable, Any, overload, TypeAlias, Callable, Iterator
 import copapy as cp
 from ._helper_types import TNum
 from ._arrays import ArrayType, array
@@ -55,7 +55,8 @@ class vector(ArrayType[TNum]):
         """Element by an int or a copapy value (computed at runtime, clamped to
         the valid range, negative counted from the end) or a sub-vector by a slice"""
         if isinstance(index, value):
-            element: value[TNum] = self._force_array()[index]
+            element = self._force_array()[index]
+            assert isinstance(element, value)  # A vector has one dimension
             return element
         if isinstance(index, slice):
             arr = self._view_array()
@@ -91,7 +92,7 @@ class vector(ArrayType[TNum]):
     @overload
     def __add__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
     @overload
-    def __add__(self, other: VecNumLike) -> 'vector[int] | vector[float]': ...
+    def __add__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __add__(self, other: VecNumLike) -> Any:
         if isinstance(other, cp.tensor):
             return NotImplemented
@@ -119,7 +120,7 @@ class vector(ArrayType[TNum]):
     @overload
     def __sub__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
     @overload
-    def __sub__(self, other: VecNumLike) -> 'vector[int] | vector[float]': ...
+    def __sub__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __sub__(self, other: VecNumLike) -> Any:
         if isinstance(other, cp.tensor):
             return NotImplemented
@@ -155,7 +156,7 @@ class vector(ArrayType[TNum]):
     @overload
     def __mul__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
     @overload
-    def __mul__(self, other: VecNumLike) -> 'vector[int] | vector[float]': ...
+    def __mul__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __mul__(self, other: VecNumLike) -> Any:
         if isinstance(other, cp.tensor):
             return NotImplemented
@@ -183,7 +184,7 @@ class vector(ArrayType[TNum]):
     @overload
     def __pow__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
     @overload
-    def __pow__(self, other: VecNumLike) -> 'vector[int] | vector[float]': ...
+    def __pow__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __pow__(self, other: VecNumLike) -> Any:
         if isinstance(other, cp.tensor):
             return NotImplemented
@@ -271,16 +272,19 @@ class vector(ArrayType[TNum]):
     @overload
     def __matmul__(self, other: 'vector[int] | vector[float]') -> float | int | value[float] | value[int]: ...
     @overload
-    def __matmul__(self, other: 'cp.tensor[Any]') -> 'vector[Any] | float | int | value[Any]': ...
+    def __matmul__(self: 'vector[int]', other: 'cp.tensor[int]') -> 'vector[int]': ...
+    @overload
+    def __matmul__(self, other: 'cp.tensor[float]') -> 'vector[float]': ...
+    @overload
+    def __matmul__(self: 'vector[float]', other: 'cp.tensor[int] | cp.tensor[float]') -> 'vector[float]': ...
     def __matmul__(self, other: 'vector[Any] | cp.tensor[Any]') -> Any:
-        if isinstance(other, cp.tensor) and other.ndim != 1:
+        """Dot product with a vector, row vector times matrix with a 2D tensor"""
+        if isinstance(other, cp.tensor):
             if other.ndim != 2:
-                return NotImplemented
+                raise ValueError(f"vector @ tensor requires a 2D tensor, not {other.ndim}D (use dot for 1D)")
             from ._tensors import _to_vector
-            # Row vector times matrix
-            ret: Any = cp.tensor(self).matmul(other)
-            return _to_vector(ret)
-        return self.dot(cast('vector[Any]', other))
+            return _to_vector(cp.tensor(self).matmul(other))
+        return self.dot(other)
 
     def cross(self: 'vector[float]', other: 'vector[float]') -> 'vector[float]':
         """Calculate the cross product of this vector with another 3D vector.

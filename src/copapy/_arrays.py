@@ -249,7 +249,11 @@ class array(Generic[TNum]):
             return self._strided(flat_index, (1,), (1,))._computed().element(0)
         return value(Net(self.net.dtype, ArrayElement(self.net, flat_index)), self.dtype)
 
-    def __getitem__(self, key: 'int | value[int] | slice | Sequence[int | value[int] | slice]') -> 'Any':
+    @overload
+    def __getitem__(self, key: slice) -> 'array[TNum]': ...
+    @overload
+    def __getitem__(self, key: 'int | value[int] | Sequence[int | value[int] | slice]') -> 'value[TNum] | array[TNum]': ...
+    def __getitem__(self, key: 'int | value[int] | slice | Sequence[int | value[int] | slice]') -> 'value[TNum] | array[TNum]':
         """Get an element (all dimensions indexed) or a sub-array (slices or fewer
         indices than dimensions). Sub-arrays are copied by a strided copy stencil."""
         keys = key if isinstance(key, Sequence) else (key,)
@@ -384,33 +388,73 @@ class array(Generic[TNum]):
     @overload
     def __add__(self: 'array[int]', other: 'array[int] | value[int] | int') -> 'array[int]': ...
     @overload
+    def __add__(self, other: 'array[float] | value[float] | float') -> 'array[float]': ...
+    @overload
+    def __add__(self: 'array[float]', other: 'array[Any] | NumLike') -> 'array[float]': ...
+    @overload
     def __add__(self, other: 'array[Any] | NumLike') -> 'array[Any]': ...
-    def __add__(self, other: 'array[Any] | NumLike') -> 'array[Any]':
+    def __add__(self, other: 'array[Any] | NumLike') -> Any:
         if isinstance(other, int | float) and other == 0:
             return self._computed()
         return self._binary_op('add', other)
 
-    def __radd__(self, other: NumLike) -> 'array[Any]':
+    @overload
+    def __radd__(self: 'array[int]', other: 'value[int] | int') -> 'array[int]': ...
+    @overload
+    def __radd__(self, other: 'value[float] | float') -> 'array[float]': ...
+    @overload
+    def __radd__(self: 'array[float]', other: 'NumLike') -> 'array[float]': ...
+    @overload
+    def __radd__(self, other: 'NumLike') -> 'array[Any]': ...
+    def __radd__(self, other: NumLike) -> Any:
         return self + other
 
-    def __sub__(self, other: 'array[Any] | NumLike') -> 'array[Any]':
+    @overload
+    def __sub__(self: 'array[int]', other: 'array[int] | value[int] | int') -> 'array[int]': ...
+    @overload
+    def __sub__(self, other: 'array[float] | value[float] | float') -> 'array[float]': ...
+    @overload
+    def __sub__(self: 'array[float]', other: 'array[Any] | NumLike') -> 'array[float]': ...
+    @overload
+    def __sub__(self, other: 'array[Any] | NumLike') -> 'array[Any]': ...
+    def __sub__(self, other: 'array[Any] | NumLike') -> Any:
         if isinstance(other, int | float) and other == 0:
             return self._computed()
         return self._binary_op('sub', other)
 
-    def __rsub__(self, other: NumLike) -> 'array[Any]':
+    @overload
+    def __rsub__(self: 'array[int]', other: 'value[int] | int') -> 'array[int]': ...
+    @overload
+    def __rsub__(self, other: 'value[float] | float') -> 'array[float]': ...
+    @overload
+    def __rsub__(self: 'array[float]', other: 'NumLike') -> 'array[float]': ...
+    @overload
+    def __rsub__(self, other: 'NumLike') -> 'array[Any]': ...
+    def __rsub__(self, other: NumLike) -> Any:
         return self._binary_op('sub', other, reverse=True)
 
     @overload
     def __mul__(self: 'array[int]', other: 'array[int] | value[int] | int') -> 'array[int]': ...
     @overload
+    def __mul__(self, other: 'array[float] | value[float] | float') -> 'array[float]': ...
+    @overload
+    def __mul__(self: 'array[float]', other: 'array[Any] | NumLike') -> 'array[float]': ...
+    @overload
     def __mul__(self, other: 'array[Any] | NumLike') -> 'array[Any]': ...
-    def __mul__(self, other: 'array[Any] | NumLike') -> 'array[Any]':
+    def __mul__(self, other: 'array[Any] | NumLike') -> Any:
         if isinstance(other, int | float) and other == 1:
             return self._computed()
         return self._binary_op('mul', other)
 
-    def __rmul__(self, other: NumLike) -> 'array[Any]':
+    @overload
+    def __rmul__(self: 'array[int]', other: 'value[int] | int') -> 'array[int]': ...
+    @overload
+    def __rmul__(self, other: 'value[float] | float') -> 'array[float]': ...
+    @overload
+    def __rmul__(self: 'array[float]', other: 'NumLike') -> 'array[float]': ...
+    @overload
+    def __rmul__(self, other: 'NumLike') -> 'array[Any]': ...
+    def __rmul__(self, other: NumLike) -> Any:
         return self * other
 
     def __truediv__(self, other: 'array[Any] | NumLike') -> 'array[float]':
@@ -422,7 +466,11 @@ class array(Generic[TNum]):
     def __neg__(self) -> 'array[TNum]':
         return self._binary_op('mul', -1)
 
-    def __pow__(self, other: 'array[Any] | NumLike') -> 'array[Any]':
+    @overload
+    def __pow__(self: 'array[int]', other: int) -> 'array[Any]': ...  # int for exponents 1 to 7, else float
+    @overload
+    def __pow__(self, other: 'array[Any] | NumLike') -> 'array[float]': ...
+    def __pow__(self, other: 'array[Any] | NumLike') -> Any:
         if isinstance(other, int) and not isinstance(other, bool) and 1 <= other < 8:
             ret: array[Any] = self._computed()
             for _ in range(other - 1):
@@ -556,7 +604,15 @@ class array(Generic[TNum]):
         if self.ndim != 1:
             raise ValueError(f"{name} requires a 1D array, got shape {self.shape}")
 
-    def dot(self, other: 'array[Any]') -> value[Any]:
+    @overload
+    def dot(self: 'array[int]', other: 'array[int]') -> 'value[int]': ...
+    @overload
+    def dot(self, other: 'array[float]') -> 'value[float]': ...
+    @overload
+    def dot(self: 'array[float]', other: 'array[Any]') -> 'value[float]': ...
+    @overload
+    def dot(self, other: 'array[Any]') -> 'value[Any]': ...
+    def dot(self, other: 'array[Any]') -> Any:
         """Dot product of two arrays with the same number of elements."""
         if other.size != self.size:
             raise ValueError(f"Size mismatch: {self.size} and {other.size}")
@@ -564,7 +620,15 @@ class array(Generic[TNum]):
         node = _add_array_op(f"dot_{self.net.dtype}arr_{other.net.dtype}arr", [self.net, other.net, n])
         return value(node.result)
 
-    def matmul(self, other: 'array[Any]') -> 'value[Any] | array[Any]':
+    @overload
+    def matmul(self: 'array[int]', other: 'array[int]') -> 'value[int] | array[int]': ...
+    @overload
+    def matmul(self, other: 'array[float]') -> 'value[float] | array[float]': ...
+    @overload
+    def matmul(self: 'array[float]', other: 'array[Any]') -> 'value[float] | array[float]': ...
+    @overload
+    def matmul(self, other: 'array[Any]') -> 'value[Any] | array[Any]': ...
+    def matmul(self, other: 'array[Any]') -> Any:
         """Matrix multiplication for 1D and 2D operands (numpy semantics)."""
         if self.ndim == 1 and other.ndim == 1:
             if self.size != other.size:
@@ -595,7 +659,15 @@ class array(Generic[TNum]):
             return array._from_net(node.result, (m,))
         raise NotImplementedError(f"matmul not implemented for shapes {self.shape} @ {other.shape}")
 
-    def __matmul__(self, other: 'array[Any]') -> 'value[Any] | array[Any]':
+    @overload
+    def __matmul__(self: 'array[int]', other: 'array[int]') -> 'value[int] | array[int]': ...
+    @overload
+    def __matmul__(self, other: 'array[float]') -> 'value[float] | array[float]': ...
+    @overload
+    def __matmul__(self: 'array[float]', other: 'array[Any]') -> 'value[float] | array[float]': ...
+    @overload
+    def __matmul__(self, other: 'array[Any]') -> 'value[Any] | array[Any]': ...
+    def __matmul__(self, other: 'array[Any]') -> Any:
         return self.matmul(other)
 
     def get_values(self, data: Sequence[int | float]) -> list[Any]:

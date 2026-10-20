@@ -86,7 +86,7 @@ def test_scalar_operands() -> None:
 
 def test_reductions_and_dot() -> None:
     check(lambda v: cp.max(tensors(v)[0]) * 2.0 - cp.min(tensors(v)[1]), lambda d: max(d[:N]) * 2.0 - min(d[N:]))
-    check(lambda v: tensors(v)[0] @ tensors(v)[1], lambda d: sum(p * q for p, q in zip(*lists(d))))
+    check(lambda v: (tensors(v)[0] @ tensors(v)[1]).item(), lambda d: sum(p * q for p, q in zip(*lists(d))))
     check(lambda v: (tensors(v)[0] * 3.0).mean() + cp.sin(tensors(v)[1]).sum() ** 2,
           lambda d: sum(p * 3.0 for p in d[:N]) / N + sum(math.sin(q) for q in d[N:]) ** 2)
 

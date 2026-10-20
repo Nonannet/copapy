@@ -1,4 +1,4 @@
-from typing import Any, Sequence, overload
+from typing import Any, Literal, Sequence, overload
 import re
 import struct
 from ._basic_types import NumLike, uniint, value, Net, Constant, ArrayNet, ArrayPack, ArrayElement, transl_type, value_from_number, add_op
@@ -66,6 +66,46 @@ def _cast_array_type(x: ArrayType[Any], dtype: str) -> ArrayType[Any]:
     return ret
 
 
+@overload
+def cast(x: float | int, dtype: Literal['bool'] | type[bool]) -> bool: ...
+@overload
+def cast(x: float | int, dtype: Literal['int'] | type[int]) -> int: ...
+@overload
+def cast(x: float | int, dtype: Literal['float'] | type[float]) -> float: ...
+@overload
+def cast(x: value[Any], dtype: Literal['bool'] | type[bool]) -> value[int]: ...
+@overload
+def cast(x: value[Any], dtype: Literal['int'] | type[int]) -> value[int]: ...
+@overload
+def cast(x: value[Any], dtype: Literal['float'] | type[float]) -> value[float]: ...
+@overload
+def cast(x: vector[Any], dtype: Literal['bool'] | type[bool]) -> vector[int]: ...
+@overload
+def cast(x: vector[Any], dtype: Literal['int'] | type[int]) -> vector[int]: ...
+@overload
+def cast(x: vector[Any], dtype: Literal['float'] | type[float]) -> vector[float]: ...
+@overload
+def cast(x: tensor[Any], dtype: Literal['bool'] | type[bool]) -> tensor[int]: ...
+@overload
+def cast(x: tensor[Any], dtype: Literal['int'] | type[int]) -> tensor[int]: ...
+@overload
+def cast(x: tensor[Any], dtype: Literal['float'] | type[float]) -> tensor[float]: ...
+@overload
+def cast(x: array[Any], dtype: Literal['bool'] | type[bool]) -> array[int]: ...
+@overload
+def cast(x: array[Any], dtype: Literal['int'] | type[int]) -> array[int]: ...
+@overload
+def cast(x: array[Any], dtype: Literal['float'] | type[float]) -> array[float]: ...
+@overload
+def cast(x: array[Any], dtype: Literal['byte']) -> array[int]: ...
+@overload
+def cast(x: ArrayType[Any], dtype: Literal['bool'] | type[bool]) -> ArrayType[int]: ...
+@overload
+def cast(x: ArrayType[Any], dtype: Literal['int'] | type[int]) -> ArrayType[int]: ...
+@overload
+def cast(x: ArrayType[Any], dtype: Literal['float'] | type[float]) -> ArrayType[float]: ...
+@overload
+def cast(x: Any, dtype: 'str | type') -> Any: ...
 def cast(x: Any, dtype: 'str | type') -> Any:
     """Convert a number, a copapy value or the elements of a vector, tensor or
     array to another type.
@@ -274,6 +314,11 @@ def pack(fmt: str, *values: NumLike) -> list[uniint]:
     return ret
 
 
+def _byte(data: 'Sequence[uniint] | array[int]', index: int) -> uniint:
+    """Byte by its index in data, the flat index for an array"""
+    return data.element(index) if isinstance(data, array) else data[index]
+
+
 def unpack(fmt: str, data: 'Sequence[uniint] | array[int]', offset: int = 0) -> tuple[Any, ...]:
     """Convert bytes to int and float values, like struct.unpack_from.
 
@@ -296,6 +341,6 @@ def unpack(fmt: str, data: 'Sequence[uniint] | array[int]', offset: int = 0) -> 
     ret: list[NumLike] = []
     for char in fields:
         if char != 'x':
-            ret.append(_unpack_field([data[offset + i] for i in range(_field_sizes[char])], char, big))
+            ret.append(_unpack_field([_byte(data, offset + i) for i in range(_field_sizes[char])], char, big))
         offset += _field_sizes[char]
     return tuple(ret)

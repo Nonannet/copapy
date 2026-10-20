@@ -112,11 +112,11 @@ class ringbuffer(Generic[T]):
         size = sample.size if sample is not None else 1
         self.n = n
         self.shape: tuple[int, ...] = shape
-        self._sample = x
+        self._sample: T = x
         self._size = size
         self._dtype = dtype
         self._stored = stored
-        self._oldest: Any = None
+        self._oldest: T | None = None
 
         state = ArrayDelay(_init_elements(init, size, stored) * n, stored)
         state_net = ArrayNet(stored, state, n * size)
@@ -163,7 +163,7 @@ class ringbuffer(Generic[T]):
         elif not 0 <= k < self.n:
             raise IndexError(f"k must be from 0 to {self.n - 1}, not {k}")
         elif k == 0:
-            return cast(T, self._sample)
+            return self._sample
         result: Any = self.data[self._slot(k)]
         return cast(T, self._wrap(result) if self.shape else result)
 
@@ -173,7 +173,7 @@ class ringbuffer(Generic[T]):
         updated by the value entering and the value leaving the window."""
         if self._oldest is None:
             self._oldest = self[self.n - 1]
-        return cast(T, self._oldest)
+        return self._oldest
 
     def window(self) -> array[Any]:
         """Values of the buffer in time order, the oldest value first and the

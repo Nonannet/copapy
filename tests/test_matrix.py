@@ -90,7 +90,7 @@ def test_matmul_keeps_vector_type(packed: bool) -> None:
 
     exprs = (m @ v, v @ m, m @ t, v + m @ v)
     assert [type(e) for e in exprs] == [cp.vector, cp.vector, cp.tensor, cp.vector]
-    assert isinstance(v @ t, cp.value)
+    assert isinstance((t @ t).item(), cp.value)
 
     results = evaluate(*exprs)
     assert results[0].values == pytest.approx([5.0, 11.0])  # pyright: ignore[reportUnknownMemberType]
@@ -119,7 +119,26 @@ def test_vector_tensor_elementwise() -> None:
 
 
 def test_vector_dot_as_1d_matmul():
-    assert cp.tensor([1, 2, 3]) @ cp.tensor([4, 5, 6]) == 32
+    res = cp.tensor([1, 2, 3]) @ cp.tensor([4, 5, 6])
+    assert isinstance(res, cp.tensor) and res.shape == ()
+    assert res.item() == 32
+
+
+def test_matmul_with_vector_requires_2d_tensor() -> None:
+    v = cp.vector([1.0, 2.0])
+    with pytest.raises(ValueError):
+        cp.tensor([1.0, 2.0]) @ v
+    with pytest.raises(ValueError):
+        v @ cp.tensor([1.0, 2.0])
+    with pytest.raises(ValueError):
+        v @ cp.tensor([[[1.0, 2.0]]])
+
+
+def test_item() -> None:
+    assert cp.tensor(5).item() == 5
+    assert cp.tensor([[2.5]]).item() == 2.5
+    with pytest.raises(ValueError):
+        cp.tensor([1, 2]).item()
 
 
 @pytest.mark.parametrize(("a", "b"), [([[1, 2], [3, 4]], [[1, 2, 3]]), ([[1, 2, 3]], [[1, 2, 3]]), ([[1, 2], [3, 4]], [1, 2, 3])])

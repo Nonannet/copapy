@@ -369,7 +369,8 @@ def test_sum():
         (t.sum(axis=-2), (3,), (5, 7, 9)),
         (t3.sum(axis=(0, -1)), (2,), (14, 22)),
     ]
-    assert t3.sum(axis=(0, 1, 2)) == 36
+    assert t3.sum(axis=(0, 1, 2)).shape == ()
+    assert t3.sum(axis=(0, 1, 2)).item() == 36
 
     for s, shape, values in cases:
         assert s.shape == shape
@@ -389,7 +390,7 @@ def test_mean():
     assert t.mean(axis=0).values == pytest.approx((2.5, 3.5, 4.5))  # pyright: ignore[reportUnknownMemberType]
     assert t.mean(axis=1).values == pytest.approx((2.0, 5.0))  # pyright: ignore[reportUnknownMemberType]
     assert t.mean(axis=-1).values == pytest.approx((2.0, 5.0))  # pyright: ignore[reportUnknownMemberType]
-    assert t.mean(axis=(0, 1)) == pytest.approx(3.5)  # pyright: ignore[reportUnknownMemberType]
+    assert t.mean(axis=(0, 1)).item() == pytest.approx(3.5)  # pyright: ignore[reportUnknownMemberType]
     assert t.mean(keepdims=True).shape == (1, 1)
     assert t.mean(keepdims=True).values == pytest.approx((3.5,))  # pyright: ignore[reportUnknownMemberType]
     assert t.mean(axis=0, keepdims=True).shape == (1, 3)
@@ -437,6 +438,11 @@ def test_arange(args: tuple[float, ...], expected: list[float]):
     ar = cp.arange(*args)
     assert ar.shape == (len(expected),)
     assert ar.values == pytest.approx(expected)  # pyright: ignore[reportUnknownMemberType]
+
+
+@pytest.mark.parametrize("args", [(2.5,), (0, 2.5), (0.0, 3), (0, 3, 1.0)])
+def test_arange_float_args_give_float_elements(args: tuple[float, ...]) -> None:
+    assert all(isinstance(v, float) for v in cp.arange(*args).values)
 
 
 def test_compile_constants_only(capfd: pytest.CaptureFixture[str]):

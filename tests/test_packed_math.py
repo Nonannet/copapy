@@ -196,8 +196,8 @@ def test_sum_axis(kind: str, axis: Any, keepdims: bool) -> None:
         reduced = [0 if k in axes else index[k] for k in range(3)]
         ref[(reduced[0] * ref_shape[1] + reduced[1]) * ref_shape[2] + reduced[2]] += data[i]
 
-    if len(axes) == 3 and not keepdims:
-        assert isinstance(result, cp.value)
+    if len(axes) == 3 and not keepdims and kind == 'array':
+        assert isinstance(result, cp.value)  # A tensor is 0-d
     else:
         assert type(result) is type(x)
         assert result.shape == (tuple(ref_shape) if keepdims else tuple(d for i, d in enumerate(shape) if i not in axes))

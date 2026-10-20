@@ -24,6 +24,7 @@ from ._tensors import tensor
 from ._quaternion import quaternion
 from ._math import sqrt, atan2, maximum
 from ._flow import iif
+from ._helper_types import U
 
 T = TypeVar("T")
 
@@ -69,13 +70,17 @@ def _delay_value(x: value[Any] | int | float, init: Any) -> value[Any]:
 
 
 @overload
-def delay(x: value[Any] | int | float, init: Any = 0, n: int = 1) -> value[Any]: ...
+def delay(x: int, init: Any = 0, n: int = 1) -> value[int]: ...
+@overload
+def delay(x: float, init: Any = 0, n: int = 1) -> value[float]: ...
+@overload
+def delay(x: value[U], init: Any = 0, n: int = 1) -> value[U]: ...
 @overload
 def delay(x: quaternion, init: Any = 0, n: int = 1) -> quaternion: ...
 @overload
-def delay(x: vector[Any], init: Any = 0, n: int = 1) -> vector[Any]: ...
+def delay(x: vector[U], init: Any = 0, n: int = 1) -> vector[U]: ...
 @overload
-def delay(x: tensor[Any], init: Any = 0, n: int = 1) -> tensor[Any]: ...
+def delay(x: tensor[U], init: Any = 0, n: int = 1) -> tensor[U]: ...
 @overload
 def delay(x: Sequence[Any], init: Any = 0, n: int = 1) -> Any: ...
 def delay(x: Any, init: Any = 0, n: int = 1) -> Any:
@@ -93,6 +98,8 @@ def delay(x: Any, init: Any = 0, n: int = 1) -> Any:
     """
     if n < 0:
         raise ValueError(f"n must not be negative, not {n}")
+    if isinstance(x, int | float):
+        x = value_from_number(x)  # A value also for n = 0
     for _ in range(n):
         x = _map_init(x, init, _delay_value)
     return x
