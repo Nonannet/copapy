@@ -16,7 +16,11 @@
 // Array stencils: operands are heap objects referenced by the ref_* symbols,
 // patched by the compiler to the addresses of the node arguments (ref_arg<n>)
 // and the result (ref_out). All heap objects are at least 4 byte aligned.
+#if defined(__GNUC__)
 #define REF_OBJ(sym) extern char sym[] __attribute__((aligned(4)))
+#else
+#define REF_OBJ(sym) extern char sym[]
+#endif
 
 // Element type of byte arrays (e.g. image data), bytes are only stored:
 // for operations the arrays are converted to int or float

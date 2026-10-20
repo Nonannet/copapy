@@ -217,6 +217,18 @@ int main() {
         }
     }
 
+    // aux_ipow: exact, wrap around on overflow, negative exponents truncated towards zero
+    const int pw[][3] = {{3, 17, 129140163}, {7, 10, 282475249}, {-3, 9, -19683}, {5, 0, 1}, {0, 0, 1},
+                         {2, 31, (int)0x80000000u}, {2, 32, 0}, {3, 40, 689956897}, {2, -1, 0}, {1, -5, 1},
+                         {-1, -3, -1}, {-1, -4, 1}, {0, -2, 0}};
+    for (int k = 0; k < (int)(sizeof(pw) / sizeof(pw[0])); k++) {
+        int res = aux_ipow(pw[k][0], pw[k][1]);
+        if (res != pw[k][2]) {
+            printf("aux_ipow(%d, %d) = %d, expected %d\n", pw[k][0], pw[k][1], res, pw[k][2]);
+            errors++;
+        }
+    }
+
 #ifdef TEST_CMSIS_LIBM
     test_cmsis_libm();
 #endif
