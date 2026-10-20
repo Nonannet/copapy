@@ -35,6 +35,20 @@ The computation engine is fully functional - for all above mentioned target arch
 
 Hardware I/O and real-time execution are available with the runner for the Zephyr RTOS. It executes periodic tasks with deterministic timing (logical execution time): a task reads its inputs at its release and publishes its outputs at the end of its period. The host is connected over a serial port (e.g. USB) by `cp.SerialTarget` to deploy the tasks, start and stop them, and to read and write values while they are running. Device I/O channels - GPIO, PWM, quadrature encoder and ADC - are bound to the values of the tasks. If the tasks need more CPU time than available, the tasks with the lowest priority are degraded to keep the connection to the host responsive. Supported boards are currently the Teensy 4.1 (Cortex-M7).
 
+Values of periodic tasks are signals in concept: one value per run of the task. `cp.delay`, `cp.integrate`, `cp.rate` and `cp.feedback` operate on these signals without side effects. Their state is kept in the memory of the task, `cp.dt` is the period of the task:
+
+```python
+setpoint = cp.value(1.0)
+position = cp.value(0.0)  # e.g. bound to an encoder with tg.bind
+error = setpoint - position
+control = 2.0 * error + 5.0 * cp.integrate(error) + 0.1 * cp.rate(error)
+smoothed = cp.feedback(lambda prev: prev + 0.2 * (control - prev), init=0.0)
+
+tg = cp.LocalTarget(tick=1e-3)
+tg.deploy(cp.Task(smoothed, period=1e-3))
+tg.step(0.1)  # 100 runs in simulated time
+```
+
 Array stencils for handling large arrays - e.g., for machine vision and neural network applications - are available and use auto-vectorizing of the C compiler. Automatic differentiation covers element-wise array operations, reductions and matrix products, but not yet convolutions, pooling, sorting, transposing and slicing of arrays.
 
 Furthermore in development is currently constant regrouping for further symbolic optimization of the computation graph.

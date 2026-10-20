@@ -10,9 +10,9 @@ import math
 import struct
 from typing import Any, Iterable
 from . import _binwrite as binw
-from ._basic_types import Net, Node, Store, Input, HeadNode, ArrayNet, ArrayConst, ArrayOp, ArrayPack, ArrayElement, value, transl_type
+from ._basic_types import Net, Node, Store, Input, HeadNode, Delay, TimeStep, ArrayNet, ArrayConst, ArrayOp, ArrayPack, ArrayElement, value, transl_type
 from ._arrays import array, ArrayType
-from ._compiler import compile_programs, _modified_node_copy
+from ._compiler import compile_programs, get_head_nets, _modified_node_copy
 from ._target import _TargetBase, _LocalMemory, collect_roots
 from ._io import IoChannel, IoChannels
 
@@ -62,7 +62,7 @@ class Task():
         for node in dict.fromkeys(collect_roots(outputs)):
             assert isinstance(node, Store | ArrayOp | ArrayPack)
             net = node.args[0] if isinstance(node, Store) else node.result
-            if isinstance(net.source, HeadNode):
+            if isinstance(net.source, HeadNode) and not isinstance(net.source, Delay):
                 continue  # Inputs and constants are not computed
             self._roots.append(node)
             self._output_nets.append(net)
@@ -142,6 +142,49 @@ def _isolate(roots: list[Node], foreign: set[Net]) -> tuple[list[Node], dict[Net
     return [new_nodes[node] for node in roots], cuts, heads, net_map
 
 
+def _isolate_task(task: Task, foreign: set[Net]) -> tuple[tuple[list[Node], dict[Net, Net], dict[Input | ArrayConst, list[Net]], dict[Net, Net]], dict[Node, Net]]:
+    """Isolated DAG of a task (see _isolate) including the computation of the
+    nets delayed by the delays of the task, they are stored for the update
+    of the delays after each run.
+
+    Returns:
+        Tuple of the result of _isolate and the net of each delay of the task
+    """
+    roots = list(task._roots)
+    stored: set[Node] = set()
+    while True:
+        isolated = _isolate(roots, foreign)
+        delays = get_head_nets(isolated[0], Delay)
+        new = [d for d in delays if d not in stored]
+        if not new:
+            return isolated, delays
+        for node in new:
+            assert isinstance(node, Delay)
+            if node.input is None:
+                raise ValueError(f"The feedback of {delays[node]} is not closed")
+            stored.add(node)
+            roots.append(Store(node.input))
+
+
+def _sort_state_copies(copies: list[tuple[int, int, int]]) -> list[tuple[int, int, int]]:
+    """Orders the copies updating the delays: a delay that is the input of
+    another delay is read before it is overwritten
+
+    Arguments:
+        copies: (destination, source, size) of each copy, each destination is
+            the memory of one delay
+    """
+    pending = [c for c in copies if c[0] != c[1]]
+    ordered: list[tuple[int, int, int]] = []
+    while pending:
+        ready = [c for c in pending if not any(o is not c and o[1] == c[0] for o in pending)]
+        if not ready:
+            raise ValueError("Delays forming a cycle without any computation are not supported")
+        ordered.extend(ready)
+        pending = [c for c in pending if all(c is not r for r in ready)]
+    return ordered
+
+
 def _task_list(args: Iterable[Any]) -> list[Task]:
     """Tasks from the arguments of deploy: values that are no tasks form one task"""
     tasks: list[Task] = []
@@ -215,8 +258,17 @@ class _TaskTarget(_TargetBase):
                 if owner.setdefault(net, task) is not task:
                     raise ValueError(f"{net} is an output of {owner[net]} and of {task}")
 
-        isolated = [_isolate(task._roots, {net for net, t in owner.items() if t is not task})
-                    for task in task_list]
+        isolated: list[tuple[list[Node], dict[Net, Net], dict[Input | ArrayConst, list[Net]], dict[Net, Net]]] = []
+        delays: list[dict[Node, Net]] = []  # Net of each delay by task
+        delay_owner: dict[Node, Task] = {}
+        for task in task_list:
+            iso, task_delays = _isolate_task(task, {net for net, t in owner.items() if t is not task})
+            for node, net in task_delays.items():
+                if delay_owner.setdefault(node, task) is not task:
+                    raise ValueError(f"The delay {net} is used by {delay_owner[node]} and by {task}, "
+                                     "use it as output of one task in the other task")
+            isolated.append(iso)
+            delays.append(task_delays)
 
         sdb = self.sdb
         offset = 0
@@ -255,9 +307,16 @@ class _TaskTarget(_TargetBase):
         # Copies of the inputs and outputs of other tasks in the memory of each task
         externals: list[dict[Node, int]] = []
         latch_copies: list[list[tuple[int, int, int]]] = []
-        for _, cuts, heads, _ in isolated:
+        for task, (roots, cuts, heads, _) in zip(task_list, isolated):
             external: dict[Node, int] = {}
             copies: list[tuple[int, int, int]] = []
+            for node, net in get_head_nets(roots, TimeStep).items():
+                if task.period is None:
+                    raise ValueError(f"{task} uses dt but has no period, "
+                                     "a time step must be given explicitly (dt argument)")
+                addr, size = alloc(net)
+                external[node] = addr
+                init.append((addr, struct.pack({'little': '<', 'big': '>'}[sdb.byteorder] + ('f' if size == 4 else 'd'), task.period)))
             for node, nets in heads.items():
                 addr, size = input_addr[node]
                 if isinstance(node, ArrayConst):
@@ -295,7 +354,7 @@ class _TaskTarget(_TargetBase):
         for i, (task, copies) in enumerate(zip(task_list, latch_copies)):
             offset = (offset + 3) // 4 * 4
             copy_offs.append((offset, offset + _COPY_SIZE * len(copies)))
-            offset += _COPY_SIZE * (len(copies) + len(task._output_nets))
+            offset += _COPY_SIZE * (len(copies) + len(task._output_nets) + len(delays[i]))
             io_offs.append((offset, offset + _IO_SIZE * len(io_in[i])))
             offset += _IO_SIZE * (len(io_in[i]) + len(io_out[i]))
 
@@ -310,6 +369,10 @@ class _TaskTarget(_TargetBase):
         for i, task in enumerate(task_list):
             net_map = isolated[i][3]
             publish = [(values[net][0], *variables[i][net_map[net]][:2]) for net in task._output_nets]
+            # Delays are updated after publishing (a delay can be an output)
+            publish += _sort_state_copies(
+                [(variables[i][net_map[net]][0], *variables[i][net_map[node.input]][:2])  # type: ignore[attr-defined]
+                 for node, net in delays[i].items()])
             latch_offs, publish_offs = copy_offs[i]
             for j, copy in enumerate(latch_copies[i] + publish):
                 struct.pack_into(en + _COPY_FORMAT, reserved, latch_offs + j * _COPY_SIZE, *copy)

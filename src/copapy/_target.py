@@ -3,9 +3,9 @@ from . import _binwrite as binw
 from coparun_module import coparun, read_data_mem, data_mem, create_target, clear_target
 import importlib
 import struct
-from ._basic_types import value, Net, Node, Store, NumLike, stencil_db_from_package, ArrayOp, ArrayElement, ArrayConst, ArrayPack, transl_type
+from ._basic_types import value, Net, Node, Store, NumLike, stencil_db_from_package, ArrayOp, ArrayElement, ArrayConst, ArrayPack, Delay, TimeStep, transl_type
 from ._arrays import array, ArrayType
-from ._compiler import compile_to_dag
+from ._compiler import compile_to_dag, get_head_nets
 from ._stencils import stencil_database
 
 T = TypeVar("T", int, float)
@@ -241,9 +241,9 @@ class _TargetBase():
     @overload
     def read_value(self, variables: NumLike) -> float | int | bool: ...
     @overload
-    def read_value(self, variables: Iterable[T | value[T]]) -> list[T]: ...
-    @overload
     def read_value(self, variables: ArrayType[T]) -> ArrayType[T]: ...
+    @overload
+    def read_value(self, variables: Iterable[T | value[T]]) -> list[T]: ...
     @overload
     def read_value(self, variables: array[T]) -> Any: ...
     @overload
@@ -458,6 +458,9 @@ class Target(_LocalMemory):
                 (nested) sequences or as values of dicts
         """
         nodes = collect_roots(values)
+        if get_head_nets(nodes, (Delay, TimeStep)):
+            raise ValueError("delay, integrate, feedback and dt require tasks: "
+                             "deploy the values on a LocalTarget or SerialTarget")
         self._release_memory()
         dw, self._values = compile_to_dag(nodes, self.sdb)
         self._send(dw)

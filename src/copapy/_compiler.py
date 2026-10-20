@@ -246,6 +246,31 @@ def get_all_dag_edges(nodes: Iterable[Node]) -> Generator[tuple[Node, Node], Non
                 emitted_edges.add(edge)
 
 
+def get_head_nets(roots: Iterable[Node], node_type: type[HeadNode] | tuple[type[HeadNode], ...]) -> dict[Node, Net]:
+    """Head nodes of the given type in the DAG and the net of each
+
+    Arguments:
+        roots: End nodes of the DAG
+        node_type: Type or types of the head nodes to find
+
+    Returns:
+        Dict of the net by head node in the order of discovery
+    """
+    found: dict[Node, Net] = {}
+    visited: set[Node] = set()
+    stack = list(roots)
+    while stack:
+        node = stack.pop()
+        if node in visited:
+            continue
+        visited.add(node)
+        for net in node.args:
+            if isinstance(net.source, node_type):
+                found.setdefault(net.source, net)
+            stack.append(net.source)
+    return found
+
+
 def get_const_nets(nodes: list[Node]) -> list[Net]:
     """Get all nets with a constant nodes value
 

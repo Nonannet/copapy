@@ -358,7 +358,7 @@ def _rhs(b: Any, n: int) -> tensor[Any] | vector[Any]:
 
 def _solution(values: list[Any], b: tensor[Any] | vector[Any]) -> Any:
     """Solution with the shape of b: a vector if b is a vector, otherwise a tensor"""
-    return vector(values) if isinstance(b, vector) else tensor(values, b.shape)
+    return vector(values) if isinstance(b, vector) else tensor[Any](values, b.shape)
 
 
 def cholesky(a: tensor[Any]) -> tensor[float]:

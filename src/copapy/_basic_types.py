@@ -405,6 +405,30 @@ class Input(HeadNode):
     Each Input is a distinct node, independent of its initial value."""
 
 
+class Delay(HeadNode):
+    """Value of a net at the previous run of the task computing it (unit
+    delay). For the computation it is a head node in the memory of the task:
+    it is initialized with the initial value and updated by the task after
+    each run. The delayed net is no argument, so feedback loops through
+    delays do not make the graph cyclic.
+
+    Attributes:
+        input: The delayed net, None until it is set by feedback
+    """
+    def __init__(self, init: int | float, input: 'Net | None' = None):
+        super().__init__(init)
+        self.name = 'delay_' + self.dtype
+        self.input = input
+
+
+class TimeStep(HeadNode):
+    """Period of the task in seconds (cp.dt), written to the memory of each
+    task using it at deployment."""
+    def __init__(self) -> None:
+        super().__init__(0.0)
+        self.name = 'dt'
+
+
 class Store(Node):
     def __init__(self, input: value[Any] | Net | int | float):
         if isinstance(input, value):

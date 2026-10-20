@@ -49,6 +49,7 @@ from ._autograd import grad, jacobian
 from ._tensors import tensor as matrix
 from ._arrays import array
 from ._flow import iif
+from ._temporal import delay, integrate, rate, feedback, dt
 from ._sorting import sort, argsort
 from . import nn
 from . import filters
@@ -73,6 +74,11 @@ __all__ = [
     "value",
     "generic_sdb",
     "iif",
+    "delay",
+    "integrate",
+    "rate",
+    "feedback",
+    "dt",
     "vector",
     "tensor",
     "matrix",
