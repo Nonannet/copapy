@@ -76,9 +76,9 @@ def get_op_code(op: str, type1: str, type2: str, type_out: str) -> str:
 
 @norm_indent
 def get_cast(type_out: str, type_in: str) -> str:
-    """Conversion of type_in to type_out."""
     return f"""
     STENCIL void {type_out}_{type_in}({type_in} arg1) {{
+        // Conversion of {type_in} to {type_out}
         result_{type_out}(({type_out})arg1);
     }}
     """
@@ -103,7 +103,9 @@ def get_func1(func_name: str, type1: str) -> str:
 
 
 @norm_indent
-def get_custom_stencil(stencil_signature: str, stencil_body: str) -> str:
+def get_custom_stencil(stencil_signature: str, stencil_body: str, comment: str = '') -> str:
+    if comment:
+        stencil_body = f"// {comment}\n        {stencil_body}"
     return f"""
     STENCIL void {stencil_signature} {{
         {stencil_body}
@@ -270,12 +272,7 @@ def arr_casted_operand(type1: str, x: str, type_out: str) -> str:
 def get_arr_op_code(op: str, type1: str, type2: str, func: str = '') -> str:
     """Element-wise binary operation for the operand types type1 and type2:
     an operator (add, sub, ...), a comparison (gt, ge, eq, ne), min, max or a C function
-    func(a, b). Three stencils are generated, each calling its own kernel:
-
-        {op}_{type1}arr_{type2}arr    array  and array   (kernel _vv)
-        {op}_{type1}arr_{type2}       array  and scalar  (kernel _vs)
-        {op}_{type1}_{type2}arr       scalar and array   (kernel _sv)
-    """
+    func(a, b)."""
     t_op = arr_operand_type(op, type1, type2)
     t_out = arr_out_type(op, type1, type2)
     kernel = f"aux_arr_{op}_{type1}_{type2}"
@@ -307,16 +304,19 @@ def get_arr_op_code(op: str, type1: str, type2: str, func: str = '') -> str:
     }}
 
     STENCIL void {op}_{type1}arr_{type2}arr(void) {{
+        // Element-wise {op} of {type1} array and {type2} array
         {kernel}_vv(REF(ref_arg0), REF(ref_arg1), REF(ref_out), *(int *)REF(ref_arg2));
         result_{t_out}_ref();
     }}
 
     STENCIL void {op}_{type1}arr_{type2}(void) {{
+        // Element-wise {op} of {type1} array and {type2} scalar
         {kernel}_vs(REF(ref_arg0), *({type2} *)REF(ref_arg1), REF(ref_out), *(int *)REF(ref_arg2));
         result_{t_out}_ref();
     }}
 
     STENCIL void {op}_{type1}_{type2}arr(void) {{
+        // Element-wise {op} of {type1} scalar and {type2} array
         {kernel}_sv(*({type1} *)REF(ref_arg0), REF(ref_arg1), REF(ref_out), *(int *)REF(ref_arg2));
         result_{t_out}_ref();
     }}
@@ -324,13 +324,13 @@ def get_arr_op_code(op: str, type1: str, type2: str, func: str = '') -> str:
 
 
 def get_reduction_body(type_out: str, term: Callable[[str], str], lanes: int = 8) -> str:
-    """Function body returning the sum of term(i) for i in range(n). Independent
-    partial sums allow vectorization without reassociation of floats. Scalars
-    instead of an accumulator array avoid memset calls for the initialization."""
+    """Function body returning the sum of term(i) for i in range(n)."""
     decl = ', '.join(f's{k} = 0' for k in range(lanes))
     body = ' '.join(f's{k} += {term(f"i + {k}")};' for k in range(lanes))
     total = ' + '.join(f's{k}' for k in range(lanes))
-    return f"""{type_out} {decl}, r = 0;
+    return f"""// Independent partial sums allow vectorization without reassociation of floats.
+        // Scalars instead of an accumulator array avoid memset calls for the initialization.
+        {type_out} {decl}, r = 0;
         int i = 0;
         for (; i + {lanes} <= n; i += {lanes}) {{
             {body}
@@ -341,7 +341,6 @@ def get_reduction_body(type_out: str, term: Callable[[str], str], lanes: int = 8
 
 @norm_indent
 def get_arr_dot_code(type1: str, type2: str) -> str:
-    """Dot product and matrix-vector product (row-major m x n matrix)"""
     t_out = arr_out_type('mul', type1, type2)
     kernel = f"aux_arr_dot_{type1}_{type2}"
     body = get_reduction_body(t_out, lambda i: f"{arr_casted_operand(type1, f'a[{i}]', t_out)} * {arr_casted_operand(type2, f'b[{i}]', t_out)}")
@@ -355,11 +354,13 @@ def get_arr_dot_code(type1: str, type2: str) -> str:
     }}
 
     STENCIL void dot_{type1}arr_{type2}arr(void) {{
+        // Dot product of {type1} array and {type2} array
         *({t_out} *)REF(ref_out) = {kernel}(REF(ref_arg0), REF(ref_arg1), *(int *)REF(ref_arg2));
         result_{t_out}_ref();
     }}
 
     STENCIL void matvec_{type1}arr_{type2}arr(void) {{
+        // Product of a row-major m x n matrix and a vector of n elements
         aux_arr_matvec_{type1}_{type2}(REF(ref_arg0), REF(ref_arg1), REF(ref_out), *(int *)REF(ref_arg2), *(int *)REF(ref_arg3));
         result_{t_out}_ref();
     }}
@@ -368,9 +369,6 @@ def get_arr_dot_code(type1: str, type2: str) -> str:
 
 @norm_indent
 def get_arr_matmul_code(type1: str, type2: str) -> str:
-    """Matrix product of a row-major m x k and a k x n matrix, the dimensions
-    are passed as int array [m, k, n]. The i-k-j loop order keeps the inner loop
-    contiguous for vectorization, the first k step initializes the output row."""
     t_out = arr_out_type('mul', type1, type2)
     a = arr_casted_operand(type1, 'ar[q]', t_out)
     a0 = arr_casted_operand(type1, 'ar[0]', t_out)
@@ -378,6 +376,8 @@ def get_arr_matmul_code(type1: str, type2: str) -> str:
     b0 = arr_casted_operand(type2, 'b[j]', t_out)
     return f"""
     KERNEL void aux_arr_matmul_{type1}_{type2}(const {type1} *restrict a, const {type2} *restrict b, {t_out} *restrict o, const int *restrict p) {{
+        // The i-k-j loop order keeps the inner loop contiguous for vectorization,
+        // the first k step initializes the output row
         int m = p[0], k = p[1], n = p[2];
         for (int i = 0; i < m; i++) {{
             {t_out} *restrict r = o + i * n;
@@ -393,6 +393,8 @@ def get_arr_matmul_code(type1: str, type2: str) -> str:
     }}
 
     STENCIL void matmul_{type1}arr_{type2}arr(void) {{
+        // Matrix product of a row-major m x k and a k x n matrix,
+        // the dimensions are passed as int array [m, k, n]
         aux_arr_matmul_{type1}_{type2}(REF(ref_arg0), REF(ref_arg1), REF(ref_out), REF(ref_arg2));
         result_{t_out}_ref();
     }}
@@ -401,15 +403,16 @@ def get_arr_matmul_code(type1: str, type2: str) -> str:
 
 @norm_indent
 def get_arr_solve_code() -> str:
-    """Solution of a linear system and determinant, the kernels aux_arr_solve_float
-    and aux_arr_det_float are in aux_functions.c"""
+    """The kernels aux_arr_solve_float and aux_arr_det_float are in aux_functions.c"""
     return """
     STENCIL void solve_floatarr_floatarr(void) {
+        // Solution of a linear system
         aux_arr_solve_float(REF(ref_arg0), REF(ref_arg1), REF(ref_out), REF(ref_arg3), REF(ref_arg2));
         result_float_ref();
     }
 
     STENCIL void det_floatarr(void) {
+        // Determinant of a square matrix
         *(float *)REF(ref_out) = aux_arr_det_float(REF(ref_arg0), REF(ref_arg2), *(int *)REF(ref_arg1));
         result_float_ref();
     }
@@ -418,18 +421,20 @@ def get_arr_solve_code() -> str:
 
 @norm_indent
 def get_arr_interp_code() -> str:
-    """Table lookup at a fractional index (lerp) and fractional index of a value in a
-    grid (bsearch) for a scalar and for an array of positions, the kernels are in
-    aux_functions.c"""
+    """The kernels are in aux_functions.c"""
+    descriptions = {'lerp': 'Table lookup at a fractional index',
+                    'bsearch': 'Fractional index of a value in a grid'}
     code = ''
-    for name in ('lerp', 'bsearch'):
+    for name, description in descriptions.items():
         code += f"""
     STENCIL void {name}_floatarr_float(void) {{
+        // {description}
         *(float *)REF(ref_out) = aux_arr_{name}_float(REF(ref_arg0), *(float *)REF(ref_arg1), *(int *)REF(ref_arg2));
         result_float_ref();
     }}
 
     STENCIL void {name}_floatarr_floatarr(void) {{
+        // {description}, element-wise for an array of positions
         aux_arr_{name}_floatarr(REF(ref_arg0), REF(ref_arg1), REF(ref_out), *(int *)REF(ref_arg2), *(int *)REF(ref_arg3));
         result_float_ref();
     }}
@@ -439,7 +444,6 @@ def get_arr_interp_code() -> str:
 
 @norm_indent
 def get_arr_func1_code(name: str, func: str, type1: str, type_out: str = 'float') -> str:
-    """Element-wise function of one array"""
     kernel = f"aux_arr_{name}_{type1}"
     return f"""
     KERNEL void {kernel}(const {type1} *restrict a, {type_out} *restrict o, int n) {{
@@ -447,6 +451,7 @@ def get_arr_func1_code(name: str, func: str, type1: str, type_out: str = 'float'
     }}
 
     STENCIL void {name}_{type1}arr(void) {{
+        // Element-wise {name} of {type1} array
         {kernel}(REF(ref_arg0), REF(ref_out), *(int *)REF(ref_arg1));
         result_{type_out}_ref();
     }}
@@ -457,12 +462,16 @@ def get_arr_func1_code(name: str, func: str, type1: str, type_out: str = 'float'
 def get_arr_cast_code(name: str, type1: str, expr: str, type_out: str) -> str:
     """Element-wise type conversion of an array, expr converts the element a[i]"""
     kernel = f"aux_arr_{name}_{type1}"
+    comment = f"// Element-wise conversion of {type1} array to {name}"
+    if name == 'byte':
+        comment += " with saturation, nan is converted to 0"
     return f"""
     KERNEL void {kernel}(const {type1} *restrict a, {type_out} *restrict o, int n) {{
         for (int i = 0; i < n; i++) o[i] = {expr};
     }}
 
     STENCIL void {name}_{type1}arr(void) {{
+        {comment}
         {kernel}(REF(ref_arg0), REF(ref_out), *(int *)REF(ref_arg1));
         result_{type_out}_ref();
     }}
@@ -471,15 +480,16 @@ def get_arr_cast_code(name: str, type1: str, expr: str, type_out: str) -> str:
 
 @norm_indent
 def get_arr_copy_code() -> str:
-    """Strided copy of 32 bit elements and of bytes, the kernels aux_arr_copy32
-    and aux_arr_copy8 are in aux_functions.c"""
+    """The kernels aux_arr_copy32 and aux_arr_copy8 are in aux_functions.c"""
     return """
     STENCIL void copy32_arr(void) {
+        // Strided copy of 32 bit elements
         aux_arr_copy32(REF(ref_arg0), REF(ref_out), REF(ref_arg1));
         result_void();
     }
 
     STENCIL void copy8_arr(void) {
+        // Strided copy of bytes
         aux_arr_copy8(REF(ref_arg0), REF(ref_out), REF(ref_arg1));
         result_void();
     }
@@ -488,13 +498,11 @@ def get_arr_copy_code() -> str:
 
 @norm_indent
 def get_arr_ring_code() -> str:
-    """Ring buffer of 32 bit elements: put32_arr writes the m elements of
-    ref_arg1 in place to the elements i * m to i * m + m - 1 of the buffer
-    (ref_out is the memory of the buffer ref_arg0, i = ref_arg2, m = ref_arg3),
-    roll32_arr copies the buffer ref_arg0 of n elements (ref_arg2) starting at
-    the element ref_arg1, the kernel aux_arr_roll32 is in aux_functions.c"""
+    """Ring buffer of 32 bit elements, the kernel aux_arr_roll32 is in aux_functions.c"""
     return """
     SHORT_LOOP STENCIL void put32_arr(void) {
+        // Writes the m elements of ref_arg1 in place to the elements i * m to i * m + m - 1
+        // of a ring buffer (ref_out is the memory of the buffer ref_arg0, i = ref_arg2, m = ref_arg3)
         const int *a = REF(ref_arg1);
         int m = *(int *)REF(ref_arg3);
         int *o = (int *)REF(ref_out) + *(int *)REF(ref_arg2) * m;
@@ -503,6 +511,7 @@ def get_arr_ring_code() -> str:
     }
 
     STENCIL void roll32_arr(void) {
+        // Copies the ring buffer ref_arg0 of n elements (ref_arg2) starting at the element ref_arg1
         aux_arr_roll32(REF(ref_arg0), REF(ref_out), *(int *)REF(ref_arg1), *(int *)REF(ref_arg2));
         result_void();
     }
@@ -511,9 +520,10 @@ def get_arr_ring_code() -> str:
 
 @norm_indent
 def get_arr_conv_code() -> str:
-    """2D convolution, the kernel aux_arr_conv2d is in aux_functions.c"""
+    """The kernel aux_arr_conv2d is in aux_functions.c"""
     return """
     STENCIL void conv2d_floatarr_floatarr(void) {
+        // 2D convolution
         aux_arr_conv2d(REF(ref_arg0), REF(ref_arg1), REF(ref_arg2), REF(ref_out), REF(ref_arg3));
         result_float_ref();
     }
@@ -522,17 +532,16 @@ def get_arr_conv_code() -> str:
 
 @norm_indent
 def get_arr_pool_code(op: str) -> str:
-    """2D pooling of a float input [n, h, w] (batch and channels as n): largest
-    element (max) or mean (avg) of each window. Parameters as int array:
-    [n, h, w, kh, kw, oh, ow, sh, sw, ph, pw] with the output size o, the
-    strides s and the padding p. The padding is ignored for max and counts as
-    zeros for avg. Like for the convolution each window element is accumulated
-    over the output rows and the loop bounds exclude the padding."""
+    """2D pooling: largest element (max) or mean (avg) of each window"""
+    description = ('largest element of each window, the padding is ignored' if op == 'max' else
+                   'mean of each window, the padding counts as zeros')
     init = '-__builtin_inff()' if op == 'max' else '0.0f'
     accumulate = 'float v = xr[ox * sw - tx]; r[ox] = v > r[ox] ? v : r[ox];' if op == 'max' else 'r[ox] += xr[ox * sw - tx];'
     scale = '' if op == 'max' else 'for (int i = 0; i < oh * ow; i++) oc[i] *= 1.0f / (float)(kh * kw);'
     return f"""
     KERNEL void aux_arr_{op}pool2d(const float *restrict x, float *restrict o, const int *restrict p) {{
+        // Like for the convolution each window element is accumulated
+        // over the output rows and the loop bounds exclude the padding
         int n = p[0], h = p[1], w = p[2], kh = p[3], kw = p[4], oh = p[5], ow = p[6];
         int sh = p[7], sw = p[8], ph = p[9], pw = p[10];
         for (int c = 0; c < n; c++) {{
@@ -562,6 +571,9 @@ def get_arr_pool_code(op: str) -> str:
     }}
 
     STENCIL void {op}pool2d_floatarr(void) {{
+        // 2D {op} pooling of a float input [n, h, w] (batch and channels as n):
+        // {description}. Parameters as int array [n, h, w, kh, kw, oh, ow, sh, sw, ph, pw]
+        // with the window size k, the output size o, the strides s and the padding p
         aux_arr_{op}pool2d(REF(ref_arg0), REF(ref_out), REF(ref_arg1));
         result_float_ref();
     }}
@@ -569,10 +581,11 @@ def get_arr_pool_code(op: str) -> str:
 
 
 def get_sort_network(compare_exchange: str) -> str:
-    """Loops of Batcher's odd-even merge sort network for n elements. The sequence
-    of compare-exchanges (indices ia < ib) only depends on n, not on the data. With
-    a branch-free compare_exchange the execution time is constant for a given n."""
-    return f"""for (int p = 1; p < n; p += p) {{
+    """Loops of Batcher's odd-even merge sort network for n elements"""
+    return f"""// Batcher's odd-even merge sort network: the sequence of compare-exchanges
+        // (indices ia < ib) only depends on n, not on the data. With a branch-free
+        // compare-exchange the execution time is constant for a given n.
+        for (int p = 1; p < n; p += p) {{
             int mask = ~(2 * p - 1);
             for (int k = p; k >= 1; k /= 2) {{
                 for (int j = k & (p - 1); j + k < n; j += 2 * k) {{  // k % p, p is a power of 2
@@ -591,9 +604,6 @@ def get_sort_network(compare_exchange: str) -> str:
 @norm_indent
 def get_arr_sort_code(type1: str) -> str:
     """Sorted copy (sort) and sorting indices (argsort) of an array by a sorting network"""
-    # Swap by a mask from the comparison result: no data dependent branches, also on
-    # targets without min/max instructions (a?b:c is compiled to a branch by gcc). The
-    # barrier on the mask keeps gcc from converting the masked swap into a branch.
     if type1 == 'float':
         sort_cx = ('union { float f; int i; } x = {o[ia]}, y = {o[ib]}; '
                    'int m = -(x.f > y.f); VALUE_BARRIER(m); '
@@ -601,27 +611,33 @@ def get_arr_sort_code(type1: str) -> str:
     else:
         sort_cx = ('int x = o[ia], y = o[ib]; int m = -(x > y); VALUE_BARRIER(m); '
                    'int d = (x ^ y) & m; o[ia] = x ^ d; o[ib] = y ^ d;')
-    # Order by (value, index): deterministic result equal to a stable sort
     arg_cx = (f'int xa = o[ia], xb = o[ib]; {type1} va = a[xa], vb = a[xb]; '
               'int m = -((va > vb) | ((va == vb) & (xa > xb))); VALUE_BARRIER(m); '
               'int d = (xa ^ xb) & m; o[ia] = xa ^ d; o[ib] = xb ^ d;')
     return f"""
     KERNEL void aux_arr_sort_{type1}(const {type1} *restrict a, {type1} *restrict o, int n) {{
+        // Swap by a mask from the comparison result: no data dependent branches, also on
+        // targets without min/max instructions (a?b:c is compiled to a branch by gcc). The
+        // barrier on the mask keeps gcc from converting the masked swap into a branch.
         for (int i = 0; i < n; i++) o[i] = a[i];
         {get_sort_network(sort_cx)}
     }}
 
     KERNEL void aux_arr_argsort_{type1}(const {type1} *restrict a, int *restrict o, int n) {{
+        // Order by (value, index): deterministic result equal to a stable sort,
+        // swap by a mask like for the sort
         for (int i = 0; i < n; i++) o[i] = i;
         {get_sort_network(arg_cx)}
     }}
 
     STENCIL void sort_{type1}arr(void) {{
+        // Sorted copy of {type1} array
         aux_arr_sort_{type1}(REF(ref_arg0), REF(ref_out), *(int *)REF(ref_arg1));
         result_{type1}_ref();
     }}
 
     STENCIL void argsort_{type1}arr(void) {{
+        // Indices that sort a {type1} array
         aux_arr_argsort_{type1}(REF(ref_arg0), REF(ref_out), *(int *)REF(ref_arg1));
         result_int_ref();
     }}
@@ -638,6 +654,7 @@ def get_arr_sum_code(type1: str) -> str:
     }}
 
     STENCIL void sum_{type1}arr(void) {{
+        // Sum of all elements of {type1} array
         *({type1} *)REF(ref_out) = {kernel}(REF(ref_arg0), *(int *)REF(ref_arg1));
         result_{type1}_ref();
     }}
@@ -646,15 +663,15 @@ def get_arr_sum_code(type1: str) -> str:
 
 @norm_indent
 def get_arr_minmax_code(op: str, type1: str, lanes: int = 8) -> str:
-    """Smallest (min) or largest (max) element of an array. Independent partial
-    results allow vectorization like for the sum."""
     kernel = f"aux_arr_{op}_{type1}"
     cmp = '<' if op == 'min' else '>'
+    description = 'Smallest' if op == 'min' else 'Largest'
     decl = ', '.join(f'r{k} = a[0]' for k in range(lanes))
     body = ' '.join(f'r{k} = a[i + {k}] {cmp} r{k} ? a[i + {k}] : r{k};' for k in range(lanes))
     total = ' '.join(f'r = r{k} {cmp} r ? r{k} : r;' for k in range(lanes))
     return f"""
     KERNEL {type1} {kernel}(const {type1} *restrict a, int n) {{
+        // Independent partial results allow vectorization like for the sum
         {type1} {decl}, r = a[0];
         int i = 0;
         for (; i + {lanes} <= n; i += {lanes}) {{
@@ -666,6 +683,7 @@ def get_arr_minmax_code(op: str, type1: str, lanes: int = 8) -> str:
     }}
 
     STENCIL void {op}_{type1}arr(void) {{
+        // {description} element of {type1} array
         *({type1} *)REF(ref_out) = {kernel}(REF(ref_arg0), *(int *)REF(ref_arg1));
         result_{type1}_ref();
     }}
@@ -674,11 +692,10 @@ def get_arr_minmax_code(op: str, type1: str, lanes: int = 8) -> str:
 
 @norm_indent
 def get_arr_sumaxis_code(type1: str) -> str:
-    """Sum along the middle axis of a row-major array [m, k, n], the dimensions
-    are passed as int array. The result is an array [m, n]. Like for the matrix
-    product the inner loop is contiguous, the first k step initializes the output."""
     return f"""
     KERNEL void aux_arr_sumaxis_{type1}(const {type1} *restrict a, {type1} *restrict o, const int *restrict p) {{
+        // Like for the matrix product the inner loop is contiguous,
+        // the first k step initializes the output
         int m = p[0], k = p[1], n = p[2];
         for (int i = 0; i < m; i++) {{
             {type1} *restrict r = o + i * n;
@@ -692,6 +709,8 @@ def get_arr_sumaxis_code(type1: str) -> str:
     }}
 
     STENCIL void sumaxis_{type1}arr(void) {{
+        // Sum along the middle axis of a row-major array [m, k, n], the dimensions
+        // are passed as int array. The result is an array [m, n].
         aux_arr_sumaxis_{type1}(REF(ref_arg0), REF(ref_out), REF(ref_arg1));
         result_{type1}_ref();
     }}
@@ -760,16 +779,18 @@ if __name__ == "__main__":
         code += get_math_func2(fn, 'float', 'float')
     code += get_custom_stencil('pow_int_int(int arg1, int arg2)', 'result_int_int(aux_ipow(arg1, arg2), arg2);')
 
-    # Branch-free selection: gtabs returns the int mask -1 if |arg1| > |arg2| else 0,
-    # mask and masknot keep a value where the mask is set / not set, otherwise 0
+    # Branch-free selection
+    gtabs_comment = 'Branch-free selection: int mask -1 if |arg1| > |arg2| else 0'
+    mask_comment = 'Branch-free selection: arg1 where the mask arg2 is set, otherwise 0'
+    masknot_comment = 'Branch-free selection: arg1 where the mask arg2 is not set, otherwise 0'
     code += get_custom_stencil('gtabs_float_float(float arg1, float arg2)',
-                               'result_int_float(-(fabsf(arg1) > fabsf(arg2)), arg2);')
+                               'result_int_float(-(fabsf(arg1) > fabsf(arg2)), arg2);', gtabs_comment)
     code += get_custom_stencil('mask_float_int(float arg1, int arg2)',
-                               'union { float f; int i; } x = {arg1}; x.i &= arg2; result_float_int(x.f, arg2);')
+                               'union { float f; int i; } x = {arg1}; x.i &= arg2; result_float_int(x.f, arg2);', mask_comment)
     code += get_custom_stencil('masknot_float_int(float arg1, int arg2)',
-                               'union { float f; int i; } x = {arg1}; x.i &= ~arg2; result_float_int(x.f, arg2);')
-    code += get_custom_stencil('mask_int_int(int arg1, int arg2)', 'result_int_int(arg1 & arg2, arg2);')
-    code += get_custom_stencil('masknot_int_int(int arg1, int arg2)', 'result_int_int(arg1 & ~arg2, arg2);')
+                               'union { float f; int i; } x = {arg1}; x.i &= ~arg2; result_float_int(x.f, arg2);', masknot_comment)
+    code += get_custom_stencil('mask_int_int(int arg1, int arg2)', 'result_int_int(arg1 & arg2, arg2);', mask_comment)
+    code += get_custom_stencil('masknot_int_int(int arg1, int arg2)', 'result_int_int(arg1 & ~arg2, arg2);', masknot_comment)
 
     for t in types:
         code += get_min(t, t)
@@ -838,8 +859,7 @@ if __name__ == "__main__":
     for t in types:
         code += get_arr_cast_code('bool', t, 'a[i] != 0', 'int')
 
-    # Byte arrays: converted to int or float for operations, the conversion
-    # to byte saturates (nan is converted to 0)
+    # Byte arrays: converted to int or float for operations
     code += get_arr_cast_code('float', 'byte', '(float)a[i]', 'float')
     code += get_arr_cast_code('int', 'byte', '(int)a[i]', 'int')
     code += get_arr_cast_code('byte', 'int', '(byte)(a[i] > 255 ? 255 : a[i] > 0 ? a[i] : 0)', 'byte')
