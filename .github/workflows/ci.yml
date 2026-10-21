@@ -388,10 +388,16 @@ jobs:
         /tmp/venv/bin/python -m pip install .[mindev]
     - name: Run TriCore tests with qemu-system-tricore
       run: /tmp/venv/bin/python -m pytest tests/test_runner_tricore.py -W error::UserWarning
+    - name: Create assembly listings
+      run: PATH="/tmp/venv/bin:$PATH" bash tools/create_asm.sh
+      env:
+        CP_TARGET_ARCH: tricore
+        RUNNER: sh tools/tricore/run_qemu.sh build/runner/coparun-tricore.elf
+        OBJDUMP: tricore-elf-objdump
 
     - uses: actions/upload-artifact@v7
       with:
-        name: runner-tricore
+        name: runner-linux-tricore
         path: build/runner/*
 
   build-windows:
@@ -496,7 +502,7 @@ jobs:
           fi
 
   build-docs:
-    needs: [build_stencils, build-ubuntu, build-ubuntu32, build-windows, build-arm64, build-arm32, build-armv81m, build-riscv64, build-riscv32]
+    needs: [build_stencils, build-ubuntu, build-ubuntu32, build-windows, build-arm64, build-arm32, build-armv81m, build-riscv64, build-riscv32, build-tricore]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

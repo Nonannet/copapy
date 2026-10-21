@@ -30,6 +30,8 @@ elif [ "$cparch" = 'riscv64' ]; then
 	cparch="riscv:rv64"
 elif [ "$cparch" = 'riscv32' ]; then
 	cparch="riscv:rv32"
+elif [ "$cparch" = 'tricore' ]; then
+	cparch="TriCore:V1_6_1"
 fi
 
 echo "Archtitecture: '$cparch'"
