@@ -4,7 +4,7 @@ to one slot of the buffer, there is no copy of the buffer for the update.
 The slot of the current value (index) increases by one each run and wraps
 around at n.
 """
-from typing import Any, Generic, TypeVar, cast, overload
+from typing import Any, Generic, Sequence, TypeVar, cast, overload
 from ._basic_types import value, Net, ArrayDelay, ArrayNet, transl_type, value_from_number, to_float
 from ._arrays import array, ArrayType, _add_array_op, _flatten
 from ._vectors import vector
@@ -13,9 +13,9 @@ from ._quaternion import quaternion
 from ._math import minimum, maximum
 from ._flow import iif
 from ._temporal import feedback
-from ._helper_types import U
+from ._helper_types import TNum, U
 
-T = TypeVar("T", bound='value[Any] | ArrayType[Any] | array[Any]')
+TSample = TypeVar("TSample", bound='value[Any] | ArrayType[Any] | array[Any]')
 
 
 def _sample_array(x: Any) -> array[Any] | None:
@@ -51,36 +51,47 @@ def _init_elements(init: Any, size: int, dtype: str) -> list[int | float]:
     return [int(e) for e in elements]
 
 
-class ringbuffer(Generic[T]):
+class ringbuffer(array[TNum], Generic[TNum, TSample]):
     """Ring buffer holding the values of x at the last n runs of the task
     computing it, the current value included. At each run the current value
     is written in place to one slot of the buffer (no copy of the buffer), so
     the cost per run is independent of n. Before n runs the remaining slots
     hold the initial value.
 
+    The ring buffer is an array of shape (n, *shape of x) in time order: the
+    oldest value first and the current value last. Using it as array copies
+    the buffer once per run into time order. Reductions that are independent
+    of the order (sum, min, max and sort, and sums along the time axis 0)
+    are computed from the slots without copy.
+
         >>> rb = cp.ringbuffer(x, 1000)
-        >>> mean = cp.filters.mean(rb.data)  # Order of the slots is irrelevant
-        >>> delayed = rb[250]                # x 250 runs ago
-        >>> fir = (rb.window() * taps).sum() # Oldest value first
+        >>> fir = (rb * taps).sum()     # Oldest value first
+        >>> mean = cp.tensor(rb).mean() # No copy
+        >>> delayed = rb.delay(250)     # x 250 runs ago
 
     The buffer is computed by the task computing x. To use it in another task,
-    data and index must be outputs of the task computing it (like for delay).
-    Values read from the buffer are constants for the gradient, only rb[0]
+    slots and index must be outputs of the task computing it (like for delay).
+    Values read from the buffer are constants for the gradient, only delay(0)
     (x itself) is differentiable.
 
     Attributes:
         n: Number of values in the buffer
-        shape: Shape of one value: () for scalars
-        index: Slot of the current value in data (0 to n - 1)
-        data: The buffer as array of shape (n, *shape) in the order of the
-            slots. It is the memory of the buffer, reading it costs no copy.
+        index: Slot of the current value in slots (0 to n - 1)
+        slots: The memory of the buffer as array of shape (n, *shape of x) in
+            the order of the slots, reading it costs no copy.
     """
     @overload
-    def __init__(self: 'ringbuffer[value[float]]', x: 'value[float] | float', n: int, init: Any = 0) -> None: ...
+    def __init__(self: 'ringbuffer[int, value[int]]', x: 'value[int] | int', n: int, init: Any = 0) -> None: ...
     @overload
-    def __init__(self: 'ringbuffer[value[int]]', x: 'value[int] | int', n: int, init: Any = 0) -> None: ...
+    def __init__(self: 'ringbuffer[float, value[float]]', x: 'value[float] | float', n: int, init: Any = 0) -> None: ...
     @overload
-    def __init__(self: 'ringbuffer[T]', x: T, n: int, init: Any = 0) -> None: ...
+    def __init__(self: 'ringbuffer[float, quaternion]', x: quaternion, n: int, init: Any = 0) -> None: ...
+    @overload
+    def __init__(self: 'ringbuffer[U, vector[U]]', x: 'vector[U]', n: int, init: Any = 0) -> None: ...
+    @overload
+    def __init__(self: 'ringbuffer[U, tensor[U]]', x: 'tensor[U]', n: int, init: Any = 0) -> None: ...
+    @overload
+    def __init__(self: 'ringbuffer[U, array[U]]', x: 'array[U]', n: int, init: Any = 0) -> None: ...
     def __init__(self, x: Any, n: int, init: Any = 0) -> None:
         """Ring buffer of the last n values of x.
 
@@ -97,6 +108,7 @@ class ringbuffer(Generic[T]):
             x = value_from_number(x)
         sample = _sample_array(x)
         net: Net
+        shape: tuple[int, ...]
         if sample is not None:
             if sample.dtype == 'byte':
                 raise TypeError("Ring buffers of byte arrays are not supported, convert them to int or float")
@@ -111,13 +123,10 @@ class ringbuffer(Generic[T]):
             net = to_float(x).net
 
         size = sample.size if sample is not None else 1
-        self.n = n
-        self.shape: tuple[int, ...] = shape
-        self._sample: T = x
-        self._size = size
-        self._dtype = dtype
-        self._stored = stored
-        self._oldest: T | None = None
+        self.n: int = n
+        self._sample: Any = x
+        self._sample_shape = shape
+        self._oldest: TSample | None = None
 
         state = ArrayDelay(_init_elements(init, size, stored) * n, stored)
         state_net = ArrayNet(stored, state, n * size)
@@ -129,13 +138,20 @@ class ringbuffer(Generic[T]):
                             n * size, stored, inplace=True)
         assert isinstance(put.result, ArrayNet)
         state.input = put.result
-        self.data: array[Any] = array._from_net(put.result, (n, *shape), dtype)
+        self.slots: array[TNum] = array._from_net(put.result, (n, *shape), dtype)
 
-    def __len__(self) -> int:
-        return self.n
+        # Time order: the buffer rotated to start at the slot of the oldest value.
+        # The copy is only compiled if the ring buffer itself is used as array.
+        start = self._slot(n - 1)
+        if size != 1:
+            start = start * size
+        roll = _add_array_op('roll32_arr', [put.result, start.net, value_from_number(n * size).net],
+                             n * size, stored)
+        assert isinstance(roll.result, ArrayNet)
+        self._init(roll.result, (n, *shape), dtype)
 
     def __repr__(self) -> str:
-        return f"ringbuffer(n={self.n}, shape={self.shape}, dtype={self._dtype})"
+        return f"ringbuffer(n={self.n}, shape={self._sample_shape}, dtype={self.dtype})"
 
     def _slot(self, k: 'int | value[int]') -> 'value[int]':
         """Slot of the value k runs ago"""
@@ -148,9 +164,37 @@ class ringbuffer(Generic[T]):
             return type(self._sample)._from_array(arr)
         return arr
 
-    def __getitem__(self, k: 'int | value[int]') -> T:
-        """Value of x k runs ago: k = 0 is the current value, k = n - 1 the
-        oldest value in the buffer. A value k is limited to 0 to n - 1.
+    def _reduces_time(self, axis: 'int | Sequence[int]') -> bool:
+        """True if the reduction along axis includes the time axis 0: its result
+        is independent of the order of the slots"""
+        return any(ax % self.ndim == 0 for ax in ((axis,) if isinstance(axis, int) else axis))
+
+    @overload
+    def sum(self, axis: None = None, keepdims: bool = False) -> value[TNum]: ...
+    @overload
+    def sum(self, axis: int | Sequence[int], keepdims: bool = False) -> 'value[TNum] | array[TNum]': ...
+    def sum(self, axis: int | Sequence[int] | None = None, keepdims: bool = False) -> Any:
+        """Sum of all elements or along the given axis or axes. Sums along
+        the time axis 0 are computed from the slots without copy."""
+        if axis is None:
+            return self.slots.sum()
+        if self._reduces_time(axis):
+            return self.slots.sum(axis, keepdims)
+        return super().sum(axis, keepdims)
+
+    def _min_max(self, op: str) -> value[TNum]:
+        # Smallest or largest element: independent of the order of the slots
+        return self.slots._min_max(op)
+
+    def sort(self) -> array[TNum]:
+        """Sorted elements (1D only), computed from the slots without copy."""
+        self._check_1d('sort')
+        return self.slots.sort()
+
+    def delay(self, k: 'int | value[int]') -> TSample:
+        """Value of x k runs ago, read from its slot without a copy of the
+        buffer: k = 0 is the current value, k = n - 1 the oldest value in the
+        buffer. A value k is limited to 0 to n - 1.
 
         Arguments:
             k: Number of runs (int or int value)
@@ -164,38 +208,14 @@ class ringbuffer(Generic[T]):
         elif not 0 <= k < self.n:
             raise IndexError(f"k must be from 0 to {self.n - 1}, not {k}")
         elif k == 0:
-            return self._sample
-        result: Any = self.data[self._slot(k)]
-        return cast(T, self._wrap(result) if self.shape else result)
+            return cast(TSample, self._sample)
+        result: Any = self.slots[self._slot(k)]
+        return cast(TSample, self._wrap(result) if self._sample_shape else result)
 
     @property
-    def oldest(self) -> T:
+    def oldest(self) -> TSample:
         """Oldest value in the buffer (n - 1 runs ago), e.g. for a moving sum
         updated by the value entering and the value leaving the window."""
         if self._oldest is None:
-            self._oldest = self[self.n - 1]
+            self._oldest = self.delay(self.n - 1)
         return self._oldest
-
-    @overload
-    def window(self: 'ringbuffer[value[U]]') -> array[U]: ...
-    @overload
-    def window(self: 'ringbuffer[vector[U]]') -> array[U]: ...
-    @overload
-    def window(self: 'ringbuffer[tensor[U]]') -> array[U]: ...
-    @overload
-    def window(self: 'ringbuffer[quaternion]') -> array[float]: ...
-    @overload
-    def window(self: 'ringbuffer[array[U]]') -> array[U]: ...
-    @overload
-    def window(self) -> array[Any]: ...
-    def window(self) -> array[Any]:
-        """Values of the buffer in time order, the oldest value first and the
-        current value last: a copy of the buffer (array of shape (n, *shape))."""
-        start = self._slot(self.n - 1)
-        if self._size != 1:
-            start = start * self._size
-        total = self.n * self._size
-        node = _add_array_op('roll32_arr', [self.data.net, start.net, value_from_number(total).net],
-                             total, self._stored)
-        assert isinstance(node.result, ArrayNet)
-        return array._from_net(node.result, (self.n, *self.shape), self._dtype)

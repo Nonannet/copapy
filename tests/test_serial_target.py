@@ -107,16 +107,15 @@ def test_ringbuffer_equals_local(target: cp.SerialTarget) -> None:
     u, lag = cp.value(0.0), cp.value(3)
     rb = cp.ringbuffer(u, 64)
     rv = cp.ringbuffer(cp.vector([u, u * 2.0]), 5)
-    total = cp.feedback(lambda s: s + u - rb[63], init=0.0)
-    window = rb.window()
-    delayed, delayed_vector = rb[lag], rv[2]
-    fast = cp.Task([rb.data, rb.index, delayed, delayed_vector, total], period=1e-3)
-    slow = cp.Task([window, cp.filters.mean(cp.vector(rb.data))], period=0.01)
+    total = cp.feedback(lambda s: s + u - rb.delay(63), init=0.0)
+    delayed, delayed_vector = rb.delay(lag), rv.delay(2)
+    fast = cp.Task([rb.slots, rb.index, delayed, delayed_vector, total], period=1e-3)
+    slow = cp.Task([rb, cp.filters.mean(cp.vector(rb.slots))], period=0.01)
     local = cp.LocalTarget()
     for tg in (target, local):
         tg.deploy(fast, slow)
 
-    outputs = [delayed, delayed_vector, total, window]
+    outputs = [delayed, delayed_vector, total, rb]
     for t, x in [(0.0035, 1.5), (0.02, -2.0), (0.07, 0.25), (0.15, 3.0)]:
         results = []
         for tg in (target, local):

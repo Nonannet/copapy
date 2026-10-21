@@ -5,6 +5,7 @@ import pytest
 
 import copapy as cp
 import copapy._tasks as tasks
+from copapy.backend import get_dag_stats
 
 
 def approx(v: object) -> object:
@@ -34,7 +35,7 @@ def test_scalar() -> None:
     n = 4
     rb = cp.ringbuffer(u, n, init=-1.0)
     lag = cp.value(2)
-    outputs = [rb.data, rb.index, rb[0], rb[1], rb[lag], rb.oldest, rb.window()]
+    outputs = [rb.slots, rb.index, rb.delay(0), rb.delay(1), rb.delay(lag), rb.oldest, rb]
     xs = [float(i + 1) for i in range(10)]
     results = run_sequence(outputs, u, xs)
     for k, (data, index, r0, r1, rl, oldest, window) in enumerate(results):
@@ -52,7 +53,7 @@ def test_runtime_lag_is_limited() -> None:
     u = cp.value(0.0)
     rb = cp.ringbuffer(u, 3)
     lags = [0, 1, 2, -5, 10]
-    outputs = [rb[cp.value(lag)] for lag in lags]
+    outputs = [rb.delay(cp.value(lag)) for lag in lags]
     xs = [1.0, 2.0, 3.0, 4.0, 5.0]
     results = run_sequence(outputs, u, xs)
     for k, result in enumerate(results):
@@ -64,12 +65,12 @@ def test_types() -> None:
     u = cp.value(0)
     rb_int = cp.ringbuffer(u * 3, 3, init=7)
     rb_bool = cp.ringbuffer(u > 1, 2)
-    results = run_sequence([rb_int.window(), rb_bool.window(), rb_int[2]], u, [1, 2, 3])
+    results = run_sequence([rb_int, rb_bool, rb_int.delay(2)], u, [1, 2, 3])
     assert results == [[[7, 7, 3], [False, False], 7], [[7, 3, 6], [False, True], 7], [[3, 6, 9], [True, True], 3]]
-    assert rb_int.data.dtype == 'int' and rb_bool.data.dtype == 'bool'
+    assert rb_int.slots.dtype == 'int' and rb_bool.slots.dtype == 'bool'
     with pytest.raises(TypeError, match="no integer"):
         cp.ringbuffer(u, 2, init=0.5)
-    assert cp.ringbuffer(cp.value(1.0), 2, init=1).data.dtype == 'float'
+    assert cp.ringbuffer(cp.value(1.0), 2, init=1).dtype == 'float'
 
 
 def test_vector_and_tensor_samples() -> None:
@@ -80,7 +81,7 @@ def test_vector_and_tensor_samples() -> None:
     rv = cp.ringbuffer(v, 3, init=[9.0, 8.0, 7.0])
     rt = cp.ringbuffer(t, 2)
     rq = cp.ringbuffer(q, 2, init=cp.quaternion.identity())
-    outputs = [rv[1], rv.window(), rt.oldest, rq[1], rv.data]
+    outputs = [rv.delay(1), rv, rt.oldest, rq.delay(1), rv.slots]
     results = run_sequence(outputs, u, [1.0, 2.0, 3.0, 4.0])
 
     assert isinstance(results[0][0], cp.vector)
@@ -97,12 +98,13 @@ def test_vector_and_tensor_samples() -> None:
 
 
 def test_array_operations_on_buffer() -> None:
-    # data and window are standard arrays for the array stencils
+    # The ring buffer and its slots are standard arrays for the array stencils
     u = cp.value(0.0)
     n = 50
     rb = cp.ringbuffer(u, n)
+    assert isinstance(rb, cp.array) and rb.shape == (n,) and len(rb) == n
     taps = cp.array([float(i % 7) for i in range(n)])
-    outputs = [cp.filters.mean(cp.vector(rb.data)), (rb.window() * taps).sum(), rb.data.max()]
+    outputs = [cp.filters.mean(cp.vector(rb.slots)), (rb * taps).sum(), rb.slots.max()]
     xs = [float((i * 13) % 17) for i in range(80)]
     results = run_sequence(outputs, u, xs)
     for k, (mean, fir, peak) in enumerate(results):
@@ -110,6 +112,45 @@ def test_array_operations_on_buffer() -> None:
         assert mean == approx(sum(expected) / n)
         assert fir == approx(sum(e * float(i % 7) for i, e in enumerate(expected)))
         assert peak == max(expected)
+
+
+def test_time_order_copy_only_if_used() -> None:
+    # The roll into time order is compiled once if the ring buffer is used as array,
+    # not at all for reductions on the slots and for delayed values
+    u = cp.value(0.0)
+    rb = cp.ringbuffer(u, 8)
+    taps = cp.array([float(i) for i in range(8)])
+    used = get_dag_stats([(rb * taps).sum().net, rb.sum().net])
+    unused = get_dag_stats([rb.slots.sum().net, rb.delay(3).net, rb.oldest.net])
+    assert used.get('roll32_arr') == 1
+    assert 'roll32_arr' not in unused
+
+    # Order-independent reductions of the ring buffer (also as tensor) are computed from the slots
+    rv = cp.ringbuffer(cp.vector([u, u * 2.0]), 8)
+    reductions: list[Any] = [rb.sum(), cp.tensor(rb).mean(), rb.max(), cp.min(rb), rb.sort(), rv.sum(axis=0), cp.tensor(rv).mean()]
+    assert 'roll32_arr' not in get_dag_stats([r.net for r in reductions])
+    assert get_dag_stats([rv.sum(axis=1).net]).get('roll32_arr') == 1
+
+
+def test_reductions() -> None:
+    u = cp.value(0.0)
+    n = 4
+    rb = cp.ringbuffer(u, n, init=-1.0)
+    rv = cp.ringbuffer(cp.vector([u, u * 2.0]), n)
+    outputs = [rb.sum(), cp.tensor(rb).mean(), rb.min(), rb.max(), rb.sort(), rv.sum(axis=0), cp.tensor(rv).mean(axis=0),
+               cp.tensor(rv).mean(), rv.sum(axis=1), rv.sum(axis=0, keepdims=True)]
+    xs = [3.0, -2.0, 5.0, 1.0, 4.0, 0.5]
+    results = run_sequence(outputs, u, xs)
+    for k, (total, mean, low, high, ordered, vsum, vmean, vmean_all, per_run, kept) in enumerate(results):
+        expected = history(xs, k, n, -1.0)
+        vexpected = history(xs, k, n, 0.0)
+        assert [total, mean, low, high] == approx([sum(expected), sum(expected) / n, min(expected), max(expected)])
+        assert ordered == sorted(expected)
+        assert vsum == approx([sum(vexpected), 2 * sum(vexpected)])
+        assert vmean.values == approx((sum(vexpected) / n, 2 * sum(vexpected) / n))
+        assert vmean_all == approx(3 * sum(vexpected) / (2 * n))
+        assert per_run == approx([3 * e for e in vexpected])  # Time order
+        assert kept == [approx([sum(vexpected), 2 * sum(vexpected)])]
 
 
 def test_moving_sum() -> None:
@@ -136,7 +177,7 @@ def test_no_copy_for_update(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(tasks, '_sort_state_copies', recorder)
     rb = cp.ringbuffer(cp.value(0.0), 1000)
     tg = cp.LocalTarget(tick=0.01)
-    tg.deploy(cp.Task([rb.oldest, rb.window()], period=0.01))
+    tg.deploy(cp.Task([rb.oldest, rb], period=0.01))
     assert copies == [[4]]
 
 
@@ -144,50 +185,49 @@ def test_single_slot_and_constants() -> None:
     u = cp.value(0.0)
     rb = cp.ringbuffer(u, 1)
     const = cp.ringbuffer(2.5, 3, init=1.0)
-    results = run_sequence([rb.window(), rb.oldest, const.window()], u, [3.0, 4.0])
+    results = run_sequence([rb, rb.oldest, const], u, [3.0, 4.0])
     assert results == [[[3.0], 3.0, [1.0, 1.0, 2.5]], [[4.0], 4.0, [1.0, 2.5, 2.5]]]
 
 
 def test_tasks() -> None:
-    # Buffer used by another task: data and index are outputs of the task computing it
+    # Buffer used by another task: slots and index are outputs of the task computing it
     u = cp.value(0.0)
     rb = cp.ringbuffer(u * 2, 3)
-    window = rb.window()
-    fast = cp.Task([rb.data, rb.index], period=0.01)
-    slow = cp.Task(window, period=0.02)
+    fast = cp.Task([rb.slots, rb.index], period=0.01)
+    slow = cp.Task(rb, period=0.02)
     tg = cp.LocalTarget(tick=0.01)
     tg.deploy(fast, slow)
     for k in range(4):
         tg.write_value(u, float(k + 1))
         tg.step((k + 1) * 0.01)
     # Window of the buffer published by the fast task at the release of the slow task
-    assert tg.read_value(window) == [0.0, 2.0, 4.0]
+    assert tg.read_value(rb) == [0.0, 2.0, 4.0]
 
     # Triggered task: one value per exec, deployment resets the buffer
     rb2 = cp.ringbuffer(u, 2)
     tg2 = cp.LocalTarget()
-    tg2.deploy(rb2.data)
+    tg2.deploy(rb2.slots)
     for x in [1.0, 2.0, 3.0]:
         tg2.write_value(u, x)
         tg2.exec()
-    assert tg2.read_value(rb2.data) == [3.0, 2.0]
-    tg2.deploy(rb2.data)
+    assert tg2.read_value(rb2.slots) == [3.0, 2.0]
+    tg2.deploy(rb2.slots)
     tg2.write_value(u, 5.0)
     tg2.exec()
-    assert tg2.read_value(rb2.data) == [5.0, 0.0]
+    assert tg2.read_value(rb2.slots) == [5.0, 0.0]
 
 
 def test_errors() -> None:
     u = cp.value(0.0)
     rb = cp.ringbuffer(u, 3)
     with pytest.raises(ValueError, match="require tasks"):
-        cp.Target().compile(rb.data)
+        cp.Target().compile(rb.slots)
     with pytest.raises(ValueError, match="positive"):
         cp.ringbuffer(u, 0)
     with pytest.raises(IndexError):
-        rb[3]
+        rb.delay(3)
     with pytest.raises(TypeError, match="int value"):
-        rb[u]  # type: ignore[index]
+        rb.delay(u)  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="initial values"):
         cp.ringbuffer(cp.vector([u, u]), 2, init=[1.0, 2.0, 3.0])
     with pytest.raises(TypeError, match="numbers"):
