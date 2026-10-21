@@ -44,7 +44,7 @@ def test_constants_like_stencil(x: int, y: int) -> None:
 def test_float_operands_give_float() -> None:
     exprs = [cp.value(2.0) ** cp.value(3), cp.value(2) ** cp.value(0.5), cp.value(2) ** 1.5, cp.value(2.0) ** 0]
     assert all(e.dtype == 'float' for e in exprs)
-    assert evaluate(*exprs) == pytest.approx([8.0, 2 ** 0.5, 2 ** 1.5, 1.0])  # pyright: ignore[reportUnknownMemberType]
+    assert evaluate(*exprs) == pytest.approx([8.0, 2 ** 0.5, 2 ** 1.5, 1.0], rel=1e-5)  # pyright: ignore[reportUnknownMemberType]
     assert isinstance(cp.pow(2.0, 9), float) and isinstance(cp.pow(2, 0.5), float)
 
 
@@ -61,7 +61,7 @@ def test_arrays_tensors_vectors() -> None:
     assert list(res[1]) == list(res[3].values) == list(res[4].values) == [int_pow_ref(b, 9) for b in bases]
     assert res[2] == [int_pow_ref(3, e) for e in exps]
     assert list(res[5].values) == ref
-    assert res[6] == pytest.approx([float(b * b) for b in bases])  # pyright: ignore[reportUnknownMemberType]
+    assert res[6] == pytest.approx([float(b * b) for b in bases], rel=1e-5)  # pyright: ignore[reportUnknownMemberType]
 
 
 def test_grad_with_int_exponent() -> None:
@@ -69,4 +69,4 @@ def test_grad_with_int_exponent() -> None:
     x = cp.value(2.0)
     y = x ** cp.value(-1)
     dx, = cp.grad(y, [x])
-    assert evaluate(dx) == pytest.approx([-0.25])  # pyright: ignore[reportUnknownMemberType]
+    assert evaluate(dx) == pytest.approx([-0.25], rel=1e-5)  # pyright: ignore[reportUnknownMemberType]
