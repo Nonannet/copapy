@@ -4,17 +4,19 @@ and give access to compiler internals and debugging tools.
 """
 
 from ._target import add_read_value_remote
-from ._basic_types import Net, Op, Node, CPConstant, Store, stencil_db_from_package
+from ._basic_types import Net, Op, Node, HeadNode, Constant, Input, Store, stencil_db_from_package
 from ._compiler import compile_to_dag, \
     stable_toposort, get_const_nets, get_all_dag_edges, add_load_ops, get_all_dag_edges_between, \
-    add_store_ops, get_dag_stats
+    add_store_ops, get_dag_stats, canonicalize
 
 __all__ = [
     "add_read_value_remote",
     "Net",
     "Op",
     "Node",
-    "CPConstant",
+    "HeadNode",
+    "Constant",
+    "Input",
     "Store",
     "compile_to_dag",
     "stable_toposort",
@@ -24,5 +26,6 @@ __all__ = [
     "add_load_ops",
     "add_store_ops",
     "stencil_db_from_package",
-    "get_dag_stats"
+    "get_dag_stats",
+    "canonicalize"
 ]

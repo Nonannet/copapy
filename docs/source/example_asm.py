@@ -56,7 +56,7 @@ Example program:
     for arch in sorted(asm_code.keys()):
         md_code += f"""
 ## {arch}
-```nasm
+```objdump
 {asm_code[arch]}
 ```
 """

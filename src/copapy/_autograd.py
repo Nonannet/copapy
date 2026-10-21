@@ -4,7 +4,38 @@ from . import value, vector, tensor
 import copapy.backend as cpb
 from typing import Any, Sequence, overload
 import copapy as cp
-from ._basic_types import Net, unifloat
+from ._arrays import array
+from ._basic_types import Net, Node, unifloat, ArrayNet, ArrayConst, ArrayOp, ArrayPack, ArrayElement, HeadNode, add_op
+from ._linalg import solve_arrays, inv_array
+from ._interp import get_table_delta
+
+# Operations with a derivative of 0 (integer results)
+_ZERO_GRAD_OPS = ('ge', 'gt', 'eq', 'ne', 'floordiv', 'bwand', 'bwor', 'bwxor', 'int', 'bool', 'byte', 'sign', 'argsort', 'gtabs')
+
+# Array operations without a derivative rule
+_UNSUPPORTED_ARRAY_OPS = ('copy32', 'copy8', 'sort', 'conv2d', 'maxpool2d', 'avgpool2d')
+
+
+def _resolve(net: Net) -> Net:
+    """Net of the scalar stored to an array element, for elements of an array
+    packed from scalars"""
+    source = net.source
+    while isinstance(source, ArrayElement) and isinstance(source.args[0].source, ArrayPack):
+        net = source.args[0].source.args[source.index]
+        source = net.source
+    return net
+
+
+def _wrap(net: Net) -> Any:
+    """Operand of a node as flat array or as value"""
+    return array._from_net(net, (net.length,)) if isinstance(net, ArrayNet) else value(net)
+
+
+def _const_ints(net: Net) -> tuple[int, ...]:
+    """Dimensions passed to an array stencil as constant or as constant array"""
+    source = net.source
+    assert isinstance(source, HeadNode | ArrayConst), "Dimensions of an array operation must be constants"
+    return tuple(int(v) for v in (source.values if isinstance(source, ArrayConst) else (source.value,)))
 
 
 @overload
@@ -14,13 +45,19 @@ def grad(x: Any, y: vector[Any]) -> vector[float]: ...
 @overload
 def grad(x: Any, y: tensor[Any]) -> tensor[float]: ...
 @overload
+def grad(x: Any, y: array[Any]) -> array[float]: ...
+@overload
 def grad(x: Any, y: quaternion) -> quaternion: ...
 @overload
 def grad(x: Any, y: Sequence[value[Any]]) -> list[unifloat]: ...
-def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any] | quaternion) -> Any:
+def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any] | array[Any] | quaternion) -> Any:
     """Returns the partial derivative dx/dy where x needs to be a scalar
-    and y might be a scalar, a list of scalars, a vector or matrix. It
+    and y might be a scalar, a list of scalars, a vector, matrix or array. It
     uses automatic differentiation in reverse-mode.
+
+    Element-wise array operations, sum, min, max, dot and matrix products
+    are differentiated by array operations. Convolutions, pooling, sorting
+    and strided copies (transposing, slicing, broadcasting) are not supported.
 
     Arguments:
         x: Value to return derivative of
@@ -31,108 +68,338 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
     """
     assert isinstance(x, value), f"Argument x for grad function must be a copapy value but is {type(x)}."
 
-    y_set: set[value[float] | float]
-
+    y_values: list[Any]
     if isinstance(y, value):
-        y_set = {y}
-    if isinstance(y, tensor):
-        y_set = {v.get_scalar(0) for v in y.flatten()}
+        y_values = [y]
+    elif isinstance(y, array):
+        y_values = []
+    elif isinstance(y, tensor | vector | quaternion):
+        y_values = list(y.values)
     else:
-        assert isinstance(y, Sequence) or isinstance(y, vector) or isinstance(y, quaternion)
-        y_set = set(y)
+        assert isinstance(y, Sequence)
+        y_values = list(y)
 
-    edges = cpb.get_all_dag_edges_between([x.net.source], (v.net.source for v in y_set if isinstance(v, value)))
+    def leaf(net: Net) -> Node:
+        # The gradient of an array element is taken from the gradient of the array
+        source = net.source
+        return source.args[0].source if isinstance(source, ArrayElement) else source
+
+    y_nets = {id(v): _resolve(v.net) for v in y_values if isinstance(v, value)}
+    x_net = _resolve(x.net)
+    leaves = {leaf(net) for net in y_nets.values()} | ({y.net.source} if isinstance(y, array) else set())
+
+    edges = cpb.get_all_dag_edges_between([x.net.source], leaves)
     ordered_ops = cpb.stable_toposort(edges)
 
     net_lookup = {net.source: net for node in ordered_ops for net in node.args}
-    grad_dict: dict[Net, unifloat] = dict()
+    path_nodes = set(ordered_ops)  # Nodes depending on y
+    grad_dict: dict[Net, unifloat] = {}  # Gradients of scalars
+    array_grads: dict[Net, array[Any]] = {}  # Gradients of arrays as flat arrays
+    element_grads: dict[Net, dict[int, unifloat]] = {}  # Gradients of single array elements
 
-    def add_grad(val: value[Any], gradient_value: unifloat) -> None:
-        grad_dict[val.net] = grad_dict.get(val.net, 0.0) + gradient_value
+    def add_grad(operand: Any, gradient: Any) -> None:
+        net: Net = operand.net
+        if isinstance(net, ArrayNet):
+            if not isinstance(gradient, array):
+                # The same gradient for each element
+                ones: array[Any] = array([1.0] * net.length)
+                gradient = ones * gradient
+            if gradient.net.dtype != 'float':
+                gradient = gradient._binary_op('mul', 1.0)
+            assert gradient.size == net.length, f"Gradient of size {gradient.size} for an array of size {net.length}"
+            gradient = gradient.reshape(net.length)
+            array_grads[net] = array_grads[net] + gradient if net in array_grads else gradient
+        else:
+            if isinstance(gradient, array):
+                gradient = gradient.sum()  # The scalar is used for each element
+            grad_dict[net] = grad_dict.get(net, 0.0) + gradient
+
+    def array_grad(net: ArrayNet) -> 'array[Any] | None':
+        """Gradient of an array including the gradients of its single elements"""
+        elements = element_grads.pop(net, None)
+        if elements:
+            packed: array[Any] = array([elements.get(i, 0.0) for i in range(net.length)], 'float')
+            array_grads[net] = array_grads[net] + packed if net in array_grads else packed
+        return array_grads.get(net)
 
     for node in reversed(ordered_ops):
         #print(f"-->   {'x' if node in net_lookup else ' '}", node, f"{net_lookup.get(node)}")
-        if node.args:
-            args: Sequence[Net] = list(node.args)
-            g = 1.0 if node is x.net.source else grad_dict[net_lookup[node]]
-            opn = node.name.split('_')[0]
-            a: value[float] = value(args[0])
-            b: value[float] = value(args[1]) if len(args) > 1 else a
+        out_net = node.result if isinstance(node, ArrayOp | ArrayPack) else net_lookup.get(node)
+        g: Any
+        if node is x.net.source:
+            g = 1.0
+        elif isinstance(out_net, ArrayNet):
+            g = array_grad(out_net)
+        else:
+            g = grad_dict.get(out_net) if out_net is not None else None
 
-            if opn in ['ge', 'gt', 'eq', 'ne', 'floordiv', 'bwand', 'bwor', 'bwxor']:
-                pass  # Derivative is 0 for all ops returning integers
+        if g is None or not node.args:
+            continue  # No derivative (e.g. only used by comparisons) or an input
 
-            elif opn == 'add':
-                add_grad(a, g)
-                add_grad(b, g)
+        if isinstance(node, ArrayElement):
+            elements = element_grads.setdefault(node.args[0], {})
+            elements[node.index] = elements.get(node.index, 0.0) + g
+            continue
 
-            elif opn == 'sub':
-                add_grad(a, g)
-                add_grad(b, -g)
+        if isinstance(node, ArrayPack):
+            for i, arg in enumerate(node.args):
+                add_grad(value(arg), g.element(i))
+            continue
 
-            elif opn == 'mul':
-                add_grad(a, b * g)
-                add_grad(b, a * g)
+        parts = node.name.split('_')
+        opn = parts[0]
+        # Array stencils have additional arguments for the sizes
+        args: Sequence[Net] = node.args[:len(parts) - 1] if isinstance(node, ArrayOp) else list(node.args)
+        reduction = isinstance(node, ArrayOp) and not isinstance(node.result, ArrayNet)
+        a: Any = _wrap(args[0])
+        b: Any = _wrap(args[1]) if len(args) > 1 else a
 
-            elif opn == 'div':
-                add_grad(a, g / b)
-                add_grad(b, -a * g / (b**2))
+        if opn in _ZERO_GRAD_OPS:
+            pass  # Derivative is 0 for all ops returning integers
 
-            elif opn == 'mod':
-                add_grad(a, g)
-                add_grad(b, -a * g / b)
+        elif opn in _UNSUPPORTED_ARRAY_OPS and isinstance(node, ArrayOp):
+            raise NotImplementedError(f"Automatic differentiation of the array operation {node.name} is not supported yet")
 
-            elif opn == 'log':
-                add_grad(a, g / a)
+        elif opn == 'sum':
+            add_grad(a, g)
 
-            elif opn == 'exp':
-                add_grad(a, g * cp.exp(a))
+        elif opn == 'sumaxis':
+            # Each element of the summed axis gets the gradient of its sum
+            m, k, n = _const_ints(node.args[1])
+            add_grad(a, g.reshape(m, 1, n).broadcast_to((m, k, n)))
 
-            elif opn == 'pow':
-                add_grad(a, (b * (a ** (b - 1))) * g)
-                add_grad(b, (a ** b * cp.log(a)) * g)
+        elif opn == 'dot':
+            add_grad(a, b * g)
+            add_grad(b, a * g)
 
-            elif opn == 'sqrt':
-                add_grad(a, g * (0.5 / cp.sqrt(a)))
+        elif opn == 'matvec':
+            (m,), (n,) = _const_ints(node.args[2]), _const_ints(node.args[3])
+            add_grad(a, g.reshape(m, 1).matmul(b.reshape(1, n)))
+            add_grad(b, a.reshape(m, n).T.matmul(g))
 
-            elif opn == 'abs':
-                add_grad(a, g * cp.sign(a))
+        elif opn == 'matmul':
+            m, k, n = _const_ints(node.args[2])
+            add_grad(a, g.reshape(m, n).matmul(b.reshape(k, n).T))
+            add_grad(b, a.reshape(m, k).T.matmul(g.reshape(m, n)))
 
-            elif opn == 'neg':
-                add_grad(a, -b)
+        elif opn == 'solve':
+            # x = a^-1 b: the gradient of b is a^-T g, the gradient of a is -(a^-T g) x^T
+            n, r = _const_ints(node.args[2])
+            assert isinstance(out_net, ArrayNet)
+            sol: array[Any] = array._from_net(out_net, (n, r))
+            g_b = solve_arrays(a.reshape(n, n).T, g.reshape(n, r))
+            add_grad(b, g_b)
+            add_grad(a, -g_b.matmul(sol.T))
 
-            elif opn == 'sin':
-                add_grad(a, g * cp.cos(a))
+        elif opn == 'det':
+            # The gradient of det(a) is det(a) a^-T (not defined for a singular matrix)
+            (n,) = _const_ints(node.args[1])
+            assert out_net is not None
+            add_grad(a, inv_array(a.reshape(n, n).T) * (value(out_net) * g))
 
-            elif opn == 'cos':
-                add_grad(a, g * -cp.sin(a))
-
-            elif opn == 'tan':
-                add_grad(a, g * (1 / cp.cos(a) ** 2))
-
-            elif opn == 'asin':
-                add_grad(a, g * (1 / cp.sqrt(1 - a**2)))
-
-            elif opn == 'acos':
-                add_grad(a, g * (-1 / cp.sqrt(1 - a**2)))
-
-            elif opn == 'atan':
-                add_grad(a, g * (1 / (1 + a**2)))
-
-            elif opn == 'atan2':
-                denom = a**2 + b**2
-                add_grad(a, g * (-b / denom))
-                add_grad(b, g * ( a / denom))
-
+        elif opn in ('lerp', 'bsearch'):
+            # a is the table (lerp) or the grid (bsearch), b the position
+            if args[0].source in path_nodes:
+                raise NotImplementedError(f"Automatic differentiation of {opn} to the table is not supported yet")
+            if opn == 'lerp':
+                # Slope of the table between the two elements around the index
+                diff, inside = get_table_delta(a, b)
+                add_grad(b, g * (inside * diff))
             else:
-                raise ValueError(f"Operation {opn} not yet supported for auto diff.")
+                # The index increases by 1 over the interval of the grid around the position
+                assert out_net is not None
+                diff, inside = get_table_delta(a, _wrap(out_net))
+                add_grad(b, g * (inside / diff))
+
+        elif opn in ('mask', 'masknot'):
+            # The gradient passes where the value passes
+            add_grad(a, add_op(opn, [g if isinstance(g, value) else float(g), b]))
+
+        elif opn in ('min', 'max') and reduction:
+            # The derivative is 1 for the elements equal to the result
+            assert out_net is not None
+            result: value[Any] = value(out_net)
+            add_grad(a, (a <= result if opn == 'min' else a >= result) * g)
+
+        elif opn in ('min', 'max'):
+            from_a = a < b if opn == 'min' else a > b
+            add_grad(a, g * from_a)
+            add_grad(b, g * (1 - from_a))
+
+        elif opn == 'add':
+            add_grad(a, g)
+            add_grad(b, g)
+
+        elif opn == 'sub':
+            add_grad(a, g)
+            add_grad(b, -g)
+
+        elif opn == 'mul':
+            add_grad(a, g * b)
+            add_grad(b, g * a)
+
+        elif opn == 'square':
+            add_grad(a, g * a * 2)
+
+        elif opn == 'div':
+            add_grad(a, g / b)
+            add_grad(b, g * (-a) / (b**2))
+
+        elif opn == 'mod':
+            add_grad(a, g)
+            add_grad(b, g * (-a) / b)
+
+        elif opn == 'log':
+            add_grad(a, g / a)
+
+        elif opn == 'exp':
+            add_grad(a, g * cp.exp(a))
+
+        elif opn == 'pow':
+            add_grad(a, g * cp.pow(a, b - 1.0) * b)
+            add_grad(b, g * cp.pow(a, b) * cp.log(a))
+
+        elif opn == 'sqrt':
+            add_grad(a, g * (0.5 / cp.sqrt(a)))
+
+        elif opn == 'abs':
+            add_grad(a, g * cp.sign(a))
+
+        elif opn == 'neg':
+            add_grad(a, -g)
+
+        elif opn == 'float':
+            add_grad(a, g)  # int to float conversion
+
+        elif opn == 'sin':
+            add_grad(a, g * cp.cos(a))
+
+        elif opn == 'cos':
+            add_grad(a, g * -cp.sin(a))
+
+        elif opn == 'tan':
+            add_grad(a, g * (1 / cp.cos(a) ** 2))
+
+        elif opn == 'tanh':
+            add_grad(a, g * (1 - cp.tanh(a) ** 2))
+
+        elif opn == 'asin':
+            add_grad(a, g * (1 / cp.sqrt(1 - a**2)))
+
+        elif opn == 'acos':
+            add_grad(a, g * (-1 / cp.sqrt(1 - a**2)))
+
+        elif opn == 'atan':
+            add_grad(a, g * (1 / (1 + a**2)))
+
+        elif opn == 'atan2':
+            denom = a**2 + b**2
+            add_grad(a, g * b / denom)
+            add_grad(b, g * (-a) / denom)
+
+        else:
+            raise ValueError(f"Operation {opn} not yet supported for auto diff.")
+
+    def result_of(v: Any) -> Any:
+        if not isinstance(v, value):
+            return 0.0
+        net = y_nets[id(v)]
+        if net is x_net:
+            return 1.0
+        source = net.source
+        if isinstance(source, ArrayElement):
+            arr = array_grads.get(source.args[0])
+            return arr.element(source.index) if arr is not None else 0.0
+        return grad_dict.get(net, 0.0)
 
     if isinstance(y, value):
-        return grad_dict[y.net]
+        return result_of(y)
+    if isinstance(y, array):
+        ret = array_grads.get(y.net)
+        if ret is None:
+            ret = array([0.0] * y.size)
+        return ret.reshape(*y.shape)
     if isinstance(y, vector):
-        return vector(grad_dict[yi.net] if isinstance(yi, value) else 0.0 for yi in y.values)
+        return vector(result_of(yi) for yi in y.values)
     if isinstance(y, quaternion):
-        return quaternion(grad_dict[yi.net] if isinstance(yi, value) else 0.0 for yi in y.values)
+        return quaternion(result_of(yi) for yi in y.values)
     if isinstance(y, tensor):
-        return tensor([grad_dict[yi.net] if isinstance(yi, value) else 0.0 for yi in y.values], y.shape)
-    return [grad_dict[yi.net] for yi in y]
+        return tensor([result_of(yi) for yi in y.values], y.shape)
+    return [result_of(yi) for yi in y_values]
+
+
+def _flat_grad(g: Any) -> list[Any]:
+    """Elements of a gradient returned by grad as flat list"""
+    if isinstance(g, vector | tensor | quaternion):
+        return list(g.values)
+    if isinstance(g, list):
+        return g
+    return [g]
+
+
+@overload
+def jacobian(x: value[Any], y: value[Any]) -> unifloat: ...
+@overload
+def jacobian(x: value[Any], y: vector[Any]) -> vector[float]: ...
+@overload
+def jacobian(x: value[Any], y: quaternion) -> quaternion: ...
+@overload
+def jacobian(x: vector[Any] | tensor[Any] | quaternion, y: value[Any] | vector[Any] | tensor[Any] | quaternion) -> tensor[float]: ...
+@overload
+def jacobian(x: Any, y: tensor[Any]) -> tensor[float]: ...
+@overload
+def jacobian(x: Sequence[Any], y: Sequence[value[Any]]) -> list[list[unifloat]]: ...
+@overload
+def jacobian(x: Sequence[Any], y: value[Any]) -> list[unifloat]: ...
+def jacobian(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any] | quaternion) -> Any:
+    """Returns the Jacobian dx/dy where x and y might be a scalar, a list of
+    scalars, a vector or a tensor. The result has the shape x.shape + y.shape.
+    It is calculated with one reverse-mode pass of grad per element of x.
+
+    For a scalar x the result is the same as of grad(x, y). The result is
+    a list of lists if x and y are lists and otherwise a tensor. Arrays are
+    not supported, an array can be used as tensor by cp.tensor(arr).
+
+    Arguments:
+        x: Value to return derivative of
+        y: Value(s) to derive in respect to
+
+    Returns:
+        Derivative of x with the dimensions of x and y
+    """
+    if isinstance(x, array) or isinstance(y, array):
+        raise TypeError("jacobian requires values, vectors or tensors, an array can be used "
+                        "as tensor without copying by cp.tensor(arr), for a scalar x use grad")
+    if isinstance(x, value):
+        return grad(x, y)
+
+    x_values: list[Any]
+    x_shape: tuple[int, ...]
+    if isinstance(x, vector | tensor | quaternion):
+        x_values = list(x.values)
+        x_shape = x.shape
+    else:
+        assert isinstance(x, Sequence), f"Argument x for jacobian function must be a copapy value or a sequence of values but is {type(x)}."
+        x_values = list(x)
+        x_shape = (len(x_values),)
+
+    y_shape: tuple[int, ...]
+    if isinstance(y, value):
+        y_shape = ()
+    elif isinstance(y, vector | tensor | quaternion):
+        y_shape = y.shape
+    else:
+        y_shape = (len(y),)
+
+    y_size = 1
+    for d in y_shape:
+        y_size *= d
+
+    # Elements of x that are constants have a derivative of 0
+    rows = [_flat_grad(grad(xi, y)) if isinstance(xi, value) else [0.0] * y_size for xi in x_values]
+
+    if isinstance(x, vector | tensor | quaternion) or isinstance(y, vector | tensor | quaternion):
+        return tensor([v for row in rows for v in row], x_shape + y_shape)
+    if isinstance(y, value):
+        return [row[0] for row in rows]
+    return rows

@@ -17,7 +17,7 @@ The main features can be summarized as:
 - Memory and type safety with a minimal set of runtime errors
 - Deterministic execution
 - Automatic differentiation for efficient realtime optimization (reverse-mode)
-- Optimized machine code for x86_64, 32 Bit ARM (Cortex-A and Cortex-M) and AArch64
+- Optimized machine code for x86_64, ARM32 (Cortex-A and Cortex-M), ARM64, RISC-V (32 and 64 Bit) and TriCore (AURIX)
 - Highly portable to new architectures
 - Small Python package with minimal dependencies and no cross-compile toolchain required
 
@@ -31,42 +31,75 @@ The Copapy framework also includes a runner as a Python module built from the sa
 
 ## Current state
 
-While hardware I/O is obviously a core aspect of the project it is not yet available. However the computation engine is already fully functional - for all above mentioned target architectures - and available for testing and experimentation simply by installing the package. The project focuses now on integration into the first demonstration hardware platform.
+The computation engine is fully functional - for all above mentioned target architectures - and available for testing and experimentation simply by installing the package.
 
-Furthermore in development are currently:
-- Array stencils for handling large arrays and generating SIMD-optimized code - e.g., for machine vision and neural network applications
-- Constant regrouping for further symbolic optimization of the computation graph
+Hardware I/O and real-time execution are available with the runner for the Zephyr RTOS. It executes periodic tasks with deterministic timing (logical execution time): a task reads its inputs at its release and publishes its outputs at the end of its period. The host is connected over a serial port (e.g. USB) by `cp.SerialTarget` to deploy the tasks, start and stop them, and to read and write values while they are running. Device I/O channels - GPIO, PWM, quadrature encoder and ADC - are bound to the values of the tasks. If the tasks need more CPU time than available, the tasks with the lowest priority are degraded to keep the connection to the host responsive. Supported boards are currently the Teensy 4.1 (Cortex-M7).
 
-Despite missing SIMD-optimization, benchmark performance shows promising numbers. The following chart plots the results in comparison to NumPy 2.3.5:
+Values of periodic tasks are signals in concept: one value per run of the task. `cp.delay`, `cp.integrate`, `cp.rate` and `cp.feedback` operate on these signals without side effects. Their state is kept in the memory of the task, `cp.dt` is the period of the task. Orientations as quaternions are integrated from angular velocities by `cp.integrate_rotation(gyro)`, `cp.angular_rate(q)` is the angular velocity of an orientation:
 
-![Copapy architecture](docs/source/media/benchmark_results_001.svg)
+```python
+setpoint = cp.value(1.0)
+position = cp.value(0.0)  # e.g. bound to an encoder with tg.bind
+error = setpoint - position
+control = 2.0 * error + 5.0 * cp.integrate(error) + 0.1 * cp.rate(error)
+smoothed = cp.feedback(lambda prev: prev + 0.2 * (control - prev), init=0.0)
 
-For the benchmark (`tests/benchmark.py`) timings for 30,000 iterations of calculating the term `sum((v1 + i) @ v2 for i in range(10))` were measured on a Ryzen 5 3400G. The vectors `v1` and `v2` both have lengths of `v_size`, which was varied from 10 to 500 according to the chart. For the NumPy case the `i in range(10)` loop was vectorized like this: `np.sum((v1 + i) @ v2)` with `i` being an `NDArray` of shape `[10, 1]`. The number of calculated scalar operations is the same for both implementations. Copapy benefits from lower overhead by calling a single function from Python per iteration, whereas the NumPy variant requires three. Interestingly, the chart shows no indication that for increasing `v_size` the calling overhead for NumPy will be compensated by faster SIMD instructions. Note that in this benchmark the Copapy case does not move any data between Python and the compiled code.
+tg = cp.LocalTarget(tick=1e-3)
+tg.deploy(cp.Task(smoothed, period=1e-3))
+tg.step(0.1)  # 100 runs in simulated time
+```
+
+Array stencils for handling large arrays - e.g., for machine vision and neural network applications - are available and use auto-vectorizing of the C compiler. Automatic differentiation covers element-wise array operations, reductions and matrix products, but not yet convolutions, pooling, sorting, transposing and slicing of arrays.
+
+Furthermore in development is currently constant regrouping for further symbolic optimization of the computation graph.
+
+Benchmark performance shows promising numbers. The following chart compares three ways of running the same computation with Copapy and NumPy 2.0.1:
+
+![Benchmark results](docs/source/media/benchmark_results_001.svg)
+
+For the benchmark (`tests/benchmark.py`) the median time per iteration of calculating the term `sum((v1 + i) @ v2 for i in range(10))` was measured on a Ryzen 5 3400G (15 runs of 30,000 iterations each). The vectors `v1` and `v2` both have lengths of `v_size`, which was varied from 10 to 500 according to the chart. For the NumPy case the `i in range(10)` loop was vectorized like this: `np.sum((v1 + i) @ v2)` with `i` being an `NDArray` of shape `[10, 1]`. The number of calculated scalar operations is the same for all implementations. The Copapy variants are:
+
+- **Copapy scalar**: `cp.vector(..., packed=False)`, one scalar stencil per element. The code grows with `v_size` but they profit from sparcity (no benefit in this benchmark).
+- **Copapy packed**: `cp.vector(..., packed=True)`, array stencils that are auto-vectorized by the C compiler. They compile much faster for large arrays. Without the `packed` argument, vectors with more than 64 elements are packed automatically.
+- **Copapy jit**: the term as a function decorated with `@cp.jit`, called with the two NumPy arrays. Unlike the other variants, this includes copying the input arrays and reads back the result.
 
 Furthermore, for many applications Copapy performance will benefit by reducing the actual number of operations significantly compared to a NumPy implementation, by precomputing constant values known at compile time and benefiting from sparsity. Multiplying by zero (e.g., in a diagonal matrix) eliminates a whole branch in the computation graph. Operations with no effect, like multiplications by 1 or additions with zero, get eliminated at compile time.
 
 For testing and using Copapy to speed up computations in conventional Python programs there is also the `@cp.jit` decorator available, to compile functions on first use and cache the compiled version for later calls:
 
 ```python
+import numpy as np
 import copapy as cp
 
 @cp.jit
-def calculation(x: float, y: float) -> float:
-    return sum(x ** 2 + y ** 2 + i for i in range(10))
+def rms_error(measured, reference):
+    error = measured - reference
+    return cp.sqrt((error * error).sum() / error.size)
+
+@cp.jit
+def normalize(v):
+    return cp.map_to_numpy(v / cp.sqrt((v * v).sum()))
+
+measured = np.array([1.0, 2.1, 2.9, 4.2], dtype=np.float32)
+reference = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32)
 
 # Compile and run:
-result1 = calculation(2.5, 1.2)
+rms = rms_error(measured, reference)  # 0.1225
 
 # Run cached compiled version:
-result2 = calculation(3.1, 4.7)
+rms = rms_error(measured * 2, reference)
+
+# Array result as NumPy array:
+unit = normalize(reference)  # array([0.183, 0.365, 0.548, 0.730], dtype=float32)
 ```
 
-Note that `cp.jit` is not currently highly optimized for data transfer between Python and the compiled code.
+Arguments can be numbers, sequences of numbers, or arrays with the buffer protocol, such as NumPy arrays. A function is compiled again for each new combination of argument types and array shapes. NumPy arrays of byte, 32 bit int or 32 bit float are copied to the compiled code as they are, other numeric types are converted to 32 bit. Array results are returned as nested lists, or as NumPy arrays if marked with `cp.map_to_numpy`. Such a NumPy array is a view of the memory of the compiled code and changes with the next call, unless `copy=True` is passed.
+
 
 
 ## Install
 
-To install Copapy, you can use pip. Precompiled wheels are available for Linux (x86_64, AArch64, ARMv7), Windows (x86_64) and macOS (x86_64, AArch64):
+To install Copapy, you can use pip. Precompiled wheels are available for Linux (x86_64, AArch64, ARMv7, i686), Windows (x86_64) and macOS (x86_64, AArch64):
 
 ```bash
 pip install copapy
@@ -180,10 +213,46 @@ print(f"quadratic error = {tg.read_value(error)}")
 ```
 
 ```
-Joint angles: [-0.7221821546554565, 2.6245293617248535]
-Joint position: [1.3509329557418823, -1.189529299736023]
-End-effector position: [0.6995794177055359, 0.7014330625534058]
-quadratic error = 2.2305819129542215e-06
+Joint angles: vector((-0.7229549288749695, 2.6246931552886963))
+Joint position: vector((1.3498780727386475, -1.1907261610031128))
+End-effector position: vector((0.6998459100723267, 0.7006908655166626))
+quadratic error = 5.010516588299652e-07
+```
+
+### Real-time tasks on a device
+
+Periodic tasks run in real time on a device with the Zephyr runner. This example deploys a position controller to a Teensy 4.1. Every millisecond it reads an encoder and sets the duty cycle of a PWM output, while the host changes the setpoint:
+
+```python
+import time
+import copapy as cp
+
+# Connect to a Teensy 4.1 running the Zephyr runner (port found by USB id)
+tg = cp.SerialTarget(device=cp.devices.teensy41)
+
+# Position controller: encoder in, PWM duty cycle out
+setpoint = cp.value(0.0)  # written by the host while running
+position = cp.value(0)    # read from the encoder at each release
+tg.bind(position, tg.io.encoder('enc0'))
+
+error = setpoint - position * 0.01
+duty = cp.clamp(0.5 + error * 2.0, 0.0, 1.0)
+tg.bind(duty, tg.io.pwm('pwm2'))
+
+controller = cp.Task(duty, period=1e-3)  # released every millisecond
+tg.deploy(controller)
+tg.run()  # real-time execution on the device
+
+tg.write_value(setpoint, 0.1)
+time.sleep(1.0)
+print(f"Duty cycle: {tg.read_value(duty)}")
+print(f"Jobs run: {tg.stats(controller)['runs']}")
+tg.stop()
+```
+
+```
+Duty cycle: 0.699999988079071
+Jobs run: 1002
 ```
 
 ## How it works
@@ -225,7 +294,18 @@ For more complex operations - where inlining is less useful - stencils call a no
             e: R_X86_64_PLT32    result_float-0x4
 ```
 
-Unlike stencils, non-stencil functions like `sinf` are not stripped and do not need to be tail-call-optimizable. These functions can be provided as C code and compiled together with the stencils or can be object files like in the case of `sinf` compiled from C and assembly code and merged into the stencil object files. Math functions like `sinf` are currently provided by the MUSL C library, with architecture-specific optimizations. 
+Unlike stencils, non-stencil functions like `sinf` are not stripped and do not need to be tail-call-optimizable. These functions can be provided as C code and compiled together with the stencils or can be object files like in the case of `sinf` compiled from C and assembly code and merged into the stencil object files. Math functions like `sinf` are currently provided by the MUSL C library, with architecture-specific optimizations. For the Cortex-M targets with a single precision FPU most math functions are based on CMSIS-DSP instead, which avoids the software emulated double precision arithmetic of the MUSL functions. 
+
+Array operations use the same mechanism. Instead of passing operands in registers, an array stencil accesses its operands and its result in heap memory through placeholder symbols, which are patched to the actual addresses. The loop over the elements is in a non-stencil function shared by all stencils of that operation:
+
+```c
+add_floatarr_floatarr(void) {
+    aux_arr_add_float_float_vv(REF(ref_arg0), REF(ref_arg1), REF(ref_out), *(int *)REF(ref_arg2));
+    result_float_ref();
+}
+```
+
+Here `ref_arg0` and `ref_arg1` are the two arrays, `ref_arg2` is the number of elements and `ref_out` is the result array. The name of the dummy function `result_float_ref()` tells the compiler the element type of the result.
 
 Non-stencil functions and constants used by them are stored together with the stencils in ELF object files for each supported CPU architecture. The required non-stencil functions and constants are bundled during compilation. The compiler includes only the data and code required for a specific Copapy program.
 
@@ -283,6 +363,15 @@ Run the tests:
 pytest
 ```
 
+The runner for the Zephyr RTOS (`targets/zephyr`) is built in a Zephyr workspace (tested with Zephyr 4.4 and the Zephyr SDK, `ZEPHYR_BASE` set):
+
+```bash
+bash tools/build_zephyr.sh mps2/an500  # Cortex-M7 in qemu-system-arm
+bash tools/build_zephyr.sh teensy41    # Teensy 4.1, runner on the USB port
+```
+
+The tests `tests/test_runner_zephyr.py` and `tests/test_serial_target.py` run it in qemu (path of `qemu-system-arm` in the environment variable `QEMU_SYSTEM_ARM`) or on a board (serial port in `COPARUN_SERIAL_PORT`).
+
 ## License
 
 This project is licensed under the MIT license - see the [LICENSE](LICENSE) file for details.
@@ -291,4 +380,4 @@ This project is licensed under the MIT license - see the [LICENSE](LICENSE) file
 
 [^2]: The compiler must support tail-call optimization (TCO). Currently, GCC is supported. Porting to a new architecture requires implementing a subset of relocation types used by that architecture.
 
-[^3]: Supported architectures: x86_64, AArch64, ARMv6/7 (non-Thumb) and ARMv7 Thumb for Cortex-A and Cortex-M. Code for x86 32-bit exists but has unresolved issues and a low priority.
+[^3]: Supported architectures: x86_64, x86 (32 Bit), AArch64, ARMv6/7 (non-Thumb), ARMv7 Thumb for Cortex-A and Cortex-M (M4 and M7), ARMv8.1-M Thumb with Helium (Cortex-M55 and M85), RISC-V (RV32/RV64 with hardware floating point) and TriCore 1.6.1 (AURIX TC2xx).

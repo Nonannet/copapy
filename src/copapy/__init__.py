@@ -33,15 +33,28 @@ Example usage:
     >>> print("Result e:", tg.read_value(e))
 """
 
-from ._target import Target, jit
-from ._basic_types import NumLike, value, generic_sdb, iif
-from ._vectors import vector, distance, scalar_projection, angle_between, rotate_vector, vector_projection
+from ._target import Target, jit, map_to_buffer, map_to_numpy
+from ._tasks import Task, LocalTarget
+from ._serial import SerialTarget
+from . import devices
+from ._basic_types import NumLike, value, generic_sdb
+from ._vectors import vector, cross, dot, distance, scalar_projection, angle_between, rotate_vector, vector_projection
 from ._quaternion import quaternion
-from ._tensors import tensor, zeros, ones, arange, eye, identity, diagonal, concat
-from ._math import sqrt, abs, sign, sin, cos, tan, asin, acos, atan, atan2, log, exp, pow, get_42, clamp, minimum, maximum
-from ._nn import relu, sigmoid
-from ._autograd import grad
+from ._tensors import tensor, zeros, ones, arange, eye, identity, diagonal, concat, ravel
+from ._math import sqrt, abs, sign, sin, cos, tan, tanh, asin, acos, atan, atan2, log, exp, pow, get_42, clamp, minimum, maximum, min, max
+from ._casts import cast, to_float, to_int, to_bool, to_byte, pack, unpack
+from ._linalg import solve, inv, det, cholesky, solve_triangular, cho_solve
+from ._interp import interp, lerp
+from ._autograd import grad, jacobian
 from ._tensors import tensor as matrix
+from ._arrays import array
+from ._flow import iif
+from ._temporal import delay, integrate, rate, integrate_rotation, angular_rate, feedback, dt
+from ._ringbuffer import ringbuffer
+from ._sorting import sort, argsort
+from . import nn
+from . import filters
+from . import controller
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -55,13 +68,26 @@ else:
 __all__ = [
     "__version__",
     "Target",
+    "Task",
+    "LocalTarget",
+    "SerialTarget",
+    "devices",
     "NumLike",
     "value",
     "generic_sdb",
     "iif",
+    "delay",
+    "integrate",
+    "rate",
+    "integrate_rotation",
+    "angular_rate",
+    "feedback",
+    "dt",
+    "ringbuffer",
     "vector",
     "tensor",
     "matrix",
+    "array",
     "identity",
     "zeros",
     "ones",
@@ -73,6 +99,7 @@ __all__ = [
     "sign",
     "cos",
     "tan",
+    "tanh",
     "asin",
     "acos",
     "atan",
@@ -84,7 +111,17 @@ __all__ = [
     "clamp",
     "minimum",
     "maximum",
-    "relu",
+    "min",
+    "max",
+    "cast",
+    "to_float",
+    "to_int",
+    "to_bool",
+    "to_byte",
+    "pack",
+    "unpack",
+    "cross",
+    "dot",
     "distance",
     "scalar_projection",
     "angle_between",
@@ -92,8 +129,24 @@ __all__ = [
     "vector_projection",
     "quaternion",
     "grad",
+    "jacobian",
+    "solve",
+    "inv",
+    "det",
+    "cholesky",
+    "solve_triangular",
+    "cho_solve",
+    "interp",
+    "lerp",
     "eye",
     "concat",
-    "sigmoid",
-    "jit"
+    "ravel",
+    "sort",
+    "argsort",
+    "nn",
+    "filters",
+    "controller",
+    "jit",
+    "map_to_buffer",
+    "map_to_numpy"
 ]

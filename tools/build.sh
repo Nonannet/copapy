@@ -4,10 +4,10 @@ set -eu
 ARCH=${1:-x86_64}
 
 case "$ARCH" in
-    (x86_64|arm64|arm-v6|arm-v7|arm-v7-thumb|arm-v7m-thumb|all)
+    (x86_64|x86|arm64|arm-v6|arm-v7|arm-v7-thumb|arm-v7m-thumb|arm-v7m-thumb-fpv5|arm-v81m-thumb|tricore|all)
         ;;
     (*)
-        echo "Usage: $0 [x86_64|arm64|arm-v6|arm-v7|arm-v6-thumb|arm-v7m-thumb|all]"
+        echo "Usage: $0 [x86_64|x86|arm64|arm-v6|arm-v7|arm-v7-thumb|arm-v7m-thumb|arm-v7m-thumb-fpv5|arm-v81m-thumb|tricore|all]"
         exit 1
         ;;
 esac
@@ -17,6 +17,7 @@ mkdir -p build/runner
 
 SRC=build/stencils/stencils.c
 DEST=src/copapy/obj
+CMSIS_DSP=${CMSIS_DSP:-../CMSIS-DSP}
 python3 stencils/generate_stencils.py $SRC
 mkdir -p $DEST
 
@@ -36,10 +37,51 @@ if [[ "$ARCH" == "x86_64" || "$ARCH" == "all" ]]; then
     gcc -Wall -Wextra -Wconversion -Wsign-conversion \
         -Wshadow -Wstrict-overflow -Werror -g -O3 \
         -DENABLE_LOGGING \
-        src/coparun/runmem.c \
+        src/coparun/runmem.c src/coparun/tasks.c \
         src/coparun/coparun.c \
         src/coparun/mem_man.c \
         -o build/runner/coparun
+fi
+
+#######################################
+# x86 32-bit
+#######################################
+if [[ "$ARCH" == "x86" || "$ARCH" == "all" ]]; then
+    echo "--------------x86 32 bit----------------"
+
+    if command -v i686-linux-gnu-gcc >/dev/null 2>&1; then
+        X86_CC=i686-linux-gnu-gcc
+        X86_LD=i686-linux-gnu-ld
+        X86_OBJDUMP=i686-linux-gnu-objdump
+        X86_EXTRA_FLAGS=""
+        X86_LD_FLAGS=""
+    elif gcc -m32 -x c -o /tmp/copapy_x86_probe - <<'EOF' >/dev/null 2>&1
+int main(void) { return 0; }
+EOF
+    then
+        X86_CC=gcc
+        X86_LD=ld
+        X86_OBJDUMP=objdump
+        X86_EXTRA_FLAGS="-m32"
+        X86_LD_FLAGS="-m elf_i386"
+    else
+        echo "x86 32-bit toolchain not available: install gcc-multilib or i686-linux-gnu-gcc" >&2
+        exit 1
+    fi
+
+    "$X86_CC" $X86_EXTRA_FLAGS -fno-pic -ffunction-sections \
+        -c $SRC -O3 -o build/stencils/stencils.o
+    "$X86_LD" $X86_LD_FLAGS -r build/stencils/stencils.o \
+        build/musl/musl_objects_x86.o \
+        -o $DEST/stencils_x86_O3.o
+    "$X86_OBJDUMP" -d -x $DEST/stencils_x86_O3.o \
+        > build/stencils/stencils_x86_O3.asm
+
+    "$X86_CC" $X86_EXTRA_FLAGS -static -O3 -DENABLE_LOGGING \
+        src/coparun/runmem.c src/coparun/tasks.c \
+        src/coparun/coparun.c \
+        src/coparun/mem_man.c \
+        -o build/runner/coparun-x86
 fi
 
 #######################################
@@ -67,7 +109,7 @@ if [[ "$ARCH" == "arm64" || "$ARCH" == "all" ]]; then
         -Wall -Wextra -Wconversion -Wsign-conversion -static \
         -Wshadow -Wstrict-overflow -O3 \
         -DENABLE_LOGGING \
-        src/coparun/runmem.c \
+        src/coparun/runmem.c src/coparun/tasks.c \
         src/coparun/coparun.c \
         src/coparun/mem_man.c \
         -o build/runner/coparun-arm64
@@ -100,7 +142,7 @@ if [[ "$ARCH" == "arm-v6" || "$ARCH" == "all" ]]; then
         -Wall -Wextra -Wconversion -Wsign-conversion \
         -Wshadow -Wstrict-overflow -O3 \
         -DENABLE_LOGGING \
-        src/coparun/runmem.c \
+        src/coparun/runmem.c src/coparun/tasks.c \
         src/coparun/coparun.c \
         src/coparun/mem_man.c \
         -o build/runner/coparun-armv6
@@ -134,7 +176,7 @@ if [[ "$ARCH" == "arm-v7" || "$ARCH" == "all" ]]; then
         -Wall -Wextra -Wconversion -Wsign-conversion \
         -Wshadow -Wstrict-overflow -O3 \
         -DENABLE_LOGGING \
-        src/coparun/runmem.c \
+        src/coparun/runmem.c src/coparun/tasks.c \
         src/coparun/coparun.c \
         src/coparun/mem_man.c \
         -o build/runner/coparun-armv7
@@ -168,27 +210,33 @@ if [[ "$ARCH" == "arm-v7-thumb" || "$ARCH" == "all" ]]; then
         -Wall -Wextra -Wconversion -Wsign-conversion \
         -Wshadow -Wstrict-overflow -O3 \
         -DENABLE_LOGGING \
-        src/coparun/runmem.c \
+        src/coparun/runmem.c src/coparun/tasks.c \
         src/coparun/coparun.c \
         src/coparun/mem_man.c \
         -o build/runner/coparun-armv7thumb
 fi
 
 #######################################
-# ARM v7 thumb Cortex-M
+# ARM v7 thumb Cortex-M4 (FPv4-SP)
 #######################################
 if [[ "$ARCH" == "arm-v7m-thumb" || "$ARCH" == "all" ]]; then
     echo "--------------arm-v7m-thumb 32 bit----------------"
 
-    LIBGCC=$(arm-none-eabi-gcc -march=armv7e-m -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -print-libgcc-file-name)
+    ARM_FLAGS="-march=armv7e-m -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb"
+    LIBGCC=$(arm-none-eabi-gcc $ARM_FLAGS -print-libgcc-file-name)
 
     arm-none-eabi-gcc -fno-pic -ffunction-sections \
-        -march=armv7e-m -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb \
+        $ARM_FLAGS \
         -c $SRC -O3 -o build/stencils/stencils.o
+
+    # Math functions based on CMSIS-DSP, remaining functions from MUSL
+    bash tools/build_cmsis_libm.sh $CMSIS_DSP \
+        build/musl/musl_objects_armv7mthumb.o \
+        build/stencils/math.o "$ARM_FLAGS"
 
     arm-none-eabi-ld -r \
         build/stencils/stencils.o \
-        build/musl/musl_objects_armv7mthumb.o \
+        build/stencils/math.o \
         $LIBGCC \
         -o $DEST/stencils_armv7mthumb_O3.o
 
@@ -202,8 +250,70 @@ if [[ "$ARCH" == "arm-v7m-thumb" || "$ARCH" == "all" ]]; then
         -Wall -Wextra -Wconversion -Wsign-conversion \
         -Wshadow -Wstrict-overflow -O3 \
         -DENABLE_LOGGING \
-        src/coparun/runmem.c \
+        src/coparun/runmem.c src/coparun/tasks.c \
         src/coparun/coparun.c \
         src/coparun/mem_man.c \
         -o build/runner/coparun-armv7thumb
+fi
+
+#######################################
+# ARM v7 thumb Cortex-M7 (FPv5-SP)
+#######################################
+if [[ "$ARCH" == "arm-v7m-thumb-fpv5" || "$ARCH" == "all" ]]; then
+    echo "--------------arm-v7m-thumb-fpv5 32 bit----------------"
+
+    ARM_FLAGS="-mcpu=cortex-m7 -mfpu=fpv5-sp-d16 -mfloat-abi=hard -mthumb"
+    LIBGCC=$(arm-none-eabi-gcc $ARM_FLAGS -print-libgcc-file-name)
+
+    arm-none-eabi-gcc -fno-pic -ffunction-sections \
+        $ARM_FLAGS \
+        -c $SRC -O3 -o build/stencils/stencils.o
+
+    # Math functions based on CMSIS-DSP, remaining functions from MUSL
+    # (the MUSL objects for FPv4-SP are compatible with FPv5-SP)
+    bash tools/build_cmsis_libm.sh $CMSIS_DSP \
+        build/musl/musl_objects_armv7mthumb.o \
+        build/stencils/math.o "$ARM_FLAGS"
+
+    arm-none-eabi-ld -r \
+        build/stencils/stencils.o \
+        build/stencils/math.o \
+        $LIBGCC \
+        -o $DEST/stencils_armv7mthumb_fpv5_O3.o
+
+    arm-none-eabi-objdump -d -x \
+        $DEST/stencils_armv7mthumb_fpv5_O3.o \
+        > build/stencils/stencils_armv7mthumb_fpv5_O3.asm
+fi
+
+#######################################
+# ARM v8.1-M thumb Cortex-M55 and Cortex-M85 (Helium)
+#######################################
+if [[ "$ARCH" == "arm-v81m-thumb" || "$ARCH" == "all" ]]; then
+    echo "--------------arm-v81m-thumb 32 bit----------------"
+
+    ARM_FLAGS="-mcpu=cortex-m55 -mfloat-abi=hard -mthumb"
+    LIBGCC=$(arm-none-eabi-gcc $ARM_FLAGS -print-libgcc-file-name)
+
+    arm-none-eabi-gcc -fno-pic -ffunction-sections \
+        $ARM_FLAGS \
+        -c $SRC -O3 -o build/stencils/stencils.o
+
+    arm-none-eabi-ld -r \
+        build/stencils/stencils.o \
+        build/musl/musl_objects_armv81mthumb.o \
+        $LIBGCC \
+        -o $DEST/stencils_armv81mthumb_O3.o
+
+    arm-none-eabi-objdump -d -x \
+        $DEST/stencils_armv81mthumb_O3.o \
+        > build/stencils/stencils_armv81mthumb_O3.asm
+fi
+
+#######################################
+# TriCore
+#######################################
+if [[ "$ARCH" == "tricore" || "$ARCH" == "all" ]]; then
+    # Stencils and bare metal runner for qemu-system-tricore
+    bash tools/tricore/build.sh all
 fi

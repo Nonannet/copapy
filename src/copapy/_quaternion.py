@@ -2,7 +2,8 @@ from typing import overload, Iterable, Callable, Any, Iterator
 from ._vectors import vector
 from ._tensors import tensor
 import copapy as cp
-from ._basic_types import NumLike, value, unifloat, ArrayType
+from ._basic_types import NumLike, value, unifloat
+from ._arrays import ArrayType
 from ._mixed import mixed_sum
 
 epsilon = 1e-20
@@ -11,8 +12,9 @@ epsilon = 1e-20
 class quaternion(ArrayType[float]):
     """Mathematical quaternion class for representing 3D rotations.
 
+    The components are stored in the order (w, x, y, z) in values.
+
     Attributes:
-        values (tuple[unifloat, ...]): Internal storage of the (w, x, y, z) components.
         w, x, y, z (unifloat): Property accessors to individual components.
     """
     def __init__(
@@ -29,12 +31,9 @@ class quaternion(ArrayType[float]):
             y: y component (ignored if w is an iterable).
             z: z component (ignored if w is an iterable).
         """
-        self.shape = (4,)
-        if isinstance(w, Iterable):
-            self.values = tuple(v for v in w)
-            assert len(self.values) == 4, "Sequence must have exactly 4 elements for quaternion initialization."
-        else:
-            self.values = (w, x, y, z)
+        components = tuple(w) if isinstance(w, Iterable) else (w, x, y, z)
+        assert len(components) == 4, "Sequence must have exactly 4 elements for quaternion initialization."
+        self._set_elements(components, (4,))
 
 
     @classmethod
@@ -239,10 +238,7 @@ class quaternion(ArrayType[float]):
     def __add__(self, other: 'quaternion | NumLike') -> 'quaternion':
         if isinstance(other, quaternion):
             return quaternion(a + b for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return quaternion(v + other for v in self.values)
-        o = value(other)  # Make sure a single constant is allocated
-        return quaternion(a + o if isinstance(a, value) else a + other for a in self.values)
+        return quaternion(v + other for v in self.values)
 
     def __radd__(self, other: int | float) -> 'quaternion':
         return self + other
@@ -254,19 +250,13 @@ class quaternion(ArrayType[float]):
     def __sub__(self, other: 'quaternion | NumLike') -> 'quaternion':
         if isinstance(other, quaternion):
             return quaternion(a - b for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return quaternion(v - other for v in self.values)
-        o = value(other)  # Make sure a single constant is allocated
-        return quaternion(a - o if isinstance(a, value) else a - other for a in self.values)
+        return quaternion(v - other for v in self.values)
 
     def __rsub__(self, other: NumLike) -> 'quaternion':
         return -self + other
 
     def __mul__(self, other: NumLike) -> 'quaternion':
-        if isinstance(other, value):
-            return quaternion(v * other for v in self.values)
-        o = value(other)  # Make sure a single constant is allocated
-        return quaternion(v * o if isinstance(v, value) else v * other for v in self.values)
+        return quaternion(v * other for v in self.values)
 
     def __rmul__(self, other: NumLike) -> 'quaternion':
         return self * other
@@ -278,8 +268,21 @@ class quaternion(ArrayType[float]):
         z = self.w * other.z + self.x * other.y - self.y * other.x + self.z * other.w
         return quaternion(w, x, y, z)
 
+    def __eq__(self, other: 'quaternion | Iterable[NumLike]') -> vector[int]:  # type: ignore
+        """Element-wise equality of the (w, x, y, z) components."""
+        if not isinstance(other, Iterable):
+            return NotImplemented
+        other_values = tuple(other)
+        assert len(other_values) == 4, "Quaternion can only be compared with 4 components"
+        return vector(a == b for a, b in zip(self.values, other_values))
+
+    def __ne__(self, other: 'quaternion | Iterable[NumLike]') -> vector[int]:  # type: ignore
+        """Element-wise inequality of the (w, x, y, z) components."""
+        if not isinstance(other, Iterable):
+            return NotImplemented
+        other_values = tuple(other)
+        assert len(other_values) == 4, "Quaternion can only be compared with 4 components"
+        return vector(a != b for a, b in zip(self.values, other_values))
+
     def __truediv__(self, other: NumLike) -> 'quaternion':
-        if isinstance(other, value):
-            return quaternion(v / other for v in self.values)
-        o = value(other)  # Make sure a single constant is allocated
-        return quaternion(v / o if isinstance(v, value) else v / other for v in self.values)
+        return quaternion(v / other for v in self.values)

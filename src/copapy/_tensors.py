@@ -1,8 +1,8 @@
-from copapy._basic_types import NumLike, ArrayType
 from . import value
+from ._arrays import array, ArrayType
 from ._vectors import vector, VecFloatLike, VecIntLike, VecNumLike
 from ._mixed import mixed_sum
-from typing import TypeVar, Any, overload, TypeAlias, Callable, Iterator, Sequence
+from typing import TypeVar, Any, overload, TypeAlias, Callable, Iterator, Sequence, Iterable, Literal, TypeGuard
 from ._helper_types import TNum
 
 TensorNumLike: TypeAlias = 'tensor[Any] | vector[Any] | value[Any] | int | float | bool'
@@ -12,6 +12,11 @@ TensorSequence: TypeAlias = 'Sequence[TNum | value[TNum]] | Sequence[Sequence[TN
 U = TypeVar("U", int, float)
 
 
+def _static_keys(keys: 'Sequence[int | value[int] | slice]') -> 'TypeGuard[Sequence[int | slice]]':
+    """True if no index is a runtime value"""
+    return not any(isinstance(k, value) for k in keys)
+
+
 class tensor(ArrayType[TNum]):
     """Generalized n-dimensional tensor class supporting numpy-style operations.
 
@@ -19,46 +24,56 @@ class tensor(ArrayType[TNum]):
     reshaping, transposition, and various reduction operations.
     """
 
-    def __init__(self, values: 'TNum | value[TNum] | vector[TNum] | tensor[TNum] | TensorSequence[TNum]', shape: Sequence[int] | None = None):
+    pack_threshold: int | None = 64
+
+    def __init__(self, values: 'TNum | value[TNum] | vector[TNum] | tensor[TNum] | array[TNum] | TensorSequence[TNum] | Iterable[TNum | value[TNum]]',
+                 shape: Sequence[int] | None = None, packed: bool | None = None):
         """Create a tensor with given values.
 
         Arguments:
-            values: Nested iterables of constant values or copapy values.
-                    Can be a scalar, 1D iterable (vector),
-                    or n-dimensional nested structure.
+            values: Nested sequence of constant values or copapy values,
+                    a flat 1D iterable if shape is provided or an array (its
+                    memory is used by the tensor without copying).
             shape: Optional shape of the tensor. If not provided, inferred from values.
+            packed: True to always use array stencils for this tensor, False to never
+                use them, None to decide by tensor.pack_threshold.
         """
-        if shape:
-            self.shape: tuple[int, ...] = tuple(shape)
-            assert (isinstance(values, Sequence) and
-                    any(isinstance(v, (value, int, float)) for v in values)), \
-                    "Values must be a sequence of scalars if shape is provided"
-            self.values: tuple[TNum | value[TNum], ...] = tuple(v for v in values if not isinstance(v, Sequence))
-            self.ndim: int = len(shape)
-        elif isinstance(values, (int, float)):
+        flat_values: tuple[Any, ...]
+        if isinstance(values, array):
+            self._init_from_array(values if shape is None else values.reshape(*shape), packed)
+            return
+        if shape is not None:
+            flat_list: list[Any] = []
+            assert isinstance(values, Iterable), "Values must be a sequence of scalars if shape is provided"
+            for v in values:
+                if isinstance(v, tensor) and v.ndim == 0:
+                    v = v.values[0]  # 0-d tensors are unwrapped to their scalar value
+                if not isinstance(v, (value, int, float)):
+                    raise ValueError("Values must be a sequence of scalars if shape is provided")
+                flat_list.append(v)
+            flat_values = tuple(flat_list)
+            new_shape: tuple[int, ...] = tuple(shape)
+            size = 1
+            for dim in new_shape:
+                size *= dim
+            if len(flat_values) != size:
+                raise ValueError(f"Number of values ({len(flat_values)}) does not match shape {new_shape}")
+        elif isinstance(values, (int, float, value)):
             # Scalar case: 0-dimensional tensor
-            self.shape = ()
-            self.values = (values,)
-            self.ndim = 0
-        elif isinstance(values, value):
-            # Scalar value case
-            self.shape = ()
-            self.values = (values,)
-            self.ndim = 0
+            flat_values, new_shape = (values,), ()
         elif isinstance(values, vector):
             # 1D case from vector
-            self.shape = (len(values),)
-            self.values = values.values
-            self.ndim = 1
+            flat_values, new_shape = values.values, (len(values),)
         elif isinstance(values, tensor):
             # Copy constructor
-            self.shape = values.shape
-            self.values = values.values
-            self.ndim = values.ndim
+            self._copy_elements(values, packed)
+            return
         else:
             # General n-dimensional case
-            self.values, self.shape = self._infer_shape_and_flatten(values)
-            self.ndim = len(self.shape)
+            assert isinstance(values, Sequence), "Values must be a sequence if shape is not provided"
+            flat_values, new_shape = self._infer_shape_and_flatten(values)
+
+        self._set_elements(flat_values, new_shape, packed)
 
     @staticmethod
     def _infer_shape_and_flatten(values: Sequence[Any]) -> tuple[tuple[Any, ...], tuple[int, ...]]:
@@ -140,7 +155,14 @@ class tensor(ArrayType[TNum]):
         flat_idx = self._get_flat_index(key)
         return self.values[flat_idx]
 
-    def __getitem__(self, key: int | slice | Sequence[int | slice]) -> 'tensor[TNum]':
+    def item(self: 'tensor[TNum]') -> TNum | value[TNum]:
+        """The element of a tensor with one element, e.g. the scalar of the
+        0-d result of 1D @ 1D."""
+        if self.size() != 1:
+            raise ValueError(f"item() requires a tensor with one element, not shape {self.shape}")
+        return self.values[0]
+
+    def __getitem__(self, key: 'int | value[int] | slice | Sequence[int | value[int] | slice]') -> 'tensor[TNum]':
         """Get a sub-tensor or element.
 
         Arguments:
@@ -155,12 +177,28 @@ class tensor(ArrayType[TNum]):
         if self.ndim == 0:
             raise TypeError("Cannot index a 0-d tensor")
 
+        if not _static_keys(key if isinstance(key, Sequence) else (key,)):
+            ret = self._force_array()[key]
+            if isinstance(ret, value):
+                return tensor(ret)
+            packed: tensor[TNum] = tensor._from_array(ret)
+            return packed
+
+        # Sub-tensors of a packed tensor by a strided copy, single elements from the values
+        arr = self._view_array()
+        if arr is not None:
+            keys = key if isinstance(key, Sequence) else (key,)
+            if not (len(keys) == self.ndim and all(isinstance(k, int) for k in keys)):
+                sub = arr[key]
+                assert isinstance(sub, array)  # Not all dimensions indexed
+                return tensor._from_array(sub)
+
         # Handle single slice
         if isinstance(key, slice):
             return self._handle_slice((key,))
 
         # Handle tuple of indices/slices
-        if isinstance(key, Sequence):
+        if isinstance(key, Sequence) and _static_keys(key):
             return self._handle_slice(key)
 
         # Handle single integer index
@@ -262,25 +300,28 @@ class tensor(ArrayType[TNum]):
 
     def __neg__(self) -> 'tensor[TNum]':
         """Negate all elements."""
+        arr = None if self._is_constant() else self._get_array()
+        if arr is not None:
+            return tensor._from_array(-arr)
         negated_values: tuple[Any, ...] = tuple(-v for v in self.values)
         return tensor(negated_values, self.shape)
 
     @overload
-    def __add__(self: 'tensor[int]', other: TensorFloatLike) -> 'tensor[float]': ...
-    @overload
     def __add__(self: 'tensor[int]', other: TensorIntLike) -> 'tensor[int]': ...
+    @overload
+    def __add__(self: 'tensor[int]', other: TensorFloatLike) -> 'tensor[float]': ...
     @overload
     def __add__(self: 'tensor[float]', other: TensorNumLike) -> 'tensor[float]': ...
     @overload
     def __add__(self, other: TensorNumLike) -> 'tensor[Any]': ...
     def __add__(self, other: TensorNumLike) -> Any:
         """Element-wise addition."""
-        return self._binary_op(other, lambda a, b: a + b)
+        return self._binary_op(other, lambda a, b: a + b, 'add')
 
     @overload
-    def __radd__(self: 'tensor[int]', other: VecFloatLike) -> 'tensor[float]': ...
-    @overload
     def __radd__(self: 'tensor[int]', other: VecIntLike) -> 'tensor[int]': ...
+    @overload
+    def __radd__(self: 'tensor[int]', other: VecFloatLike) -> 'tensor[float]': ...
     @overload
     def __radd__(self: 'tensor[float]', other: VecNumLike) -> 'tensor[float]': ...
     @overload
@@ -289,44 +330,44 @@ class tensor(ArrayType[TNum]):
         return self + other
 
     @overload
-    def __sub__(self: 'tensor[int]', other: TensorFloatLike) -> 'tensor[float]': ...
-    @overload
     def __sub__(self: 'tensor[int]', other: TensorIntLike) -> 'tensor[int]': ...
+    @overload
+    def __sub__(self: 'tensor[int]', other: TensorFloatLike) -> 'tensor[float]': ...
     @overload
     def __sub__(self: 'tensor[float]', other: TensorNumLike) -> 'tensor[float]': ...
     @overload
     def __sub__(self, other: TensorNumLike) -> 'tensor[Any]': ...
     def __sub__(self, other: TensorNumLike) -> Any:
         """Element-wise subtraction."""
-        return self._binary_op(other, lambda a, b: a - b, commutative=False)
+        return self._binary_op(other, lambda a, b: a - b, 'sub')
 
     @overload
-    def __rsub__(self: 'tensor[int]', other: VecFloatLike) -> 'tensor[float]': ...
-    @overload
     def __rsub__(self: 'tensor[int]', other: VecIntLike) -> 'tensor[int]': ...
+    @overload
+    def __rsub__(self: 'tensor[int]', other: VecFloatLike) -> 'tensor[float]': ...
     @overload
     def __rsub__(self: 'tensor[float]', other: VecNumLike) -> 'tensor[float]': ...
     @overload
     def __rsub__(self, other: VecNumLike) -> 'tensor[Any]': ...
     def __rsub__(self, other: TensorNumLike) -> Any:
-        return self._binary_op(other, lambda a, b: b - a, commutative=False, reversed=True)
+        return self._binary_op(other, lambda a, b: b - a, 'sub', reverse=True)
 
     @overload
-    def __mul__(self: 'tensor[int]', other: TensorFloatLike) -> 'tensor[float]': ...
-    @overload
     def __mul__(self: 'tensor[int]', other: TensorIntLike) -> 'tensor[int]': ...
+    @overload
+    def __mul__(self: 'tensor[int]', other: TensorFloatLike) -> 'tensor[float]': ...
     @overload
     def __mul__(self: 'tensor[float]', other: TensorNumLike) -> 'tensor[float]': ...
     @overload
     def __mul__(self, other: TensorNumLike) -> 'tensor[Any]': ...
     def __mul__(self, other: TensorNumLike) -> Any:
         """Element-wise multiplication."""
-        return self._binary_op(other, lambda a, b: a * b)
+        return self._binary_op(other, lambda a, b: a * b, 'mul')
 
     @overload
-    def __rmul__(self: 'tensor[int]', other: VecFloatLike) -> 'tensor[float]': ...
-    @overload
     def __rmul__(self: 'tensor[int]', other: VecIntLike) -> 'tensor[int]': ...
+    @overload
+    def __rmul__(self: 'tensor[int]', other: VecFloatLike) -> 'tensor[float]': ...
     @overload
     def __rmul__(self: 'tensor[float]', other: VecNumLike) -> 'tensor[float]': ...
     @overload
@@ -336,82 +377,86 @@ class tensor(ArrayType[TNum]):
 
     def __truediv__(self, other: TensorNumLike) -> 'tensor[float]':
         """Element-wise division."""
-        return self._binary_op(other, lambda a, b: a / b, commutative=False)
+        return self._binary_op(other, lambda a, b: a / b, 'div')
 
     def __rtruediv__(self, other: TensorNumLike) -> 'tensor[float]':
         """Element-wise right division."""
-        return self._binary_op(other, lambda a, b: b / a, commutative=False, reversed=True)
+        return self._binary_op(other, lambda a, b: b / a, 'div', reverse=True)
 
     @overload
-    def __pow__(self: 'tensor[int]', other: TensorFloatLike) -> 'tensor[float]': ...
-    @overload
     def __pow__(self: 'tensor[int]', other: TensorIntLike) -> 'tensor[int]': ...
+    @overload
+    def __pow__(self: 'tensor[int]', other: TensorFloatLike) -> 'tensor[float]': ...
     @overload
     def __pow__(self: 'tensor[float]', other: TensorNumLike) -> 'tensor[float]': ...
     @overload
     def __pow__(self, other: TensorNumLike) -> 'tensor[Any]': ...
     def __pow__(self, other: TensorNumLike) -> Any:
         """Element-wise power."""
-        return self._binary_op(other, lambda a, b: a ** b, commutative=False)
+        if isinstance(other, int) and not isinstance(other, bool) and 1 <= other < 8:
+            ret: tensor[Any] = self
+            for _ in range(other - 1):
+                ret = ret * self
+            return ret
+        return self._binary_op(other, lambda a, b: a ** b, 'pow')
 
     @overload
-    def __rpow__(self: 'tensor[int]', other: VecFloatLike) -> 'tensor[float]': ...
-    @overload
     def __rpow__(self: 'tensor[int]', other: VecIntLike) -> 'tensor[int]': ...
+    @overload
+    def __rpow__(self: 'tensor[int]', other: VecFloatLike) -> 'tensor[float]': ...
     @overload
     def __rpow__(self: 'tensor[float]', other: VecNumLike) -> 'tensor[float]': ...
     @overload
     def __rpow__(self, other: VecNumLike) -> 'tensor[Any]': ...
     def __rpow__(self, other: TensorNumLike) -> Any:
-        return self._binary_op(other, lambda a, b: b ** a, commutative=False, reversed=True)
+        return self._binary_op(other, lambda a, b: b ** a, 'pow', reverse=True)
 
     def __gt__(self, other: TensorNumLike) -> 'tensor[int]':
         """Element-wise greater than."""
-        return self._binary_op(other, lambda a, b: a > b, commutative=False)
+        return self._binary_op(other, lambda a, b: a > b, 'gt')
 
     def __lt__(self, other: TensorNumLike) -> 'tensor[int]':
         """Element-wise less than."""
-        return self._binary_op(other, lambda a, b: a < b, commutative=False)
+        return self._binary_op(other, lambda a, b: a < b, 'gt', reverse=True)
 
     def __ge__(self, other: TensorNumLike) -> 'tensor[int]':
         """Element-wise greater than or equal."""
-        return self._binary_op(other, lambda a, b: a >= b, commutative=False)
+        return self._binary_op(other, lambda a, b: a >= b, 'ge')
 
     def __le__(self, other: TensorNumLike) -> 'tensor[int]':
         """Element-wise less than or equal."""
-        return self._binary_op(other, lambda a, b: a <= b, commutative=False)
+        return self._binary_op(other, lambda a, b: a <= b, 'ge', reverse=True)
 
     def __eq__(self, other: TensorNumLike) -> 'tensor[int]':  # type: ignore
         """Element-wise equality."""
-        return self._binary_op(other, lambda a, b: a == b)
+        return self._binary_op(other, lambda a, b: a == b, 'eq')
 
     def __ne__(self, other: TensorNumLike) -> 'tensor[int]':  # type: ignore
         """Element-wise inequality."""
-        return self._binary_op(other, lambda a, b: a != b)
+        return self._binary_op(other, lambda a, b: a != b, 'ne')
 
-    def _binary_op(self, other: TensorNumLike, op: Callable[[Any, Any], 'tensor[TNum]'],
-                   commutative: bool = True, reversed: bool = False) -> 'tensor[Any]':
+    def _binary_op(self, other: TensorNumLike, op: Callable[[Any, Any], Any],
+                   array_op: str | None = None, reverse: bool = False) -> 'tensor[Any]':
         """Perform binary operation with broadcasting support.
-        """
-        seen_consts: dict[NumLike, NumLike] = {}
 
-        def call_op(a: TNum | value[TNum], b: NumLike) -> Any:
-            if isinstance(b, value) or not isinstance(a, value):
-                b_trans = b
-            else:
-                if b in seen_consts:
-                    b_trans = seen_consts[b]
-                else:
-                    b_trans = value(b)
-                    seen_consts[b] = b_trans
-            if reversed:
-                return op(b_trans, a)
-            else:
-                return op(a, b_trans)
+        Arguments:
+            other: Second operand.
+            op: Element-wise operation, called with an element of self as
+                first and an element of other as second argument.
+            array_op: Name of the equivalent array stencil operation (add, sub, mul, div, pow,
+                gt, ge, eq, ne)
+            reverse: The array operation computes other (op) self
+        """
+        if array_op:
+            if isinstance(other, Sequence | vector):
+                other = tensor(other)
+            ret = self._try_array_op(other, array_op, reverse)
+            if ret is not None:
+                return ret
 
         if isinstance(other, Sequence | vector):
             other_tensor: tensor[Any] = tensor(other)
-            return self._binary_op(other_tensor, op, commutative, reversed)
+            return self._binary_op(other_tensor, op)
 
         elif isinstance(other, tensor):
             self_shape = self.shape
@@ -419,7 +464,7 @@ class tensor(ArrayType[TNum]):
 
             # Check if shapes are identical
             if self_shape == other_shape:
-                result_vals = tuple(call_op(a, b) for a, b in zip(self.values, other.values))
+                result_vals = tuple(op(a, b) for a, b in zip(self.values, other.values))
                 return tensor(result_vals, self_shape)
 
             # Broadcast shapes using numpy-style broadcasting rules
@@ -430,12 +475,12 @@ class tensor(ArrayType[TNum]):
             other_expanded = other._expand_to_shape(result_shape)
 
             # Apply operation element-wise
-            result_vals = tuple(call_op(a, b) for a, b in zip(self_expanded.values, other_expanded.values))
+            result_vals = tuple(op(a, b) for a, b in zip(self_expanded.values, other_expanded.values))
             return tensor(result_vals, result_shape)
 
         else:
             # Broadcast scalar
-            result_vals = tuple(call_op(v, other) for v in self.values)
+            result_vals = tuple(op(v, other) for v in self.values)
             return tensor(result_vals, self.shape)
 
     def _broadcast_shapes(self, shape1: tuple[int, ...], shape2: tuple[int, ...]) -> tuple[int, ...]:
@@ -565,7 +610,13 @@ class tensor(ArrayType[TNum]):
         if total_size != self.size():
             raise ValueError(f"Cannot reshape tensor of size {self.size()} into shape {new_shape}")
 
-        return tensor(self.values, new_shape)
+        if self._array is not None and self._packed is not False:
+            # Same memory, same element order
+            ret: tensor[Any] = tensor._from_array(self._array.reshape(*new_shape), self._packed)
+            ret._values = self._values
+            ret._element_refs = self._element_refs
+            return ret
+        return tensor(self.values, new_shape, packed=self._packed)
 
     @overload
     def trace(self: 'tensor[TNum]') -> TNum | value[TNum]: ...
@@ -599,6 +650,10 @@ class tensor(ArrayType[TNum]):
 
         if any(not (0 <= ax < self.ndim) for ax in axes):
             raise ValueError(f"Invalid axes for tensor of rank {self.ndim}")
+
+        arr = self._view_array()
+        if arr is not None:
+            return tensor._from_array(arr.transpose(*axes))
 
         new_shape = tuple(self.shape[ax] for ax in axes)
         new_values: list[Any] = [None] * len(self.values)
@@ -636,11 +691,26 @@ class tensor(ArrayType[TNum]):
             size *= dim
         return size
 
-    def matmul(self, other: 'tensor[TNum] | vector[TNum]') -> 'TNum | value[TNum] | tensor[TNum]':
-        """Matrix multiplication (@ operator).
+    @overload
+    def matmul(self: 'tensor[int]', other: 'vector[int]') -> 'vector[int]': ...
+    @overload
+    def matmul(self, other: 'vector[float]') -> 'vector[float]': ...
+    @overload
+    def matmul(self: 'tensor[float]', other: 'vector[int] | vector[float]') -> 'vector[float]': ...
+    @overload
+    def matmul(self: 'tensor[int]', other: 'tensor[int]') -> 'tensor[int]': ...
+    @overload
+    def matmul(self, other: 'tensor[float]') -> 'tensor[float]': ...
+    @overload
+    def matmul(self: 'tensor[float]', other: 'tensor[int] | tensor[float]') -> 'tensor[float]': ...
+    def matmul(self, other: 'tensor[Any] | vector[Any]') -> Any:
+        """Matrix multiplication (@ operator). The type of the result does not
+        depend on the shapes: it is a tensor, 0-d for 1D @ 1D (use item() for
+        the scalar). With a vector as other, the tensor must be 2D and the
+        result is a vector.
 
         Arguments:
-            other: Another tensor to multiply with.
+            other: Another tensor or a vector to multiply with.
 
         Returns:
             Result of matrix multiplication.
@@ -648,14 +718,37 @@ class tensor(ArrayType[TNum]):
         Raises:
             ValueError: If shapes are incompatible for matrix multiplication.
         """
+        if isinstance(other, vector):
+            if self.ndim != 2:
+                raise ValueError(f"tensor @ vector requires a 2D tensor, not {self.ndim}D (use dot for 1D)")
+            ret = self._matmul(other)
+            assert isinstance(ret, tensor)  # 2D @ 1D is no scalar
+            return _to_vector(ret)
+        ret = self._matmul(other)
+        return ret if isinstance(ret, tensor) else tensor(ret)
+
+    def _matmul(self, other: 'tensor[Any] | vector[Any]') -> 'int | float | value[Any] | tensor[Any]':
         if self.ndim < 1 or other.ndim < 1:
             raise ValueError("matmul requires tensors with at least 1 dimension")
+
+        other_t = tensor(other) if isinstance(other, vector) else other
+        if self.ndim <= 2 and other.ndim <= 2 and not (self._is_constant() and other_t._is_constant()):
+            a, b = self._get_array(), other_t._get_array()
+            if a is not None or b is not None:
+                a = a if a is not None else self._get_array(force=True)
+                b = b if b is not None else other_t._get_array(force=True)
+                if a is not None and b is not None:
+                    ret = a.matmul(b)
+                    if isinstance(ret, value):
+                        return ret
+                    packed_result: tensor[Any] = tensor._from_array(ret)
+                    return packed_result
 
         # For 1D x 1D: dot product (returns scalar)
         if self.ndim == 1 and other.ndim == 1:
             if self.shape[0] != other.shape[0]:
                 raise ValueError(f"Shape mismatch: ({self.shape[0]},) @ ({other.shape[0]},)")
-            result = mixed_sum(a * b for a, b in zip(self.values, other.values))
+            result: int | float | value[Any] = mixed_sum(a * b for a, b in zip(self.values, other.values))
             return result
 
         # For 2D x 2D: standard matrix multiplication
@@ -688,37 +781,41 @@ class tensor(ArrayType[TNum]):
             if self.shape[1] != other.shape[0]:
                 raise ValueError(f"Shape mismatch: {self.shape} @ ({other.shape[0]},)")
 
-            result_values = []
-
-            if isinstance(other, vector):
-                for i in range(self.shape[0]):
-                    dot_sum = value(0)
-                    for k in range(self.shape[1]):
-                        dot_sum = dot_sum + self.get_scalar(i, k) * other.get_scalar(k)
-                    result_values.append(dot_sum)
-            else:
-                for i in range(self.shape[0]):
-                    dot_sum = value(0)
-                    for k in range(self.shape[1]):
-                        dot_sum = dot_sum + self.get_scalar(i, k) * other.get_scalar(k)
-                    result_values.append(dot_sum)
+            result_values = [mixed_sum(self.get_scalar(i, k) * other.get_scalar(k) for k in range(self.shape[1]))
+                             for i in range(self.shape[0])]
 
             return tensor(tuple(result_values), (self.shape[0],))
 
         raise NotImplementedError(f"matmul not implemented for shapes {self.ndim}D @ {other.ndim}D")
 
-    def __matmul__(self, other: 'tensor[TNum] | vector[TNum]') -> 'TNum | value[TNum] | tensor[TNum]':
+    @overload
+    def __matmul__(self: 'tensor[int]', other: 'vector[int]') -> 'vector[int]': ...
+    @overload
+    def __matmul__(self, other: 'vector[float]') -> 'vector[float]': ...
+    @overload
+    def __matmul__(self: 'tensor[float]', other: 'vector[int] | vector[float]') -> 'vector[float]': ...
+    @overload
+    def __matmul__(self: 'tensor[int]', other: 'tensor[int]') -> 'tensor[int]': ...
+    @overload
+    def __matmul__(self, other: 'tensor[float]') -> 'tensor[float]': ...
+    @overload
+    def __matmul__(self: 'tensor[float]', other: 'tensor[int] | tensor[float]') -> 'tensor[float]': ...
+    def __matmul__(self, other: 'tensor[Any] | vector[Any]') -> Any:
         """Matrix multiplication operator (@)."""
         return self.matmul(other)
 
-    def __rmatmul__(self, other: 'tensor[TNum] | vector[TNum]') -> 'TNum | value[TNum] | tensor[TNum]':
-        """Right matrix multiplication operator."""
-        if isinstance(other, tensor):
-            return other.matmul(self)
-        return NotImplemented
-
-    def sum(self, axis: int | Sequence[int] | None = None, keepdims: bool = False) -> TNum | value[TNum] | 'tensor[TNum]':
-        """Sum all or along specified axis/axes.
+    @overload
+    def sum(self, axis: None = None, keepdims: Literal[False] = False) -> TNum | value[TNum]: ...
+    @overload
+    def sum(self, axis: None = None, *, keepdims: Literal[True]) -> 'tensor[TNum]': ...
+    @overload
+    def sum(self, axis: int | Sequence[int], keepdims: bool = False) -> 'tensor[TNum]': ...
+    @overload
+    def sum(self, axis: int | Sequence[int] | None = None, keepdims: bool = False) -> 'TNum | value[TNum] | tensor[TNum]': ...
+    def sum(self, axis: int | Sequence[int] | None = None, keepdims: bool = False) -> Any:
+        """Sum all or along specified axis/axes. The type of the result does
+        not depend on the shape: a scalar for axis None without keepdims, else
+        a tensor (0-d if all axes are summed, use item() for the scalar).
 
         Arguments:
             axis: Axis or tuple of axes along which to sum. If None, sums all elements.
@@ -728,7 +825,8 @@ class tensor(ArrayType[TNum]):
             Scalar or tensor with reduced dimension(s).
         """
         if axis is None:
-            result = mixed_sum(self.values)
+            arr = None if self._is_constant() else self._get_array()
+            result = arr.sum() if arr is not None else mixed_sum(self.values)
             if keepdims:
                 # Return tensor with all dimensions set to 1
                 new_shape = [1 for _ in self.shape]
@@ -744,13 +842,20 @@ class tensor(ArrayType[TNum]):
         # Validate and normalize axes
         normalized_axes: list[int] = []
         for ax in axes:
-            if not (0 <= ax < self.ndim):
+            if not (-self.ndim <= ax < self.ndim):
                 raise ValueError(f"Axis {ax} is out of bounds for tensor of rank {self.ndim}")
+            if ax < 0:
+                ax += self.ndim
             if ax not in normalized_axes:
                 normalized_axes.append(ax)
 
         # Sort axes in descending order for easier dimension removal
         normalized_axes = sorted(set(normalized_axes), reverse=True)
+
+        arr = None if self._is_constant() else self._get_array()
+        if arr is not None:
+            total = arr.sum(normalized_axes, keepdims)
+            return tensor._from_array(total) if isinstance(total, array) else tensor(total)
 
         # Sum along specified axes
         new_shape = list(self.shape)
@@ -758,8 +863,8 @@ class tensor(ArrayType[TNum]):
             new_shape.pop(ax)
 
         if not new_shape:
-            # All axes summed - return scalar
-            return mixed_sum(self.values)
+            # All axes summed
+            return tensor([mixed_sum(self.values)], (1,) * self.ndim if keepdims else ())
 
         new_size = 1
         for dim in new_shape:
@@ -797,30 +902,30 @@ class tensor(ArrayType[TNum]):
                 full_shape[ax] = 1
             return tensor(new_values, tuple(full_shape))
 
-        if not new_shape:
-            return new_values[0]
         return tensor(new_values, tuple(new_shape))
 
-    def mean(self, axis: int | None = None) -> Any:
-        """Calculate mean along axis or overall.
+    @overload
+    def mean(self, axis: None = None, keepdims: Literal[False] = False) -> float | value[float]: ...
+    @overload
+    def mean(self, axis: None = None, *, keepdims: Literal[True]) -> 'tensor[float]': ...
+    @overload
+    def mean(self, axis: int | Sequence[int], keepdims: bool = False) -> 'tensor[float]': ...
+    @overload
+    def mean(self, axis: int | Sequence[int] | None = None, keepdims: bool = False) -> 'float | value[float] | tensor[float]': ...
+    def mean(self, axis: int | Sequence[int] | None = None, keepdims: bool = False) -> Any:
+        """Calculate mean of all elements or along specified axis/axes.
 
         Arguments:
-            axis: Axis along which to compute mean. If None, computes overall mean.
+            axis: Axis or tuple of axes along which to compute mean. If None, computes overall mean.
+            keepdims: If True, keep reduced dimensions as size 1.
 
         Returns:
-            Scalar or tensor with reduced dimension.
+            Scalar or tensor with reduced dimension(s).
         """
-        if axis is None:
-            total_sum: Any = mixed_sum(self.values)
-            return total_sum / self.size()
-
-        sum_result: Any = self.sum(axis)
-        axis_size = self.shape[axis]
-
-        if isinstance(sum_result, tensor):
-            return sum_result / axis_size
-        else:
-            return sum_result / axis_size
+        total: Any = self.sum(axis, keepdims)
+        # Number of elements averaged into each element of the result
+        count = self.size() // (total.size() if isinstance(total, tensor) else 1)
+        return total / count
 
     def map(self, func: Callable[[Any], value[U] | U]) -> 'tensor[U]':
         """Apply a function to each element.
@@ -851,9 +956,17 @@ class tensor(ArrayType[TNum]):
         return self.transpose()
 
 
+def _to_vector(t: tensor[TNum]) -> vector[TNum]:
+    """1D tensor as vector, a packed tensor keeps its array"""
+    assert t.ndim == 1, f"Can not convert a tensor of shape {t.shape} to a vector"
+    if t._array is not None:
+        return vector._from_array(t._array, t._packed)
+    return vector(t.values, t._packed)
+
+
 def zeros(shape: Sequence[int] | int) -> tensor[int]:
     """Create a zero tensor of given shape.
-    
+
     Arguments:
         shape: shape of the tensor to create.
 
@@ -871,7 +984,7 @@ def zeros(shape: Sequence[int] | int) -> tensor[int]:
 
 def ones(shape: Sequence[int] | int) -> tensor[int]:
     """Create a tensor of ones with given shape.
-    
+
     Arguments:
         shape: shape of the tensor to create.
 
@@ -960,20 +1073,28 @@ def concat(tensors: Sequence[tensor[U] | vector[U]], axis: int = 0) -> tensor[U]
     return result_tensor
 
 
-def flatten(t: tensor[U]) -> tensor[U]:
-    """Flatten a tensor to a 1D tensor.
+@overload
+def ravel(t: tensor[U]) -> tensor[U]: ...
+@overload
+def ravel(t: array[U]) -> array[U]: ...
+def ravel(t: tensor[U] | array[U]) -> tensor[U] | array[U]:
+    """Flatten a tensor or array to one dimension.
 
     Arguments:
-        t: n-dimensional tensor.
+        t: n-dimensional tensor or array.
 
     Returns:
-        A 1D tensor containing all elements from the input tensor.
+        A 1D tensor or array containing all elements of the input.
     """
     return t.flatten()
 
 
+@overload
+def arange(start: int, stop: int | None = None, step: int = 1) -> tensor[int]: ...
+@overload
+def arange(start: float, stop: float | None = None, step: float = 1) -> tensor[float]: ...
 def arange(start: int | float, stop: int | float | None = None,
-           step: int | float = 1) -> tensor[int] | tensor[float]:
+           step: int | float = 1) -> tensor[Any]:
     """Create a tensor with evenly spaced values.
 
     Arguments:
@@ -982,22 +1103,24 @@ def arange(start: int | float, stop: int | float | None = None,
         step: Step between values.
 
     Returns:
-        A 1D tensor.
+        A 1D tensor, of floats if any argument is a float.
     """
     if stop is None:
         stop = start
         start = 0
+    if any(isinstance(a, float) for a in (start, stop, step)):
+        start = float(start)
 
     # Determine type
-    values_list: list[value[Any]] = []
+    values_list: list[int | float] = []
     current = start
     if step > 0:
         while current < stop:
-            values_list.append(value(current))
+            values_list.append(current)
             current += step
     elif step < 0:
         while current > stop:
-            values_list.append(value(current))
+            values_list.append(current)
             current += step
     else:
         raise ValueError("step cannot be zero")
@@ -1018,14 +1141,11 @@ def eye(rows: int, cols: int | None = None) -> tensor[int]:
     if cols is None:
         cols = rows
 
-    values_list: list[value[int]] = []
+    values_list: list[int] = []
 
     for i in range(rows):
         for j in range(cols):
-            if i == j:
-                values_list.append(value(1))
-            else:
-                values_list.append(value(0))
+            values_list.append(1 if i == j else 0)
 
     return tensor(tuple(values_list), (rows, cols))
 
@@ -1064,8 +1184,8 @@ def diagonal(vec: tensor[Any] | vector[Any]) -> tensor[Any]:
     for i in range(size):
         for j in range(size):
             if i == j:
-                values_list.append(vec[i])
+                values_list.append(vec.values[i])
             else:
-                values_list.append(value(0))
+                values_list.append(0)
 
     return tensor(tuple(values_list), (size, size))

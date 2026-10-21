@@ -9,10 +9,19 @@ if not "%ARCH%"=="x86" ^
 if not "%ARCH%"=="arm64" ^
 if not "%ARCH%"=="arm-v6" ^
 if not "%ARCH%"=="arm-v7" ^
+if not "%ARCH%"=="arm-v7-thumb" ^
+if not "%ARCH%"=="arm-v7m-thumb" ^
+if not "%ARCH%"=="arm-v7m-thumb-fpv5" ^
+if not "%ARCH%"=="arm-v81m-thumb" ^
+if not "%ARCH%"=="riscv32" ^
+if not "%ARCH%"=="riscv64" ^
+if not "%ARCH%"=="tricore" ^
 if not "%ARCH%"=="all" (
-    echo Usage: %0 [x86_64^|x86^|arm64^|arm-v6^|arm-v7^|all]
+    echo Usage: %0 [x86_64^|x86^|arm64^|arm-v6^|arm-v7^|arm-v7-thumb^|arm-v7m-thumb^|arm-v7m-thumb-fpv5^|arm-v81m-thumb^|riscv32^|riscv64^|tricore^|all]
     exit /b 1
 )
+
+if "%CMSIS_DSP%"=="" set CMSIS_DSP=../CMSIS-DSP
 
 mkdir build\stencils
 mkdir build\runner
@@ -29,16 +38,22 @@ goto SKIP_X86_64
 :BUILD_X86_64
 echo -------------x86_64 - 64 bit-----------------
 
-call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64
+call "%~dp0vcvars.bat" x64
+if errorlevel 1 exit /b 1
 
 echo - Compile stencil test...
 cl /Zi /Od stencils\test.c /Fe:build\stencils\test.exe
 
-echo - Build runner for Windows 64 bit...
-cl /Zi /Od /DENABLE_BASIC_LOGGING ^
+echo - Build entry wrapper (reassemble from committed hex)...
+python tools\hexdump_annotated.py -r src\coparun\x86_64_abi_shim.hex build\runner\x86_64_abi_shim.obj
+
+echo - Compile and link runner...
+cl /Zi /O2 /DENABLE_LOGGING /Fobuild\runner\ ^
     src\coparun\runmem.c ^
+    src\coparun\tasks.c ^
     src\coparun\coparun.c ^
     src\coparun\mem_man.c ^
+    build\runner\x86_64_abi_shim.obj ^
     /Fe:build\runner\coparun.exe
 
 echo - Build stencils for x86_64...
@@ -58,18 +73,19 @@ goto SKIP_X86
 :BUILD_X86
 echo ---------------x86 - 32 bit----------------
 
-call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x86
+call "%~dp0vcvars.bat" x86
 
-echo - Build runner for Windows 32 bit...
-cl /Zi /Od /DENABLE_LOGGING ^
-    src\coparun\runmem.c ^
-    src\coparun\coparun.c ^
-    src\coparun\mem_man.c ^
-    /Fe:build\runner\coparun-x86.exe
+REM echo - Build runner for Windows 32 bit...
+REM cl /Zi /Od /DENABLE_LOGGING ^
+REM     src\coparun\runmem.c ^
+REM     src\coparun\tasks.c ^
+REM     src\coparun\coparun.c ^
+REM     src\coparun\mem_man.c ^
+REM     /Fe:build\runner\coparun-x86.exe
 
 echo - Build runner for Linux x86 32 bit...
 wsl i686-linux-gnu-gcc-12 -static -O3 -DENABLE_LOGGING ^
-    src/coparun/runmem.c ^
+    src/coparun/runmem.c src/coparun/tasks.c ^
     src/coparun/coparun.c ^
     src/coparun/mem_man.c ^
     -o build/runner/coparun-x86
@@ -97,7 +113,7 @@ wsl aarch64-linux-gnu-objdump -d -x src/copapy/obj/stencils_arm64_O3.o > build/s
 
 echo - Build runner for AArch64...
 wsl aarch64-linux-gnu-gcc-12 -static -O3 -DENABLE_LOGGING ^
-    src/coparun/runmem.c ^
+    src/coparun/runmem.c src/coparun/tasks.c ^
     src/coparun/coparun.c ^
     src/coparun/mem_man.c ^
     -o build/runner/coparun-aarch64
@@ -130,7 +146,7 @@ REM ARM v7
 REM ============================================================
 if "%ARCH%"=="arm-v7" goto BUILD_ARMV7
 if "%ARCH%"=="all"    goto BUILD_ARMV7
-goto END
+goto SKIP_ARMV7
 
 :BUILD_ARMV7
 echo --------------arm-v7 32 bit----------------
@@ -146,10 +162,193 @@ wsl arm-none-eabi-objdump -d -x src/copapy/obj/stencils_armv7_O3.o > build/stenc
 
 echo - Build runner for ARM v7...
 wsl arm-linux-gnueabihf-gcc -static -O3 -DENABLE_LOGGING ^
-    src/coparun/runmem.c ^
+    src/coparun/runmem.c src/coparun/tasks.c ^
     src/coparun/coparun.c ^
     src/coparun/mem_man.c ^
     -o build/runner/coparun-armv7
+
+:SKIP_ARMV7
+
+REM ============================================================
+REM ARM v7 thumb Cortex-A
+REM ============================================================
+if "%ARCH%"=="arm-v7-thumb" goto BUILD_ARMV7THUMB
+if "%ARCH%"=="all"          goto BUILD_ARMV7THUMB
+goto SKIP_ARMV7THUMB
+
+:BUILD_ARMV7THUMB
+echo --------------arm-v7a-thumb 32 bit----------------
+
+wsl arm-none-eabi-gcc -fno-pic -ffunction-sections -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -mthumb ^
+    -c build/stencils/stencils.c -O3 -o build/stencils/stencils.o
+
+wsl arm-none-eabi-ld -r build/stencils/stencils.o build/musl/musl_objects_armv7thumb.o ^
+    $(arm-none-eabi-gcc -march=armv7 -mfpu=vfp3 -mthumb -print-libgcc-file-name) ^
+    -o src/copapy/obj/stencils_armv7thumb_O3.o
+
+wsl arm-none-eabi-objdump -d -x src/copapy/obj/stencils_armv7thumb_O3.o > build/stencils/stencils_armv7thumb_O3.asm
+
+echo - Build runner for ARM v7 thumb...
+wsl arm-linux-gnueabihf-gcc -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -static -O3 -DENABLE_LOGGING ^
+    src/coparun/runmem.c src/coparun/tasks.c ^
+    src/coparun/coparun.c ^
+    src/coparun/mem_man.c ^
+    -o build/runner/coparun-armv7thumb
+
+:SKIP_ARMV7THUMB
+
+REM ============================================================
+REM ARM v7 thumb Cortex-M4 (FPv4-SP)
+REM ============================================================
+if "%ARCH%"=="arm-v7m-thumb" goto BUILD_ARMV7MTHUMB
+if "%ARCH%"=="all"           goto BUILD_ARMV7MTHUMB
+goto SKIP_ARMV7MTHUMB
+
+:BUILD_ARMV7MTHUMB
+echo --------------arm-v7m-thumb 32 bit----------------
+
+set ARM_FLAGS=-march=armv7e-m -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb
+
+wsl arm-none-eabi-gcc -fno-pic -ffunction-sections %ARM_FLAGS% ^
+    -c build/stencils/stencils.c -O3 -o build/stencils/stencils.o
+
+REM Math functions based on CMSIS-DSP, remaining functions from MUSL
+REM The CR characters of a Windows checkout are removed before the script is passed to bash
+wsl tr -d "\r" < tools\build_cmsis_libm.sh | wsl bash -s -- %CMSIS_DSP% ^
+    build/musl/musl_objects_armv7mthumb.o ^
+    build/stencils/math.o "%ARM_FLAGS%"
+if errorlevel 1 exit /b 1
+
+wsl arm-none-eabi-ld -r build/stencils/stencils.o build/stencils/math.o ^
+    $(arm-none-eabi-gcc %ARM_FLAGS% -print-libgcc-file-name) ^
+    -o src/copapy/obj/stencils_armv7mthumb_O3.o
+
+wsl arm-none-eabi-objdump -d -x src/copapy/obj/stencils_armv7mthumb_O3.o > build/stencils/stencils_armv7mthumb_O3.asm
+
+REM The same runner for all ARM7
+echo - Build runner for ARM v7 thumb...
+wsl arm-linux-gnueabihf-gcc -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -static -O3 -DENABLE_LOGGING ^
+    src/coparun/runmem.c src/coparun/tasks.c ^
+    src/coparun/coparun.c ^
+    src/coparun/mem_man.c ^
+    -o build/runner/coparun-armv7thumb
+
+:SKIP_ARMV7MTHUMB
+
+REM ============================================================
+REM ARM v7 thumb Cortex-M7 (FPv5-SP)
+REM ============================================================
+if "%ARCH%"=="arm-v7m-thumb-fpv5" goto BUILD_ARMV7MTHUMB_FPV5
+if "%ARCH%"=="all"                goto BUILD_ARMV7MTHUMB_FPV5
+goto SKIP_ARMV7MTHUMB_FPV5
+
+:BUILD_ARMV7MTHUMB_FPV5
+echo --------------arm-v7m-thumb-fpv5 32 bit----------------
+
+set ARM_FLAGS=-mcpu=cortex-m7 -mfpu=fpv5-sp-d16 -mfloat-abi=hard -mthumb
+
+wsl arm-none-eabi-gcc -fno-pic -ffunction-sections %ARM_FLAGS% ^
+    -c build/stencils/stencils.c -O3 -o build/stencils/stencils.o
+
+REM Math functions based on CMSIS-DSP, remaining functions from MUSL
+REM (the MUSL objects for FPv4-SP are compatible with FPv5-SP)
+REM The CR characters of a Windows checkout are removed before the script is passed to bash
+wsl tr -d "\r" < tools\build_cmsis_libm.sh | wsl bash -s -- %CMSIS_DSP% ^
+    build/musl/musl_objects_armv7mthumb.o ^
+    build/stencils/math.o "%ARM_FLAGS%"
+if errorlevel 1 exit /b 1
+
+wsl arm-none-eabi-ld -r build/stencils/stencils.o build/stencils/math.o ^
+    $(arm-none-eabi-gcc %ARM_FLAGS% -print-libgcc-file-name) ^
+    -o src/copapy/obj/stencils_armv7mthumb_fpv5_O3.o
+
+wsl arm-none-eabi-objdump -d -x src/copapy/obj/stencils_armv7mthumb_fpv5_O3.o > build/stencils/stencils_armv7mthumb_fpv5_O3.asm
+
+:SKIP_ARMV7MTHUMB_FPV5
+
+REM ============================================================
+REM ARM v8.1-M thumb Cortex-M55 and Cortex-M85 (Helium)
+REM ============================================================
+if "%ARCH%"=="arm-v81m-thumb" goto BUILD_ARMV81MTHUMB
+if "%ARCH%"=="all"            goto BUILD_ARMV81MTHUMB
+goto SKIP_ARMV81MTHUMB
+
+:BUILD_ARMV81MTHUMB
+echo --------------arm-v81m-thumb 32 bit----------------
+
+set ARM_FLAGS=-mcpu=cortex-m55 -mfloat-abi=hard -mthumb
+
+wsl arm-none-eabi-gcc -fno-pic -ffunction-sections %ARM_FLAGS% ^
+    -c build/stencils/stencils.c -O3 -o build/stencils/stencils.o
+
+wsl arm-none-eabi-ld -r build/stencils/stencils.o build/musl/musl_objects_armv81mthumb.o ^
+    $(arm-none-eabi-gcc %ARM_FLAGS% -print-libgcc-file-name) ^
+    -o src/copapy/obj/stencils_armv81mthumb_O3.o
+
+wsl arm-none-eabi-objdump -d -x src/copapy/obj/stencils_armv81mthumb_O3.o > build/stencils/stencils_armv81mthumb_O3.asm
+
+:SKIP_ARMV81MTHUMB
+
+REM ============================================================
+REM RISC-V 64-bit
+REM ============================================================
+if "%ARCH%"=="riscv64" goto BUILD_RISCV64
+if "%ARCH%"=="all"     goto BUILD_RISCV64
+goto SKIP_RISCV64
+
+:BUILD_RISCV64
+echo -----------riscv64 64 bit-------------
+REM -mcmodel=medany: PC relative addressing, code can be located anywhere in the 64 bit address space
+REM -mno-relax: no linker relaxation relocations
+
+wsl riscv64-linux-gnu-gcc-12 -fno-pic -ffunction-sections -mcmodel=medany -mno-relax -c build/stencils/stencils.c -O3 -o build/stencils/stencils.o
+wsl riscv64-linux-gnu-ld -r build/stencils/stencils.o build/musl/musl_objects_riscv64.o -o src/copapy/obj/stencils_riscv64_O3.o
+wsl riscv64-linux-gnu-objdump -d -x src/copapy/obj/stencils_riscv64_O3.o > build/stencils/stencils_riscv64_O3.asm
+
+echo - Build runner for RISC-V 64 bit...
+wsl riscv64-linux-gnu-gcc-12 -static -O3 -DENABLE_LOGGING ^
+    src/coparun/runmem.c src/coparun/tasks.c ^
+    src/coparun/coparun.c ^
+    src/coparun/mem_man.c ^
+    -o build/runner/coparun-riscv64
+
+:SKIP_RISCV64
+
+REM ============================================================
+REM RISC-V 32-bit
+REM ============================================================
+if "%ARCH%"=="riscv32" goto BUILD_RISCV32
+if "%ARCH%"=="all"     goto BUILD_RISCV32
+goto SKIP_RISCV32
+
+:BUILD_RISCV32
+echo -----------riscv32 32 bit-------------
+REM cross compiler: https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2026.04.26/riscv32-musl-ubuntu-22.04-gcc.tar.xz
+REM extracted to build/riscv_gcc
+
+wsl build/riscv_gcc/riscv/bin/riscv32-unknown-linux-musl-gcc -fno-pic -ffunction-sections -mcmodel=medany -mno-relax -c build/stencils/stencils.c -O3 -o build/stencils/stencils.o
+wsl build/riscv_gcc/riscv/bin/riscv32-unknown-linux-musl-ld -r build/stencils/stencils.o build/musl/musl_objects_riscv32.o -o src/copapy/obj/stencils_riscv32_O3.o
+wsl build/riscv_gcc/riscv/bin/riscv32-unknown-linux-musl-objdump -d -x src/copapy/obj/stencils_riscv32_O3.o > build/stencils/stencils_riscv32_O3.asm
+
+echo - Build runner for RISC-V 32 bit...
+wsl build/riscv_gcc/riscv/bin/riscv32-unknown-linux-musl-gcc -static -O3 -DENABLE_LOGGING ^
+    src/coparun/runmem.c src/coparun/tasks.c ^
+    src/coparun/coparun.c ^
+    src/coparun/mem_man.c ^
+    -o build/runner/coparun-riscv32
+
+:SKIP_RISCV32
+
+REM ============================================================
+REM TriCore
+REM ============================================================
+if "%ARCH%"=="tricore" goto BUILD_TRICORE
+if "%ARCH%"=="all"     goto BUILD_TRICORE
+goto END
+
+:BUILD_TRICORE
+REM Stencils and bare metal runner for qemu-system-tricore, toolchain in /opt/tricore in WSL
+wsl bash tools/tricore/build.sh all
 
 :END
 echo Build completed for %ARCH%

@@ -1,3 +1,13 @@
 html[data-theme="dark"] .bd-content img {
   background-color: transparent !important;
 }
+/* Calls to auxiliary functions in the stencil listings */
+.highlight a.aux-call {
+  color: var(--pst-color-link);
+  font-weight: 600;
+  text-decoration: underline dotted;
+}
+
+.highlight a.aux-call:hover {
+  text-decoration: underline solid;
+}

@@ -3,7 +3,7 @@ from ._mixed import mixed_sum, mixed_homogenize
 from typing import Sequence, TypeVar, Iterable, Any, overload, TypeAlias, Callable, Iterator
 import copapy as cp
 from ._helper_types import TNum
-from ._basic_types import ArrayType
+from ._arrays import ArrayType, array
 
 #VecNumLike: TypeAlias = 'vector[int] | vector[float] | value[int] | value[float] | int | float | bool'
 VecNumLike: TypeAlias = 'vector[Any] | value[Any] | int | float | bool'
@@ -16,21 +16,28 @@ epsilon = 1e-20
 
 class vector(ArrayType[TNum]):
     """Mathematical vector class supporting basic operations and interactions with values.
-
-    Attributes:
-        values (tuple[value[TNum] | TNum, ...]): The elements of the vector.
-        ndim (int): Number of dimensions (always 1 for vector).
-        shape (tuple[int, ...]): Shape of the vector as a tuple.
+    A vector has one dimension: ndim is 1 and shape is (number of elements,).
     """
-    def __init__(self, values: Iterable[TNum | value[TNum]]):
+
+    pack_threshold: int | None = 64
+
+    def __init__(self, values: 'Iterable[TNum | value[TNum]] | array[TNum]', packed: bool | None = None):
         """Create a vector with given values.
 
         Arguments:
-            values: iterable of constant values
+            values: iterable of constant values or a 1D array (its memory
+                is used by the vector without copying)
+            packed: True to always use array stencils for this vector, False to never
+                use them, None to decide by vector.pack_threshold.
         """
-        self.values: tuple[value[TNum] | TNum, ...] = tuple(values)
-        self.ndim: int = 1
-        self.shape: tuple[int, ...] = (len(self.values),)
+        if isinstance(values, array):
+            if values.ndim != 1:
+                raise ValueError(f"A vector requires a 1D array, got shape {values.shape}")
+            self._init_from_array(values, packed)
+            return
+        # 0-d tensors (e.g. from iterating a 1D tensor) are unwrapped to their scalar
+        elements = tuple(v.values[0] if isinstance(v, ArrayType) and not v.shape else v for v in values)
+        self._set_elements(elements, (len(elements),), packed)
 
     def __repr__(self) -> str:
         return f"vector({self.values})"
@@ -41,13 +48,27 @@ class vector(ArrayType[TNum]):
     @overload
     def __getitem__(self, index: int) -> value[TNum] | TNum: ...
     @overload
+    def __getitem__(self, index: value[int]) -> value[TNum]: ...
+    @overload
     def __getitem__(self, index: slice) -> 'vector[TNum]': ...
-    def __getitem__(self, index: int | slice) -> 'vector[TNum] | value[TNum] | TNum':
+    def __getitem__(self, index: int | value[int] | slice) -> 'vector[TNum] | value[TNum] | TNum':
+        """Element by an int or a copapy value (computed at runtime, clamped to
+        the valid range, negative counted from the end) or a sub-vector by a slice"""
+        if isinstance(index, value):
+            element = self._force_array()[index]
+            assert isinstance(element, value)  # A vector has one dimension
+            return element
         if isinstance(index, slice):
+            arr = self._view_array()
+            if arr is not None:
+                return vector._from_array(arr[index])
             return vector(self.values[index])
         return self.values[index]
 
     def __neg__(self) -> 'vector[TNum]':
+        arr = None if self._is_constant() else self._get_array()
+        if arr is not None:
+            return vector._from_array(-arr)
         return vector(-a for a in self.values)
 
     def __iter__(self) -> Iterator[value[TNum] | TNum]:
@@ -65,138 +86,162 @@ class vector(ArrayType[TNum]):
         return self.values[index]
 
     @overload
-    def __add__(self: 'vector[int]', other: VecFloatLike) -> 'vector[float]': ...
-    @overload
     def __add__(self: 'vector[int]', other: VecIntLike) -> 'vector[int]': ...
+    @overload
+    def __add__(self: 'vector[int]', other: VecFloatLike) -> 'vector[float]': ...
     @overload
     def __add__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
     @overload
-    def __add__(self, other: VecNumLike) -> 'vector[int] | vector[float]': ...
+    def __add__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __add__(self, other: VecNumLike) -> Any:
+        if isinstance(other, cp.tensor):
+            return NotImplemented
+        ret = self._try_array_op(other, 'add')
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a + b for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(a + other for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
-        return vector(a + o if isinstance(a, value) else a + other for a in self.values)
+        return vector(a + other for a in self.values)
 
     @overload
-    def __radd__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
-    @overload
     def __radd__(self: 'vector[int]', other: value[int] | int) -> 'vector[int]': ...
+    @overload
+    def __radd__(self, other: value[float] | float) -> 'vector[float]': ...
+    @overload
+    def __radd__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
     @overload
     def __radd__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __radd__(self, other: Any) -> Any:
         return self + other
 
     @overload
-    def __sub__(self: 'vector[int]', other: VecFloatLike) -> 'vector[float]': ...
-    @overload
     def __sub__(self: 'vector[int]', other: VecIntLike) -> 'vector[int]': ...
+    @overload
+    def __sub__(self: 'vector[int]', other: VecFloatLike) -> 'vector[float]': ...
     @overload
     def __sub__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
     @overload
-    def __sub__(self, other: VecNumLike) -> 'vector[int] | vector[float]': ...
+    def __sub__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __sub__(self, other: VecNumLike) -> Any:
+        if isinstance(other, cp.tensor):
+            return NotImplemented
+        ret = self._try_array_op(other, 'sub')
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a - b for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(a - other for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
-        return vector(a - o if isinstance(a, value) else a - other for a in self.values)
+        return vector(a - other for a in self.values)
 
-    @overload
-    def __rsub__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
     @overload
     def __rsub__(self: 'vector[int]', other: value[int] | int) -> 'vector[int]': ...
     @overload
+    def __rsub__(self, other: value[float] | float) -> 'vector[float]': ...
+    @overload
+    def __rsub__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
+    @overload
     def __rsub__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __rsub__(self, other: VecNumLike) -> Any:
+        if isinstance(other, cp.tensor):
+            return NotImplemented
+        ret = self._try_array_op(other, 'sub', reverse=True)
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(b - a for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(other - a for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
-        return vector(o - a if isinstance(a, value) else other - a for a in self.values)
+        return vector(other - a for a in self.values)
 
-    @overload
-    def __mul__(self: 'vector[int]', other: VecFloatLike) -> 'vector[float]': ...
     @overload
     def __mul__(self: 'vector[int]', other: VecIntLike) -> 'vector[int]': ...
     @overload
+    def __mul__(self: 'vector[int]', other: VecFloatLike) -> 'vector[float]': ...
+    @overload
     def __mul__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
     @overload
-    def __mul__(self, other: VecNumLike) -> 'vector[int] | vector[float]': ...
+    def __mul__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __mul__(self, other: VecNumLike) -> Any:
+        if isinstance(other, cp.tensor):
+            return NotImplemented
+        ret = self._try_array_op(other, 'mul')
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a * b for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(a * other for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
-        return vector(a * o if isinstance(a, value) else a * other for a in self.values)
+        return vector(a * other for a in self.values)
 
     @overload
-    def __rmul__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
-    @overload
     def __rmul__(self: 'vector[int]', other: value[int] | int) -> 'vector[int]': ...
+    @overload
+    def __rmul__(self, other: value[float] | float) -> 'vector[float]': ...
+    @overload
+    def __rmul__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
     @overload
     def __rmul__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __rmul__(self, other: VecNumLike) -> Any:
         return self * other
 
     @overload
-    def __pow__(self: 'vector[int]', other: VecFloatLike) -> 'vector[float]': ...
-    @overload
     def __pow__(self: 'vector[int]', other: VecIntLike) -> 'vector[int]': ...
+    @overload
+    def __pow__(self: 'vector[int]', other: VecFloatLike) -> 'vector[float]': ...
     @overload
     def __pow__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
     @overload
-    def __pow__(self, other: VecNumLike) -> 'vector[int] | vector[float]': ...
+    def __pow__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __pow__(self, other: VecNumLike) -> Any:
+        if isinstance(other, cp.tensor):
+            return NotImplemented
+        ret = self._try_array_op(other, 'pow')
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a ** b for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(a ** other for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
-        return vector(a ** o if isinstance(a, value) else a ** other for a in self.values)
+        return vector(a ** other for a in self.values)
 
-    @overload
-    def __rpow__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
     @overload
     def __rpow__(self: 'vector[int]', other: value[int] | int) -> 'vector[int]': ...
     @overload
+    def __rpow__(self, other: value[float] | float) -> 'vector[float]': ...
+    @overload
+    def __rpow__(self: 'vector[float]', other: VecNumLike) -> 'vector[float]': ...
+    @overload
     def __rpow__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __rpow__(self, other: VecNumLike) -> Any:
+        if isinstance(other, cp.tensor):
+            return NotImplemented
+        ret = self._try_array_op(other, 'pow', reverse=True)
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(b ** a for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(other ** a for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
-        return vector(o ** a if isinstance(a, value) else other ** a for a in self.values)
+        return vector(other ** a for a in self.values)
 
     def __truediv__(self, other: VecNumLike) -> 'vector[float]':
+        if isinstance(other, cp.tensor):
+            return NotImplemented
+        ret: 'vector[Any] | None' = self._try_array_op(other, 'div')
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a / b for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(a / other for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
-        return vector(a / o if isinstance(a, value) else a / other for a in self.values)
+        return vector(a / other for a in self.values)
 
     def __rtruediv__(self, other: VecNumLike) -> 'vector[float]':
+        if isinstance(other, cp.tensor):
+            return NotImplemented
+        ret: 'vector[Any] | None' = self._try_array_op(other, 'div', reverse=True)
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(b / a for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(other / a for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
-        return vector(o / a if isinstance(a, value) else other / a for a in self.values)
+        return vector(other / a for a in self.values)
 
     @overload
     def dot(self: 'vector[int]', other: 'vector[int]') -> int | value[int]: ...
@@ -216,6 +261,13 @@ class vector(ArrayType[TNum]):
             The dot product as a scalar value.
         """
         assert len(self.values) == len(other.values), "Vectors must be of same length."
+        if not (self._is_constant() and other._is_constant()):
+            a, b = self._get_array(), other._get_array()
+            if a is not None or b is not None:
+                a = a if a is not None else self._get_array(force=True)
+                b = b if b is not None else other._get_array(force=True)
+                if a is not None and b is not None:
+                    return a.dot(b)
         return mixed_sum(a * b for a, b in zip(self.values, other.values))
 
     # @ operator
@@ -227,7 +279,19 @@ class vector(ArrayType[TNum]):
     def __matmul__(self: 'vector[float]', other: 'vector[int] | vector[float]') -> float | value[float]: ...
     @overload
     def __matmul__(self, other: 'vector[int] | vector[float]') -> float | int | value[float] | value[int]: ...
-    def __matmul__(self, other: 'vector[int] | vector[float]') -> Any:
+    @overload
+    def __matmul__(self: 'vector[int]', other: 'cp.tensor[int]') -> 'vector[int]': ...
+    @overload
+    def __matmul__(self, other: 'cp.tensor[float]') -> 'vector[float]': ...
+    @overload
+    def __matmul__(self: 'vector[float]', other: 'cp.tensor[int] | cp.tensor[float]') -> 'vector[float]': ...
+    def __matmul__(self, other: 'vector[Any] | cp.tensor[Any]') -> Any:
+        """Dot product with a vector, row vector times matrix with a 2D tensor"""
+        if isinstance(other, cp.tensor):
+            if other.ndim != 2:
+                raise ValueError(f"vector @ tensor requires a 2D tensor, not {other.ndim}D (use dot for 1D)")
+            from ._tensors import _to_vector
+            return _to_vector(cp.tensor(self).matmul(other))
         return self.dot(other)
 
     def cross(self: 'vector[float]', other: 'vector[float]') -> 'vector[float]':
@@ -249,58 +313,70 @@ class vector(ArrayType[TNum]):
         ])
 
     def __gt__(self, other: VecNumLike) -> 'vector[int]':
+        if isinstance(other, cp.tensor):
+            return NotImplemented
+        ret: 'vector[Any] | None' = self._try_array_op(other, 'gt')
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a > b for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(a > other for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
-        return vector(a > o if isinstance(a, value) else a > other for a in self.values)
+        return vector(a > other for a in self.values)
 
     def __lt__(self, other: VecNumLike) -> 'vector[int]':
+        if isinstance(other, cp.tensor):
+            return NotImplemented
+        ret: 'vector[Any] | None' = self._try_array_op(other, 'gt', reverse=True)
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a < b for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(a < other for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
-        return vector(a < o if isinstance(a, value) else a < other for a in self.values)
+        return vector(a < other for a in self.values)
 
     def __ge__(self, other: VecNumLike) -> 'vector[int]':
+        if isinstance(other, cp.tensor):
+            return NotImplemented
+        ret: 'vector[Any] | None' = self._try_array_op(other, 'ge')
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a >= b for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(a >= other for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
-        return vector(a >= o if isinstance(a, value) else a >= other for a in self.values)
+        return vector(a >= other for a in self.values)
 
     def __le__(self, other: VecNumLike) -> 'vector[int]':
+        if isinstance(other, cp.tensor):
+            return NotImplemented
+        ret: 'vector[Any] | None' = self._try_array_op(other, 'ge', reverse=True)
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a <= b for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(a <= other for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
-        return vector(a <= o if isinstance(a, value) else a <= other for a in self.values)
+        return vector(a <= other for a in self.values)
 
     def __eq__(self, other: VecNumLike | Sequence[int | float]) -> 'vector[int]':  # type: ignore
+        if isinstance(other, cp.tensor):
+            return NotImplemented
+        ret: 'vector[Any] | None' = None if isinstance(other, Sequence) else self._try_array_op(other, 'eq')
+        if ret is not None:
+            return ret
         if isinstance(other, vector | Sequence):
             assert len(self) == len(other)
             return vector(a == b for a, b in zip(self.values, other))
-        if isinstance(other, value):
-            return vector(a == other for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
-        return vector(a == o if isinstance(a, value) else a == other for a in self.values)
+        return vector(a == other for a in self.values)
 
     def __ne__(self, other: VecNumLike) -> 'vector[int]':  # type: ignore
+        if isinstance(other, cp.tensor):
+            return NotImplemented
+        ret: 'vector[Any] | None' = self._try_array_op(other, 'ne')
+        if ret is not None:
+            return ret
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(a != b for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(a != other for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
-        return vector(a != o if isinstance(a, value) else a != other for a in self.values)
+        return vector(a != other for a in self.values)
 
 
     @overload
@@ -313,6 +389,9 @@ class vector(ArrayType[TNum]):
         Returns:
             The sum of all vector elements as a scalar value.
         """
+        arr = None if self._is_constant() else self._get_array()
+        if arr is not None:
+            return arr.sum()
         return mixed_sum(self.values)
 
     def magnitude(self) -> 'float | value[float]':
@@ -321,8 +400,7 @@ class vector(ArrayType[TNum]):
         Returns:
             The magnitude of the vector as a scalar value.
         """
-        s = mixed_sum(a * a for a in self.values)
-        return cp.sqrt(s)
+        return cp.sqrt(self.dot(self))
 
     def normalize(self) -> 'vector[float]':
         """Calculate a normalized (unit length) version of the vector.
@@ -359,13 +437,10 @@ class vector(ArrayType[TNum]):
         if isinstance(other, vector):
             assert len(self.values) == len(other.values)
             return vector(func(a, b) for a, b in zip(self.values, other.values))
-        if isinstance(other, value):
-            return vector(func(a, other) for a in self.values)
-        o = value(other)  # Make sure a single constant is allocated
-        return vector(func(a, o) if isinstance(a, value) else a + other for a in self.values)
+        return vector(func(a, other) for a in self.values)
 
 
-def cross_product(v1: vector[float], v2: vector[float]) -> vector[float]:
+def cross(v1: vector[float], v2: vector[float]) -> vector[float]:
     """Calculate the cross product of two 3D vectors.
 
     Arguments:
@@ -378,7 +453,7 @@ def cross_product(v1: vector[float], v2: vector[float]) -> vector[float]:
     return v1.cross(v2)
 
 
-def dot_product(v1: vector[float], v2: vector[float]) -> 'float | value[float]':
+def dot(v1: vector[float], v2: vector[float]) -> 'float | value[float]':
     """Calculate the dot product of two vectors.
 
     Arguments:

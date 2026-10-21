@@ -2,6 +2,10 @@ import re
 from pathlib import Path
 import glob
 import argparse
+from docutils.nodes import make_id
+from pygments import highlight
+from pygments.lexers import get_lexer_by_name
+from pygments.formatters import HtmlFormatter
 
 def extract_c_functions(stencils_path: str) -> dict[str, str]:
     """
@@ -16,24 +20,57 @@ def extract_c_functions(stencils_path: str) -> dict[str, str]:
     with open(stencils_path, 'r') as f:
         content = f.read()
 
-    # Regex pattern to match C functions
-    # Matches: return_type function_name(parameters) { ... }
-    pattern = r'((?:STENCIL\s+extern|void|int|float|double)\s+\w+\s*\([^)]*\)\s*\{(?:[^{}]|\{[^{}]*\})*\})'
+    # Function header at the start of a line: [qualifiers] return_type name(parameters) {
+    header_pattern = r'^[A-Za-z_][^\n;{}#=]*?\b(\w+)\s*\([^;{}]*\)\s*\{'
 
     functions: dict[str, str] = {}
 
-    # Find all function matches
-    for match in re.finditer(pattern, content, re.MULTILINE | re.DOTALL):
-        func_code = match.group(1).strip()
-
-        # Extract function name using a simpler regex on the matched code
-        name_match = re.search(r'(?:STENCIL\s+extern)?\s*(?:void|int|float|double)?\s*(\w+)\s*\(', func_code)
-
-        if name_match:
-            func_name = name_match.group(1)
-            functions[func_name] = func_code
+    for match in re.finditer(header_pattern, content, re.MULTILINE):
+        end = find_block_end(content, match.end())
+        if end > 0:
+            functions[match.group(1)] = content[match.start():end]
 
     return functions
+
+
+def find_block_end(code: str, pos: int) -> int:
+    """
+    Find the end of a C block by counting braces, ignoring braces in
+    comments, string and character literals.
+
+    Args:
+        code: C source code
+        pos: Position directly after the opening brace of the block
+
+    Returns:
+        Position after the closing brace, -1 if the block is not closed
+    """
+    token_pattern = re.compile(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|[{}]', re.DOTALL)
+    depth = 1
+    for token in token_pattern.finditer(code, pos):
+        if token.group() == '{':
+            depth += 1
+        elif token.group() == '}':
+            depth -= 1
+            if depth == 0:
+                return token.end()
+    return -1
+
+
+def extract_stencil_names(stencils_path: str) -> set[str]:
+    """
+    Extract the names of all functions declared with the STENCIL macro.
+
+    Args:
+        stencils_path: Path to the stencils.c file
+
+    Returns:
+        Set of stencil function names
+    """
+    with open(stencils_path, 'r') as f:
+        content = f.read()
+
+    return set(re.findall(r'^.*\bSTENCIL\b[^(\n]*?(\w+)\s*\(', content, re.MULTILINE))
 
 
 def extract_asm_section(asm_path: str) -> dict[str, str]:
@@ -91,6 +128,84 @@ def build_asm_code_dict(asm_glob_pattern: str) -> dict[str, dict[str, str]]:
     return asm_code
 
 
+# Category key and page title; each key needs a matching stencil_doc_<key>.md page
+CATEGORIES: list[tuple[str, str]] = [
+    ('load_store', 'Load and store stencils'),
+    ('conversion', 'Conversion and copy stencils'),
+    ('scalar_arith', 'Scalar arithmetic and logic stencils'),
+    ('scalar_math', 'Scalar math stencils'),
+    ('array_elementwise', 'Array element-wise stencils'),
+    ('array_linalg', 'Array reduction and linear algebra stencils'),
+    ('aux', 'Auxiliary functions'),
+]
+
+LOAD_STORE_OPS = {'load', 'store'}
+CONVERSION_OPS = {'float', 'int', 'bool', 'byte', 'copy32', 'copy8', 'roll32', 'put32'}
+SCALAR_MATH_OPS = {'sqrt', 'exp', 'log', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan',
+                   'atan2', 'tanh', 'pow'}
+ARRAY_LINALG_OPS = {'dot', 'matvec', 'matmul', 'solve', 'det', 'lerp', 'bsearch', 'conv2d',
+                    'maxpool2d', 'avgpool2d', 'sum', 'sumaxis', 'sort', 'argsort'}
+ARRAY_REDUCTION_OPS = {'min', 'max'}  # Reductions if called with a single array argument
+
+
+def get_category(func_name: str, stencil_names: set[str]) -> str:
+    """
+    Determine the documentation category of a function by its name.
+
+    Args:
+        func_name: Function name, e.g. "add_floatarr_float"
+        stencil_names: Names of all STENCIL functions; others are auxiliary functions
+
+    Returns:
+        Category key from CATEGORIES
+    """
+    if func_name not in stencil_names:
+        return 'aux'
+
+    op, *arg_types = func_name.split('_')
+    is_array = any(t.endswith('arr') for t in arg_types)
+
+    if op in LOAD_STORE_OPS:
+        return 'load_store'
+    if op in CONVERSION_OPS:
+        return 'conversion'
+    if is_array:
+        if op in ARRAY_LINALG_OPS or (op in ARRAY_REDUCTION_OPS and len(arg_types) == 1):
+            return 'array_linalg'
+        return 'array_elementwise'
+    if op in SCALAR_MATH_OPS:
+        return 'scalar_math'
+    return 'scalar_arith'
+
+
+def highlight_code(code: str, language: str, link_names: list[str]) -> str:
+    """
+    Syntax highlight code as a raw HTML block in which all references to the
+    given auxiliary functions link to their entry on the auxiliary functions page.
+
+    Args:
+        code: Source or disassembly code
+        language: Pygments lexer name, e.g. "c" or "objdump"
+        link_names: Names of the auxiliary functions to link
+
+    Returns:
+        MyST raw HTML block with the same markup Sphinx uses for code blocks
+    """
+    html_code = highlight(code, get_lexer_by_name(language), HtmlFormatter(nowrap=True))
+
+    if link_names:
+        # Longest names first, so that e.g. aux_arr_sum_int is not matched as aux_arr_sum
+        names = sorted(link_names, key=len, reverse=True)
+        pattern = r'(?<!\w)(' + '|'.join(re.escape(n) for n in names) + r')(?!\w)'
+        html_code = re.sub(
+            pattern,
+            lambda m: f'<a class="aux-call" href="stencil_doc_aux.html#{make_id(m.group(1))}">{m.group(1)}</a>',
+            html_code)
+
+    return (f'````{{raw}} html\n<div class="highlight-{language} notranslate"><div class="highlight">'
+            f'<pre>{html_code}</pre></div></div>\n````')
+
+
 # Example usage:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate stencils documentation from C and assembly code")
@@ -102,42 +217,47 @@ if __name__ == "__main__":
 
     # Get all C functions
     functions = extract_c_functions(args.input)
+    stencil_names = extract_stencil_names(args.input)
 
     # Build assembly code dictionary for all architectures
     asm_code = build_asm_code_dict(args.asm_pattern)
+
+    documented = [name for name in functions if 'get_42' not in name]
+    aux_names = [name for name in documented if get_category(name, stencil_names) == 'aux']
 
     #@norm_indent
     def get_stencil_section(func_name: str) -> str:
         c_code = functions[func_name]
         section_name = '.text.' + func_name
+        link_names = [name for name in aux_names if name != func_name]
 
         arch_asm_code = ''
         for arch in sorted(asm_code.keys()):
             if section_name in asm_code[arch]:
                 arch_asm_code += f"""
 ### {arch}
-```nasm
-{asm_code[arch][section_name]}
-```
+{highlight_code(asm_code[arch][section_name], 'objdump', link_names)}
 """
             else:
                 arch_asm_code += f"\n### {arch}\nNo assembly found for this architecture\n"
 
         return f"""
 ## {func_name}
-```c
-{c_code}
-```
+{highlight_code(c_code, 'c', link_names)}
 {arch_asm_code}
 """
 
-    md_code: str = ''
+    category_md: dict[str, str] = {key: '' for key, _ in CATEGORIES}
 
-    for function_name, code in functions.items():
-        if 'get_42' not in function_name and not function_name.startswith('cast_'):
-            md_code += get_stencil_section(function_name)
+    for function_name in documented:
+        category_md[get_category(function_name, stencil_names)] += get_stencil_section(function_name)
 
-    with open(args.output, 'wt') as f:
-        f.write(md_code)
+    # One file per category: <output stem>_<category key><output suffix>
+    output_path = Path(args.output)
+    for key, title in CATEGORIES:
+        category_path = output_path.with_name(f"{output_path.stem}_{key}{output_path.suffix}")
+        with open(category_path, 'wt') as f:
+            f.write(category_md[key])
+        print(f"Generated {category_path} ({title})")
 
-    print(f"Generated {args.output} with {len(functions)} stencil functions")
+    print(f"Generated documentation for {len(functions)} stencil functions")

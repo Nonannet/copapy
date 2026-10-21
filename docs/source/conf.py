@@ -11,7 +11,7 @@ import sys
 sys.path.insert(0, os.path.abspath("../src/"))
 
 project = 'copapy'
-copyright = '2025, Nicolas Kruse'
+copyright = '2026, Nicolas Kruse'
 author = 'Nicolas Kruse'
 
 # -- General configuration ---------------------------------------------------
@@ -41,3 +41,6 @@ html_theme_options["footer_end"] = []
 
 autodoc_inherit_docstrings = True
 autoclass_content = 'both'
+
+# Prevent warning noise for the syntax highlighting.
+suppress_warnings = ['misc.highlighting_failure']

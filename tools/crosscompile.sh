@@ -6,9 +6,11 @@ set -v
 mkdir -p build/stencils
 SRC=build/stencils/stencils.c
 STMP=build/stencils/stencils.o
+MTMP=build/stencils/math.o
 DEST=src/copapy/obj
 OPT=O3
 FLAGS="-fno-pic -ffunction-sections"
+CMSIS_DSP=${CMSIS_DSP:-/opt/CMSIS-DSP}
 
 mkdir -p $DEST
 
@@ -46,10 +48,26 @@ arm-none-eabi-gcc -march=armv7-a -mfpu=neon-vfpv3 -mfloat-abi=hard -mthumb $FLAG
 LIBGCC=$(arm-none-eabi-gcc -march=armv7 -mfpu=vfp3 -mthumb -print-libgcc-file-name)
 arm-none-eabi-ld -r $STMP /object_files/musl_objects_armv7thumb.o $LIBGCC -o $DEST/stencils_armv7thumb_$OPT.o
 
-# Armv7 Thumb for Cortex-M3..7 hardware fp
-arm-none-eabi-gcc -march=armv7e-m -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb $FLAGS -$OPT -c $SRC -o $STMP
-LIBGCC=$(arm-none-eabi-gcc -march=armv7e-m -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -print-libgcc-file-name)
-arm-none-eabi-ld -r $STMP /object_files/musl_objects_armv7mthumb.o $LIBGCC -o $DEST/stencils_armv7mthumb_$OPT.o
+# Armv7 Thumb for Cortex-M4 hardware fp (FPv4-SP), math functions based on CMSIS-DSP
+ARM_FLAGS="-march=armv7e-m -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb"
+arm-none-eabi-gcc $ARM_FLAGS $FLAGS -$OPT -c $SRC -o $STMP
+LIBGCC=$(arm-none-eabi-gcc $ARM_FLAGS -print-libgcc-file-name)
+bash tools/build_cmsis_libm.sh $CMSIS_DSP /object_files/musl_objects_armv7mthumb.o $MTMP "$ARM_FLAGS"
+arm-none-eabi-ld -r $STMP $MTMP $LIBGCC -o $DEST/stencils_armv7mthumb_$OPT.o
+
+# Armv7 Thumb for Cortex-M7 hardware fp (FPv5-SP), math functions based on CMSIS-DSP
+# The MUSL objects for FPv4-SP are used, they are compatible with FPv5-SP
+ARM_FLAGS="-mcpu=cortex-m7 -mfpu=fpv5-sp-d16 -mfloat-abi=hard -mthumb"
+arm-none-eabi-gcc $ARM_FLAGS $FLAGS -$OPT -c $SRC -o $STMP
+LIBGCC=$(arm-none-eabi-gcc $ARM_FLAGS -print-libgcc-file-name)
+bash tools/build_cmsis_libm.sh $CMSIS_DSP /object_files/musl_objects_armv7mthumb.o $MTMP "$ARM_FLAGS"
+arm-none-eabi-ld -r $STMP $MTMP $LIBGCC -o $DEST/stencils_armv7mthumb_fpv5_$OPT.o
+
+# Armv8.1-M Thumb for Cortex-M55 and Cortex-M85 with Helium (MVE) and double precision FPU
+ARM_FLAGS="-mcpu=cortex-m55 -mfloat-abi=hard -mthumb"
+arm-none-eabi-gcc $ARM_FLAGS $FLAGS -$OPT -c $SRC -o $STMP
+LIBGCC=$(arm-none-eabi-gcc $ARM_FLAGS -print-libgcc-file-name)
+arm-none-eabi-ld -r $STMP /object_files/musl_objects_armv81mthumb.o $LIBGCC -o $DEST/stencils_armv81mthumb_$OPT.o
 
 # PowerPC64LE
 # powerpc64le-linux-gnu-gcc-13 $FLAGS -$OPT -c $SRC -o $DEST/stencils_ppc64le_$OPT.o
@@ -63,8 +81,17 @@ arm-none-eabi-ld -r $STMP /object_files/musl_objects_armv7mthumb.o $LIBGCC -o $D
 # Mips (Little Endian)
 #mipsel-linux-gnu-gcc-13 $FLAGS -$OPT -c $SRC -o $DEST/stencils_mipsel_$OPT.o
 
-# RISCV 32 Bit
-# riscv64-linux-gnu-gcc-13 $FLAGS -$OPT -march=rv32imac -mabi=ilp32 -c $SRC -o $DEST/stencils_riscv_$OPT.o
+# RISC-V: -mcmodel=medany for PC relative addressing (code can be located anywhere
+# in the address space), -mno-relax to avoid linker relaxation relocations
+RISCV_FLAGS="-mcmodel=medany -mno-relax"
 
-# RISCV 64 Bit
-#riscv64-linux-gnu-gcc-13 $FLAGS -$OPT -c $SRC -o $DEST/stencils_riscv64_$OPT.o
+# RISC-V 32 Bit
+riscv32-unknown-linux-musl-gcc $FLAGS $RISCV_FLAGS -$OPT -c $SRC -o $STMP
+riscv32-unknown-linux-musl-ld -r $STMP /object_files/musl_objects_riscv32.o -o $DEST/stencils_riscv32_$OPT.o
+
+# RISC-V 64 Bit
+riscv64-linux-gnu-gcc-13 $FLAGS $RISCV_FLAGS -$OPT -c $SRC -o $STMP
+riscv64-linux-gnu-ld -r $STMP /object_files/musl_objects_riscv64.o -o $DEST/stencils_riscv64_$OPT.o
+
+# TriCore (AURIX TC2xx), math functions from newlib
+bash tools/tricore/build.sh stencils

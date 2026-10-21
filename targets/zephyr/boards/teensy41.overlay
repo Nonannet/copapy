@@ -1,0 +1,132 @@
+/*
+ * The runner communicates over USB (CDC ACM), the Zephyr console stays on
+ * LPUART6 (Teensy pins 0 and 1).
+ */
+
+#include <zephyr/dt-bindings/gpio/gpio.h>
+#include <zephyr/dt-bindings/pwm/pwm.h>
+
+/ {
+	chosen {
+		coparun,uart = &coparun_cdc_acm_uart;
+	};
+
+	/* I/O channels for copapy (see dts/bindings/copapy,io-channels.yaml),
+	 * named by Teensy pin numbers. Pins 0/1 are the console, 22/23 CAN. */
+	copapy_io {
+		compatible = "copapy,io-channels";
+
+		led {
+			gpios = <&gpio2 3 GPIO_ACTIVE_HIGH>;    /* pin 13, GPIO_B0_03 */
+			output;
+		};
+		d10 {
+			gpios = <&gpio2 0 GPIO_ACTIVE_HIGH>;    /* GPIO_B0_00 */
+			output;
+		};
+		d11 {
+			gpios = <&gpio2 2 GPIO_ACTIVE_HIGH>;    /* GPIO_B0_02 */
+			output;
+		};
+		d12 {
+			gpios = <&gpio2 1 GPIO_ACTIVE_HIGH>;    /* GPIO_B0_01 */
+			output;
+		};
+		d24 {
+			gpios = <&gpio1 12 (GPIO_ACTIVE_HIGH | GPIO_PULL_UP)>;  /* GPIO_AD_B0_12 */
+		};
+		d25 {
+			gpios = <&gpio1 13 (GPIO_ACTIVE_HIGH | GPIO_PULL_UP)>;  /* GPIO_AD_B0_13 */
+		};
+		pwm2 {
+			pwms = <&flexpwm4_pwm2 0 PWM_USEC(50) PWM_POLARITY_NORMAL>;  /* 20 kHz */
+		};
+		pwm3 {
+			pwms = <&flexpwm4_pwm2 1 PWM_USEC(50) PWM_POLARITY_NORMAL>;
+		};
+		enc0 {
+			encoder = <&qdec1>;                      /* phase A pin 8, B pin 7 */
+		};
+		a0 {
+			io-channels = <&adc1 7>;                 /* pin 14 */
+		};
+		a1 {
+			io-channels = <&adc1 8>;                 /* pin 15 */
+		};
+	};
+};
+
+&zephyr_udc0 {
+	coparun_cdc_acm_uart: coparun_cdc_acm_uart {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};
+
+/* PWM pins 2 (A) and 3 (B): FlexPWM4 submodule 2 at full clock (150 MHz,
+ * 7500 steps at 20 kHz) */
+&flexpwm4_pwm2 {
+	status = "okay";
+	pinctrl-0 = <&pinmux_flexpwm4_pwm2>;
+	pinctrl-names = "default";
+	nxp,prescaler = <1>;
+};
+
+/* Quadrature decoder ENC1, inputs through the crossbar */
+&qdec1 {
+	status = "okay";
+	pinctrl-0 = <&pinmux_qdec1>;
+	pinctrl-names = "default";
+	counts-per-revolution = <4096>;
+	xbar = <&xbar1>;
+};
+
+&xbar1 {
+	status = "okay";
+	xbar-maps =
+		/* kXBARA1_InputIomuxXbarInout14 -> kXBARA1_OutputEnc1PhaseAInput */
+		<(14 | 0x100) (66 | 0x100)>,
+		/* kXBARA1_InputIomuxXbarInout15 -> kXBARA1_OutputEnc1PhaseBInput */
+		<(15 | 0x100) (67 | 0x100)>;
+};
+
+/* ADC1, its driver requires a pin configuration */
+&adc1 {
+	status = "okay";
+	pinctrl-0 = <&pinmux_adc1>;
+	pinctrl-names = "default";
+};
+
+&pinctrl {
+	pinmux_flexpwm4_pwm2: pinmux_flexpwm4_pwm2 {
+		group0 {
+			pinmux = <&iomuxc_gpio_emc_04_flexpwm4_pwma2>,
+				 <&iomuxc_gpio_emc_05_flexpwm4_pwmb2>;
+			drive-strength = "r0-6";
+			slew-rate = "fast";
+			nxp,speed = "100-mhz";
+		};
+	};
+
+	pinmux_adc1: pinmux_adc1 {
+		group0 {
+			pinmux = <&iomuxc_gpio_ad_b1_02_adc1_in7>,
+				 <&iomuxc_gpio_ad_b1_03_adc1_in8>;
+			drive-strength = "r0-6";
+			slew-rate = "slow";
+			nxp,speed = "100-mhz";
+			bias-disable;
+		};
+	};
+
+	pinmux_qdec1: pinmux_qdec1 {
+		group0 {
+			pinmux = <&iomuxc_gpio_b1_00_xbar1_xbar_inout14>,
+				 <&iomuxc_gpio_b1_01_xbar1_xbar_inout15>;
+			drive-strength = "r0-6";
+			slew-rate = "slow";
+			nxp,speed = "100-mhz";
+			input-enable;
+			bias-pull-up;
+		};
+	};
+};

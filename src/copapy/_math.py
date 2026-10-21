@@ -1,10 +1,13 @@
 from . import vector
 from . import tensor
-from ._vectors import VecNumLike
-from ._tensors import TensorNumLike
+from ._vectors import VecNumLike, VecIntLike
+from ._tensors import TensorNumLike, TensorIntLike
+from ._arrays import array, ArrayType
 from . import value, NumLike
 from typing import TypeVar, Any, overload, Callable
-from ._basic_types import add_op, unifloat
+from ._basic_types import add_op, uniint, value_from_number
+from functools import reduce
+import builtins
 import math
 
 T = TypeVar("T", int, float, value[int], value[float])
@@ -19,6 +22,8 @@ def exp(x: value[Any]) -> value[float]: ...
 def exp(x: vector[Any]) -> vector[float]: ...
 @overload
 def exp(x: tensor[Any]) -> tensor[float]: ...
+@overload
+def exp(x: array[Any]) -> array[float]: ...
 def exp(x: Any) -> Any:
     """Exponential function to basis e
 
@@ -30,8 +35,8 @@ def exp(x: Any) -> Any:
     """
     if isinstance(x, value):
         return add_op('exp', [x])
-    if isinstance(x, vector | tensor):
-        return x.map(exp)
+    if isinstance(x, vector | tensor | array):
+        return _map1(x, exp, 'exp')
     return float(math.exp(x))
 
 
@@ -43,6 +48,8 @@ def log(x: value[Any]) -> value[float]: ...
 def log(x: vector[Any]) -> vector[float]: ...
 @overload
 def log(x: tensor[Any]) -> tensor[float]: ...
+@overload
+def log(x: array[Any]) -> array[float]: ...
 def log(x: Any) -> Any:
     """Logarithm to basis e
 
@@ -54,51 +61,93 @@ def log(x: Any) -> Any:
     """
     if isinstance(x, value):
         return add_op('log', [x])
-    if isinstance(x, vector | tensor):
-        return x.map(log)
+    if isinstance(x, vector | tensor | array):
+        return _map1(x, log, 'log')
     return float(math.log(x))
 
 
 @overload
+def pow(x: int, y: int) -> int: ...  # type: ignore[overload-overlap]  # int is also a float for mypy
+@overload
 def pow(x: float | int, y: float | int) -> float: ...
+@overload
+def pow(x: value[int], y: uniint) -> value[int]: ...
+@overload
+def pow(x: int, y: value[int]) -> value[int]: ...
 @overload
 def pow(x: value[Any], y: NumLike) -> value[float]: ...
 @overload
 def pow(x: NumLike, y: value[Any]) -> value[float]: ...
 @overload
-def pow(x: vector[Any], y: Any) -> vector[float]: ...
+def pow(x: vector[int], y: VecIntLike) -> vector[int]: ...
 @overload
-def pow(x: Any, y: vector[Any]) -> vector[float]: ...
+def pow(x: value[int] | int, y: vector[int]) -> vector[int]: ...
 @overload
-def pow(x: tensor[Any], y: Any) -> tensor[float]: ...
+def pow(x: vector[Any], y: VecNumLike) -> vector[float]: ...
 @overload
-def pow(x: Any, y: tensor[Any]) -> tensor[float]: ...
-def pow(x: TensorNumLike, y: TensorNumLike) -> Any:
-    """x to the power of y
+def pow(x: VecNumLike, y: vector[Any]) -> vector[float]: ...
+@overload
+def pow(x: tensor[int], y: TensorIntLike) -> tensor[int]: ...
+@overload
+def pow(x: TensorIntLike, y: tensor[int]) -> tensor[int]: ...
+@overload
+def pow(x: tensor[Any], y: TensorNumLike) -> tensor[float]: ...
+@overload
+def pow(x: TensorNumLike, y: tensor[Any]) -> tensor[float]: ...
+@overload
+def pow(x: array[int], y: array[int] | uniint) -> array[int]: ...
+@overload
+def pow(x: uniint, y: array[int]) -> array[int]: ...
+@overload
+def pow(x: array[Any], y: array[Any] | NumLike) -> array[float]: ...
+@overload
+def pow(x: NumLike, y: array[Any]) -> array[float]: ...
+def pow(x: Any, y: Any) -> Any:
+    """x to the power of y. The result is an int if both operands are
+    int, otherwise a float. An int power is exact up to the wrap around of
+    32 bit ints on overflow, a negative int exponent gives 1 / x^-y truncated
+    towards zero (0 for |x| > 1 and for x = 0).
 
     Arguments:
         x: Input value
+        y: Exponent
 
     Returns:
         result of x**y
     """
-    if isinstance(x, tensor) or isinstance(y, tensor):
-        return _map2_tensor(x, y, pow)
+    if isinstance(x, tensor | array):
+        return x ** y
+    if isinstance(y, array) or (isinstance(y, tensor) and not isinstance(x, vector)):
+        return y.__rpow__(x)
+    if isinstance(y, tensor):
+        return _map2_tensor(x, y, pow, 'pow')
     if isinstance(x, vector) or isinstance(y, vector):
-        return _map2_vector(x, y, pow)
+        return _map2_vector(x, y, pow, 'pow')
     if isinstance(y, int) and 0 <= y < 8:
         if y == 0:
-            return 1
+            one = 1.0 if isinstance(x, float) or (isinstance(x, value) and x.dtype == 'float') else 1
+            return value_from_number(one) if isinstance(x, value) else one
         m = x
         for _ in range(y - 1):
             m *= x
         return m
     if isinstance(x, value) or isinstance(y, value):
         return add_op('pow', [x, y])
-    elif y == -1:
+    if isinstance(x, int) and isinstance(y, int):
+        return _int_pow(x, y)
+    if y == -1.0:
         return 1 / x
-    else:
-        return float(x ** y)
+    return float(x ** y)
+
+
+def _int_pow(x: int, y: int) -> int:
+    """Int power of numbers like the pow_int_int stencil (without the
+    wrap around): a negative exponent gives 1 / x^-y truncated towards zero"""
+    if y >= 0:
+        return int(x ** y)
+    if x == -1:
+        return -1 if y % 2 else 1
+    return 1 if x == 1 else 0
 
 
 @overload
@@ -109,6 +158,8 @@ def sqrt(x: value[Any]) -> value[float]: ...
 def sqrt(x: vector[Any]) -> vector[float]: ...
 @overload
 def sqrt(x: tensor[Any]) -> tensor[float]: ...
+@overload
+def sqrt(x: array[Any]) -> array[float]: ...
 def sqrt(x: Any) -> Any:
     """Square root function
 
@@ -120,8 +171,8 @@ def sqrt(x: Any) -> Any:
     """
     if isinstance(x, value):
         return add_op('sqrt', [x])
-    if isinstance(x, vector | tensor):
-        return x.map(sqrt)
+    if isinstance(x, vector | tensor | array):
+        return _map1(x, sqrt, 'sqrt')
     return float(math.sqrt(x))
 
 
@@ -133,6 +184,8 @@ def sin(x: value[Any]) -> value[float]: ...
 def sin(x: vector[Any]) -> vector[float]: ...
 @overload
 def sin(x: tensor[Any]) -> tensor[float]: ...
+@overload
+def sin(x: array[Any]) -> array[float]: ...
 def sin(x: Any) -> Any:
     """Sine function
 
@@ -144,8 +197,8 @@ def sin(x: Any) -> Any:
     """
     if isinstance(x, value):
         return add_op('sin', [x])
-    if isinstance(x, vector | tensor):
-        return x.map(sin)
+    if isinstance(x, vector | tensor | array):
+        return _map1(x, sin, 'sin')
     return math.sin(x)
 
 
@@ -157,6 +210,8 @@ def cos(x: value[Any]) -> value[float]: ...
 def cos(x: vector[Any]) -> vector[float]: ...
 @overload
 def cos(x: tensor[Any]) -> tensor[float]: ...
+@overload
+def cos(x: array[Any]) -> array[float]: ...
 def cos(x: Any) -> Any:
     """Cosine function
 
@@ -168,8 +223,8 @@ def cos(x: Any) -> Any:
     """
     if isinstance(x, value):
         return add_op('cos', [x])
-    if isinstance(x, vector | tensor):
-        return x.map(cos)
+    if isinstance(x, vector | tensor | array):
+        return _map1(x, cos, 'cos')
     return math.cos(x)
 
 
@@ -181,6 +236,8 @@ def tan(x: value[Any]) -> value[float]: ...
 def tan(x: vector[Any]) -> vector[float]: ...
 @overload
 def tan(x: tensor[Any]) -> tensor[float]: ...
+@overload
+def tan(x: array[Any]) -> array[float]: ...
 def tan(x: Any) -> Any:
     """Tangent function
 
@@ -192,8 +249,8 @@ def tan(x: Any) -> Any:
     """
     if isinstance(x, value):
         return add_op('tan', [x])
-    if isinstance(x, vector | tensor):
-        return x.map(tan)
+    if isinstance(x, vector | tensor | array):
+        return _map1(x, tan, 'tan')
     return math.tan(x)
 
 
@@ -205,6 +262,8 @@ def atan(x: value[Any]) -> value[float]: ...
 def atan(x: vector[Any]) -> vector[float]: ...
 @overload
 def atan(x: tensor[Any]) -> tensor[float]: ...
+@overload
+def atan(x: array[Any]) -> array[float]: ...
 def atan(x: Any) -> Any:
     """Inverse tangent function
 
@@ -216,8 +275,8 @@ def atan(x: Any) -> Any:
     """
     if isinstance(x, value):
         return add_op('atan', [x])
-    if isinstance(x, vector | tensor):
-        return x.map(atan)
+    if isinstance(x, vector | tensor | array):
+        return _map1(x, atan, 'atan')
     return math.atan(x)
 
 
@@ -235,7 +294,11 @@ def atan2(x: VecNumLike, y: vector[float]) -> vector[float]: ...
 def atan2(x: tensor[float], y: TensorNumLike) -> tensor[float]: ...
 @overload
 def atan2(x: TensorNumLike, y: tensor[float]) -> tensor[float]: ...
-def atan2(x: TensorNumLike, y: TensorNumLike) -> Any:
+@overload
+def atan2(x: array[Any], y: 'array[Any] | NumLike') -> array[float]: ...
+@overload
+def atan2(x: NumLike, y: array[Any]) -> array[float]: ...
+def atan2(x: Any, y: Any) -> Any:
     """2-argument arctangent
 
     Arguments:
@@ -245,10 +308,14 @@ def atan2(x: TensorNumLike, y: TensorNumLike) -> Any:
     Returns:
         Result in radian
     """
+    if isinstance(x, array):
+        return x._binary_op('atan2', y)
+    if isinstance(y, array):
+        return y._binary_op('atan2', x, reverse=True)
     if isinstance(x, tensor) or isinstance(y, tensor):
-        return _map2_tensor(x, y, atan2)
+        return _map2_tensor(x, y, atan2, 'atan2')
     if isinstance(x, vector) or isinstance(y, vector):
-        return _map2_vector(x, y, atan2)
+        return _map2_vector(x, y, atan2, 'atan2')
     if isinstance(x, value) or isinstance(y, value):
         return add_op('atan2', [x, y])
     return math.atan2(x, y)
@@ -262,6 +329,8 @@ def asin(x: value[Any]) -> value[float]: ...
 def asin(x: vector[Any]) -> vector[float]: ...
 @overload
 def asin(x: tensor[Any]) -> tensor[float]: ...
+@overload
+def asin(x: array[Any]) -> array[float]: ...
 def asin(x: Any) -> Any:
     """Inverse sine function
 
@@ -273,8 +342,8 @@ def asin(x: Any) -> Any:
     """
     if isinstance(x, value):
         return add_op('asin', [x])
-    if isinstance(x, vector | tensor):
-        return x.map(asin)
+    if isinstance(x, vector | tensor | array):
+        return _map1(x, asin, 'asin')
     return math.asin(x)
 
 
@@ -286,6 +355,8 @@ def acos(x: value[Any]) -> value[float]: ...
 def acos(x: vector[Any]) -> vector[float]: ...
 @overload
 def acos(x: tensor[Any]) -> tensor[float]: ...
+@overload
+def acos(x: array[Any]) -> array[float]: ...
 def acos(x: Any) -> Any:
     """Inverse cosine function
 
@@ -297,9 +368,35 @@ def acos(x: Any) -> Any:
     """
     if isinstance(x, value):
         return add_op('acos', [x])
-    if isinstance(x, vector | tensor):
-        return x.map(acos)
+    if isinstance(x, vector | tensor | array):
+        return _map1(x, acos, 'acos')
     return math.acos(x)
+
+
+@overload
+def tanh(x: float | int) -> float: ...
+@overload
+def tanh(x: value[Any]) -> value[float]: ...
+@overload
+def tanh(x: vector[Any]) -> vector[float]: ...
+@overload
+def tanh(x: tensor[Any]) -> tensor[float]: ...
+@overload
+def tanh(x: array[Any]) -> array[float]: ...
+def tanh(x: Any) -> Any:
+    """Hyperbolic tangent function
+
+    Arguments:
+        x: Input value
+
+    Returns:
+        Hyperbolic tangent of x
+    """
+    if isinstance(x, value):
+        return add_op('tanh', [x])
+    if isinstance(x, vector | tensor | array):
+        return _map1(x, tanh, 'tanh')
+    return math.tanh(x)
 
 
 # Debug test function
@@ -322,7 +419,9 @@ def abs(x: value[U]) -> value[U]: ...
 def abs(x: vector[U]) -> vector[U]: ...
 @overload
 def abs(x: tensor[U]) -> tensor[U]: ...
-def abs(x: U | value[U] | vector[U] | tensor[U]) -> Any:
+@overload
+def abs(x: array[U]) -> array[U]: ...
+def abs(x: U | value[U] | vector[U] | tensor[U] | array[U]) -> Any:
     """Absolute value function
 
     Arguments:
@@ -333,8 +432,8 @@ def abs(x: U | value[U] | vector[U] | tensor[U]) -> Any:
     """
     if isinstance(x, value):
         return add_op('abs', [x])
-    if isinstance(x, vector | tensor):
-        return x.map(abs)
+    if isinstance(x, vector | tensor | array):
+        return _map1(x, abs, 'abs')
     return (x < 0) * -x + (x >= 0) * x
 
 
@@ -346,7 +445,9 @@ def sign(x: value[U]) -> value[int]: ...
 def sign(x: vector[U]) -> vector[int]: ...
 @overload
 def sign(x: tensor[U]) -> tensor[int]: ...
-def sign(x: U | value[U] | vector[U] | tensor[U]) -> Any:
+@overload
+def sign(x: array[U]) -> array[int]: ...
+def sign(x: Any) -> Any:
     """Return 1 for positive numbers and -1 for negative numbers.
     For an input of 0 the return value is 0.
 
@@ -359,7 +460,9 @@ def sign(x: U | value[U] | vector[U] | tensor[U]) -> Any:
     if isinstance(x, value):
         return add_op('sign', [x])
     if isinstance(x, vector | tensor):
-        return x.map(sign)
+        if x._is_constant() or x._get_array() is None:
+            return x.map(sign)
+        # Packed: by the array stencils of the comparisons
     return (x > 0) - (x < 0)
 
 
@@ -372,24 +475,27 @@ def clamp(x: U | value[U], min_value: U | value[U], max_value: value[U]) -> valu
 @overload
 def clamp(x: U, min_value: U, max_value: U) -> U: ...
 @overload
-def clamp(x: vector[U], min_value: 'U | value[U]', max_value: 'U | value[U]') -> vector[U]: ...
-def clamp(x: U | value[U] | vector[U], min_value: U | value[U], max_value:  U | value[U]) -> Any:
+def clamp(x: vector[U], min_value: U | value[U], max_value: U | value[U]) -> vector[U]: ...
+@overload
+def clamp(x: tensor[U], min_value: U | value[U], max_value: U | value[U]) -> tensor[U]: ...
+@overload
+def clamp(x: array[Any], min_value: 'array[Any] | NumLike', max_value: 'array[Any] | NumLike') -> array[Any]: ...
+def clamp(x: Any, min_value: Any, max_value: Any) -> Any:
     """Clamp function to limit a value between a minimum and maximum.
 
+    The elements of a vector, tensor or array are clamped by array stencils
+    for arrays and packed vectors or tensors. For x = nan the result is
+    min_value.
+
     Arguments:
-        x: Input value
+        x: Input value, vector, tensor or array
         min_value: Minimum limit
         max_value: Maximum limit
 
     Returns:
         Clamped value of x
     """
-    if isinstance(x, vector):
-        return vector(clamp(comp, min_value, max_value) for comp in x.values)
-
-    return (x < min_value) * min_value + \
-          (x > max_value) * max_value + \
-          ((x >= min_value) & (x <= max_value)) * x
+    return minimum(maximum(x, min_value), max_value)
 
 
 @overload
@@ -406,7 +512,11 @@ def minimum(x: U | value[U] | vector[U], y: vector[U]) -> vector[U]: ...
 def minimum(x: tensor[U], y: U | value[U] | tensor[U]) -> tensor[U]: ...
 @overload
 def minimum(x: U | value[U] | tensor[U], y: tensor[U]) -> tensor[U]: ...
-def minimum(x: U | value[U] | vector[U] | tensor[U], y: U | value[U] | vector[U] | tensor[U]) -> Any:
+@overload
+def minimum(x: array[Any], y: 'array[Any] | NumLike') -> array[Any]: ...
+@overload
+def minimum(x: NumLike, y: array[Any]) -> array[Any]: ...
+def minimum(x: Any, y: Any) -> Any:
     """Minimum function to get the smaller of two values.
 
     Arguments:
@@ -416,10 +526,14 @@ def minimum(x: U | value[U] | vector[U] | tensor[U], y: U | value[U] | vector[U]
     Returns:
         Minimum of x and y
     """
+    if isinstance(x, array):
+        return x._binary_op('min', y)
+    if isinstance(y, array):
+        return y._binary_op('min', x, reverse=True)
     if isinstance(x, tensor) or isinstance(y, tensor):
-        return _map2_tensor(x, y, minimum)
+        return _map2_tensor(x, y, minimum, 'min')
     if isinstance(x, vector) or isinstance(y, vector):
-        return _map2_vector(x, y, minimum)
+        return _map2_vector(x, y, minimum, 'min')
     if isinstance(x, value) or isinstance(y, value):
         return add_op('min', [x, y])
     return x if x < y else y
@@ -439,7 +553,11 @@ def maximum(x: U | value[U] | vector[U], y: vector[U]) -> vector[U]: ...
 def maximum(x: tensor[U], y: U | value[U] | tensor[U]) -> tensor[U]: ...
 @overload
 def maximum(x: U | value[U] | tensor[U], y: tensor[U]) -> tensor[U]: ...
-def maximum(x: U | value[U] | vector[U] | tensor[U], y: U | value[U] | vector[U] | tensor[U]) -> Any:
+@overload
+def maximum(x: array[Any], y: 'array[Any] | NumLike') -> array[Any]: ...
+@overload
+def maximum(x: NumLike, y: array[Any]) -> array[Any]: ...
+def maximum(x: Any, y: Any) -> Any:
     """Maximum function to get the larger of two values.
 
     Arguments:
@@ -449,45 +567,82 @@ def maximum(x: U | value[U] | vector[U] | tensor[U], y: U | value[U] | vector[U]
     Returns:
         Maximum of x and y
     """
+    if isinstance(x, array):
+        return x._binary_op('max', y)
+    if isinstance(y, array):
+        return y._binary_op('max', x, reverse=True)
     if isinstance(x, tensor) or isinstance(y, tensor):
-        return _map2_tensor(x, y, maximum)
+        return _map2_tensor(x, y, maximum, 'max')
     if isinstance(x, vector) or isinstance(y, vector):
-        return _map2_vector(x, y, maximum)
+        return _map2_vector(x, y, maximum, 'max')
     if isinstance(x, value) or isinstance(y, value):
         return add_op('max', [x, y])
     return x if x > y else y
 
 
 @overload
-def lerp(v1: value[U], v2: U | value[U], t: unifloat) -> value[U]: ...
+def min(x: array[U]) -> value[U]: ...
 @overload
-def lerp(v1: U | value[U], v2: value[U], t: unifloat) -> value[U]: ...
-@overload
-def lerp(v1: U | value[U], v2: U | value[U], t: value[float]) -> value[U]: ...
-@overload
-def lerp(v1: U, v2: U, t: float) -> U: ...
-@overload
-def lerp(v1: vector[U], v2: vector[U], t: unifloat) -> vector[U]: ...
-def lerp(v1: U | value[U] | vector[U], v2: U | value[U] | vector[U], t:  unifloat) -> Any:
-    """Linearly interpolate between two values or vectors v1 and v2 by a factor t.
+def min(x: ArrayType[U]) -> U | value[U]: ...
+def min(x: ArrayType[U] | array[U]) -> Any:
+    """Smallest element of a vector, tensor or array.
 
     Arguments:
-        v1: First value or vector
-        v2: Second value or vector
-        t: Interpolation factor (0.0 to 1.0)
+        x: Vector, tensor or array
 
     Returns:
-        Interpolated value or vector
+        Minimum of all elements
     """
-    if isinstance(v1, vector) or isinstance(v2, vector):
-        assert isinstance(v1, vector) and isinstance(v2, vector), "None or both v1 and v2 must be vectors."
-        assert len(v1.values) == len(v2.values), "Vectors must be of the same length."
-        return vector(lerp(vv1, vv2, t) for vv1, vv2 in zip(v1.values, v2.values))
-    return v1 * (1 - t) + v2 * t
+    return _min_max(x, 'min')
 
 
-def _map2_vector(self: VecNumLike, other: VecNumLike, func: Callable[[Any, Any], value[U] | U]) -> vector[U]:
-    """Applies a function to each element of the vector and a second vector or scalar."""
+@overload
+def max(x: array[U]) -> value[U]: ...
+@overload
+def max(x: ArrayType[U]) -> U | value[U]: ...
+def max(x: ArrayType[U] | array[U]) -> Any:
+    """Largest element of a vector, tensor or array.
+
+    Arguments:
+        x: Vector, tensor or array
+
+    Returns:
+        Maximum of all elements
+    """
+    return _min_max(x, 'max')
+
+
+def _min_max(x: Any, op: str) -> Any:
+    """Reduction by an array stencil for arrays and packed instances, otherwise by
+    one scalar operation for each copapy value (constants are reduced at trace time)."""
+    if isinstance(x, array):
+        return x._min_max(op)
+    if not isinstance(x, ArrayType):
+        raise TypeError(f"{op} requires a vector, tensor or array, not {type(x).__name__}")
+    if not x.values:
+        raise ValueError(f"{op} of an empty {type(x).__name__}")
+    arr = None if x._is_constant() else x._get_array()
+    if arr is not None:
+        return arr._min_max(op)
+    constants = [v for v in x.values if not isinstance(v, value)]
+    start: list[Any] = [getattr(builtins, op)(constants)] if constants else []
+    def func(a: Any, b: Any) -> Any:
+        return add_op(op, [a, b])
+    return reduce(func, start + [v for v in x.values if isinstance(v, value)])
+
+
+def _map2_vector(self: VecNumLike, other: VecNumLike, func: Callable[[Any, Any], value[U] | U],
+                 array_op: str | None = None) -> vector[U]:
+    """Applies a function to each element of the vector and a second vector or scalar,
+    by the array stencil array_op for packed vectors."""
+    if array_op:
+        ret = None
+        if isinstance(self, vector):
+            ret = self._try_array_op(other, array_op)
+        elif isinstance(other, vector):
+            ret = other._try_array_op(self, array_op, reverse=True)
+        if ret is not None:
+            return ret
     if isinstance(self, vector) and isinstance(other, vector):
         return vector(func(x, y) for x, y in zip(self.values, other.values))
     elif isinstance(self, vector):
@@ -498,12 +653,32 @@ def _map2_vector(self: VecNumLike, other: VecNumLike, func: Callable[[Any, Any],
         return vector([func(self, other)])
 
 
-def _map2_tensor(self: TensorNumLike, other: TensorNumLike, func: Callable[[Any, Any], value[U] | U]) -> tensor[U]:
-    """Applies a function to each element of the vector and a second vector or scalar."""
+def _map1(x: 'vector[Any] | tensor[Any] | array[Any]', func: Callable[[Any], Any], op: str) -> Any:
+    """Applies a function to each element, by an array stencil for arrays and packed vectors or tensors."""
+    if isinstance(x, array):
+        return x._unary_op(op)
+    arr = None if x._is_constant() else x._get_array()
+    if arr is not None:
+        return type(x)._from_array(arr._unary_op(op))
+    return x.map(func)
+
+
+def _map2_tensor(self: TensorNumLike, other: TensorNumLike, func: Callable[[Any, Any], value[U] | U],
+                 array_op: str | None = None) -> tensor[U]:
+    """Applies a function to each element of the vector and a second vector or scalar,
+    by the array stencil array_op for packed tensors."""
     if isinstance(self, vector):
         self = tensor(self)
     if isinstance(other, vector):
         other = tensor(other)
+    if array_op:
+        ret = None
+        if isinstance(self, tensor):
+            ret = self._try_array_op(other, array_op)
+        elif isinstance(other, tensor):
+            ret = other._try_array_op(self, array_op, reverse=True)
+        if ret is not None:
+            return ret
     if isinstance(self, tensor) and isinstance(other, tensor):
         assert self.shape == other.shape, "Tensors must have the same shape"
         return tensor([func(x, y) for x, y in zip(self.values, other.values)], self.shape)

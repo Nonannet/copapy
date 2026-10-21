@@ -91,7 +91,9 @@ if __name__ == "__main__":
 
         write_classes(f, ['*'], 'copapy', title='Classes', api_dir=api_dir)
 
-        write_functions(f, ['*'], 'copapy', title='General functions', path_patterns=['*_autograd.py', '*_basic_types.py', '*_target.py'], api_dir=api_dir)
+        write_functions(f, ['*'], 'copapy', title='General functions', path_patterns=['*_autograd.py', '*_basic_types.py', '*_target.py', '*_sorting.py', '*_flow.py'], api_dir=api_dir)
+
+        write_functions(f, ['*'], 'copapy', title='Type conversion functions', path_patterns=['*_casts*'], api_dir=api_dir)
 
         write_functions(f, ['*'], 'copapy', title='Math functions', path_patterns=['*_math*'], exclude=['get_42'], api_dir=api_dir)
 
@@ -99,7 +101,15 @@ if __name__ == "__main__":
 
         write_functions(f, ['*'], 'copapy', title='Tensor/Matrix functions', path_patterns=['*_tensors*'], api_dir=api_dir)
 
-        write_functions(f, ['*'], 'copapy', title='ANN functions', path_patterns=['*_nn*'], api_dir=api_dir)
+        write_functions(f, ['*'], 'copapy', title='Interpolation functions', path_patterns=['*_interp*'], api_dir=api_dir)
+
+        write_functions(f, ['*'], 'copapy', title='Linear algebra functions', path_patterns=['*_linalg*'], api_dir=api_dir)
+
+        write_functions(f, ['*'], 'copapy.nn', title='ANN functions', path_patterns=['*nn.py'], api_dir=api_dir)
+
+        write_functions(f, ['*'], 'copapy.filters', title='Filter functions', path_patterns=['*filters.py'], api_dir=api_dir)
+
+        write_functions(f, ['*'], 'copapy.controller', title='Controller functions', path_patterns=['*controller.py'], api_dir=api_dir)
 
         #write_manual(f, ['NumLike'], title='Types')
 
