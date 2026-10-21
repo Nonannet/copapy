@@ -286,7 +286,7 @@ def array_test_values() -> tuple[list[NumLike], list[NumLike]]:
     ia = [i * 3 - 10 for i in range(n)]
     ib = [(i * 7) % 5 + 1 for i in range(n)]
     rows = [[(r * 3 + i) % 4 - 1.5 for i in range(n)] for r in range(3)]
-    arrays = {id(fa): cp.array(fa), id(fb): cp.array(fb), id(ia): cp.array(ia), id(ib): cp.array(ib)}
+    arrays: dict[int, cp.array[Any]] = {id(fa): cp.array(fa), id(fb): cp.array(fb), id(ia): cp.array(ia), id(ib): cp.array(ib)}
     fs, i_s = value(1.5), value(3)
 
     ret_test: list[NumLike] = []

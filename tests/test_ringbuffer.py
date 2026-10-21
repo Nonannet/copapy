@@ -195,4 +195,4 @@ def test_errors() -> None:
     with pytest.raises(TypeError, match="byte"):
         cp.ringbuffer(cp.array([1, 2], 'byte'), 2)
     with pytest.raises(TypeError, match="Unsupported"):
-        cp.ringbuffer("x", 2)
+        cp.ringbuffer("x", 2)  # type: ignore[call-overload]

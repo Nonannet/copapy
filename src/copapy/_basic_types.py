@@ -548,6 +548,10 @@ class ArrayElement(Node):
 _constant_nets: 'weakref.WeakValueDictionary[tuple[type, int | bytes], Net]' = weakref.WeakValueDictionary()
 
 
+@overload
+def value_from_number(val: int) -> value[int]: ...
+@overload
+def value_from_number(val: float) -> value[float]: ...
 def value_from_number(val: int | float) -> value[Any]:
     """Anonymous constant that can be removed during optimization. Constants
     of the same type and value share one node: they can not change, so the
@@ -570,7 +574,7 @@ def select_by_mask(mask: value[int], x: Any, y: Any) -> Any:
     return kept_x + kept_y
 
 
-def to_float(val: value[Any]) -> value[Any]:
+def to_float(val: value[Any]) -> value[float]:
     """Convert an int value to float: constants at trace time, variables by
     the float_int stencil. Float values are returned unchanged."""
     if transl_type(val.dtype) != 'int':

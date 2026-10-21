@@ -13,8 +13,9 @@ from ._quaternion import quaternion
 from ._math import minimum, maximum
 from ._flow import iif
 from ._temporal import feedback
+from ._helper_types import U
 
-T = TypeVar("T")
+T = TypeVar("T", bound='value[Any] | ArrayType[Any] | array[Any]')
 
 
 def _sample_array(x: Any) -> array[Any] | None:
@@ -175,6 +176,18 @@ class ringbuffer(Generic[T]):
             self._oldest = self[self.n - 1]
         return self._oldest
 
+    @overload
+    def window(self: 'ringbuffer[value[U]]') -> array[U]: ...
+    @overload
+    def window(self: 'ringbuffer[vector[U]]') -> array[U]: ...
+    @overload
+    def window(self: 'ringbuffer[tensor[U]]') -> array[U]: ...
+    @overload
+    def window(self: 'ringbuffer[quaternion]') -> array[float]: ...
+    @overload
+    def window(self: 'ringbuffer[array[U]]') -> array[U]: ...
+    @overload
+    def window(self) -> array[Any]: ...
     def window(self) -> array[Any]:
         """Values of the buffer in time order, the oldest value first and the
         current value last: a copy of the buffer (array of shape (n, *shape))."""

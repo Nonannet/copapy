@@ -11,8 +11,6 @@ __all__ = ["relu", "sigmoid", "softmax", "linear", "conv1d", "conv2d",
 
 U = TypeVar("U", int, float)
 ArrayLike: TypeAlias = array[Any] | ArrayType[Any] | Sequence[Any]
-TArr = TypeVar("TArr", array[Any], tensor[Any])
-TVec = TypeVar("TVec", array[Any], tensor[Any], vector[Any])
 
 
 @overload
@@ -52,7 +50,13 @@ def sigmoid(x: Any) -> Any:
     return 1 / (1 + cp.exp(-x))
 
 
-def softmax(x: TVec) -> TVec:
+@overload
+def softmax(x: array[Any]) -> array[float]: ...
+@overload
+def softmax(x: tensor[Any]) -> tensor[float]: ...
+@overload
+def softmax(x: vector[Any]) -> vector[float]: ...
+def softmax(x: array[Any] | tensor[Any] | vector[Any]) -> Any:
     """Softmax function: maps the elements to the range (0, 1) with a sum of 1,
     larger elements get a larger share (probabilities of a classification).
 
@@ -67,8 +71,7 @@ def softmax(x: TVec) -> TVec:
     if x.ndim != 1:
         raise ValueError(f"softmax requires a 1D input, got shape {x.shape}")
     e: Any = cp.exp(x - cp.max(x))  # The largest exponent is 0: no overflow
-    ret: TVec = e / e.sum()
-    return ret
+    return e / e.sum()
 
 
 def _float_array(x: Any, name: str) -> 'array[Any]':
@@ -121,7 +124,13 @@ def _conv(x: 'array[float]', weight: 'array[float]', bias: ArrayLike | None, str
     return array._from_net(node.result, (n, co, oh, ow))
 
 
-def linear(x: TVec, weight: ArrayLike, bias: ArrayLike | None = None) -> TVec:
+@overload
+def linear(x: array[Any], weight: ArrayLike, bias: ArrayLike | None = None) -> array[float]: ...
+@overload
+def linear(x: tensor[Any], weight: ArrayLike, bias: ArrayLike | None = None) -> tensor[float]: ...
+@overload
+def linear(x: vector[Any], weight: ArrayLike, bias: ArrayLike | None = None) -> vector[float]: ...
+def linear(x: array[Any] | tensor[Any] | vector[Any], weight: ArrayLike, bias: ArrayLike | None = None) -> Any:
     """Fully connected layer: weight @ x + bias
 
     Arguments:
@@ -146,12 +155,17 @@ def linear(x: TVec, weight: ArrayLike, bias: ArrayLike | None = None) -> TVec:
         if b.shape != (wa.shape[0],):
             raise ValueError(f"Bias of shape {b.shape} does not match {wa.shape[0]} output features")
         ret = ret + b
-    out: TVec = type(x)._from_array(ret) if isinstance(x, ArrayType) else ret
-    return out
+    return type(x)._from_array(ret) if isinstance(x, ArrayType) else ret
 
 
-def conv2d(x: TArr, weight: ArrayLike, bias: ArrayLike | None = None, stride: int | Sequence[int] = 1,
-           padding: int | Sequence[int] = 0, dilation: int | Sequence[int] = 1) -> TArr:
+@overload
+def conv2d(x: array[Any], weight: ArrayLike, bias: ArrayLike | None = None, stride: int | Sequence[int] = 1,
+           padding: int | Sequence[int] = 0, dilation: int | Sequence[int] = 1) -> array[float]: ...
+@overload
+def conv2d(x: tensor[Any], weight: ArrayLike, bias: ArrayLike | None = None, stride: int | Sequence[int] = 1,
+           padding: int | Sequence[int] = 0, dilation: int | Sequence[int] = 1) -> tensor[float]: ...
+def conv2d(x: array[Any] | tensor[Any], weight: ArrayLike, bias: ArrayLike | None = None, stride: int | Sequence[int] = 1,
+           padding: int | Sequence[int] = 0, dilation: int | Sequence[int] = 1) -> Any:
     """2D convolution (cross-correlation as in most deep learning frameworks)
     computed by a single array stencil.
 
@@ -179,8 +193,14 @@ def conv2d(x: TArr, weight: ArrayLike, bias: ArrayLike | None = None, stride: in
     return tensor._from_array(ret) if isinstance(x, tensor) else ret
 
 
-def conv1d(x: TArr, weight: ArrayLike, bias: ArrayLike | None = None, stride: int = 1,
-           padding: int = 0, dilation: int = 1) -> TArr:
+@overload
+def conv1d(x: array[Any], weight: ArrayLike, bias: ArrayLike | None = None, stride: int = 1,
+           padding: int = 0, dilation: int = 1) -> array[float]: ...
+@overload
+def conv1d(x: tensor[Any], weight: ArrayLike, bias: ArrayLike | None = None, stride: int = 1,
+           padding: int = 0, dilation: int = 1) -> tensor[float]: ...
+def conv1d(x: array[Any] | tensor[Any], weight: ArrayLike, bias: ArrayLike | None = None, stride: int = 1,
+           padding: int = 0, dilation: int = 1) -> Any:
     """1D convolution (cross-correlation as in most deep learning frameworks)
     computed by a single array stencil.
 
@@ -234,8 +254,14 @@ def _pool(x: Any, op: str, kernel_size: int | Sequence[int], stride: int | Seque
     return tensor._from_array(ret) if isinstance(x, tensor) else ret
 
 
-def max_pool2d(x: TArr, kernel_size: int | Sequence[int], stride: int | Sequence[int] | None = None,
-               padding: int | Sequence[int] = 0) -> TArr:
+@overload
+def max_pool2d(x: array[Any], kernel_size: int | Sequence[int], stride: int | Sequence[int] | None = None,
+               padding: int | Sequence[int] = 0) -> array[float]: ...
+@overload
+def max_pool2d(x: tensor[Any], kernel_size: int | Sequence[int], stride: int | Sequence[int] | None = None,
+               padding: int | Sequence[int] = 0) -> tensor[float]: ...
+def max_pool2d(x: array[Any] | tensor[Any], kernel_size: int | Sequence[int], stride: int | Sequence[int] | None = None,
+               padding: int | Sequence[int] = 0) -> Any:
     """2D max pooling: the largest element of each window, computed by a
     single array stencil.
 
@@ -252,12 +278,17 @@ def max_pool2d(x: TArr, kernel_size: int | Sequence[int], stride: int | Sequence
         Float array or tensor (same type as x) of shape (channels, out_height, out_width)
         with a leading batch dimension if x has one.
     """
-    ret: TArr = _pool(x, 'max', kernel_size, stride, padding, 2)
-    return ret
+    return _pool(x, 'max', kernel_size, stride, padding, 2)
 
 
-def avg_pool2d(x: TArr, kernel_size: int | Sequence[int], stride: int | Sequence[int] | None = None,
-               padding: int | Sequence[int] = 0) -> TArr:
+@overload
+def avg_pool2d(x: array[Any], kernel_size: int | Sequence[int], stride: int | Sequence[int] | None = None,
+               padding: int | Sequence[int] = 0) -> array[float]: ...
+@overload
+def avg_pool2d(x: tensor[Any], kernel_size: int | Sequence[int], stride: int | Sequence[int] | None = None,
+               padding: int | Sequence[int] = 0) -> tensor[float]: ...
+def avg_pool2d(x: array[Any] | tensor[Any], kernel_size: int | Sequence[int], stride: int | Sequence[int] | None = None,
+               padding: int | Sequence[int] = 0) -> Any:
     """2D average pooling: the mean of each window, computed by a single
     array stencil.
 
@@ -274,11 +305,14 @@ def avg_pool2d(x: TArr, kernel_size: int | Sequence[int], stride: int | Sequence
         Float array or tensor (same type as x) of shape (channels, out_height, out_width)
         with a leading batch dimension if x has one.
     """
-    ret: TArr = _pool(x, 'avg', kernel_size, stride, padding, 2)
-    return ret
+    return _pool(x, 'avg', kernel_size, stride, padding, 2)
 
 
-def max_pool1d(x: TArr, kernel_size: int, stride: int | None = None, padding: int = 0) -> TArr:
+@overload
+def max_pool1d(x: array[Any], kernel_size: int, stride: int | None = None, padding: int = 0) -> array[float]: ...
+@overload
+def max_pool1d(x: tensor[Any], kernel_size: int, stride: int | None = None, padding: int = 0) -> tensor[float]: ...
+def max_pool1d(x: array[Any] | tensor[Any], kernel_size: int, stride: int | None = None, padding: int = 0) -> Any:
     """1D max pooling: the largest element of each window, computed by a
     single array stencil.
 
@@ -293,11 +327,14 @@ def max_pool1d(x: TArr, kernel_size: int, stride: int | None = None, padding: in
         Float array or tensor (same type as x) of shape (channels, out_length)
         with a leading batch dimension if x has one.
     """
-    ret: TArr = _pool(x, 'max', kernel_size, stride, padding, 1)
-    return ret
+    return _pool(x, 'max', kernel_size, stride, padding, 1)
 
 
-def avg_pool1d(x: TArr, kernel_size: int, stride: int | None = None, padding: int = 0) -> TArr:
+@overload
+def avg_pool1d(x: array[Any], kernel_size: int, stride: int | None = None, padding: int = 0) -> array[float]: ...
+@overload
+def avg_pool1d(x: tensor[Any], kernel_size: int, stride: int | None = None, padding: int = 0) -> tensor[float]: ...
+def avg_pool1d(x: array[Any] | tensor[Any], kernel_size: int, stride: int | None = None, padding: int = 0) -> Any:
     """1D average pooling: the mean of each window, computed by a single
     array stencil.
 
@@ -312,11 +349,14 @@ def avg_pool1d(x: TArr, kernel_size: int, stride: int | None = None, padding: in
         Float array or tensor (same type as x) of shape (channels, out_length)
         with a leading batch dimension if x has one.
     """
-    ret: TArr = _pool(x, 'avg', kernel_size, stride, padding, 1)
-    return ret
+    return _pool(x, 'avg', kernel_size, stride, padding, 1)
 
 
-def global_avg_pool2d(x: TArr) -> TArr:
+@overload
+def global_avg_pool2d(x: array[Any]) -> array[float]: ...
+@overload
+def global_avg_pool2d(x: tensor[Any]) -> tensor[float]: ...
+def global_avg_pool2d(x: array[Any] | tensor[Any]) -> Any:
     """Mean of each channel over height and width.
 
     Arguments:
@@ -327,5 +367,4 @@ def global_avg_pool2d(x: TArr) -> TArr:
         with a leading batch dimension if x has one.
     """
     pooled: Any = _pool(x, 'avg', x.shape[-2:], None, 0, 2)
-    ret: TArr = pooled.reshape(*pooled.shape[:-2])
-    return ret
+    return pooled.reshape(*pooled.shape[:-2])

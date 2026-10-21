@@ -1,4 +1,4 @@
-from typing import Any, Generic, Sequence, Iterable, Callable, TypeVar, overload
+from typing import Any, Generic, Literal, Sequence, Iterable, Callable, TypeVar, TypeAlias, overload
 from ._basic_types import value, Net, ArrayNet, ArrayConst, ArrayOp, ArrayElement, ArrayPack, NumLike, transl_type, value_from_number, generic_sdb, to_float, add_op
 from ._helper_types import TNum
 
@@ -146,6 +146,10 @@ def _from_bytes(net: ArrayNet, dtype: str) -> ArrayNet:
     return node.result
 
 
+# Nested sequences of numbers or copapy values of one type, up to 3 dimensions
+_Nested: TypeAlias = 'Sequence[TNum | value[TNum]] | Sequence[Sequence[TNum | value[TNum]]] | Sequence[Sequence[Sequence[TNum | value[TNum]]]]'
+
+
 class array(Generic[TNum]):
     """Homogeneous n-dimensional array stored contiguously (row-major) in the
     target memory. Operations on arrays compile to a array stencil instead of
@@ -157,7 +161,17 @@ class array(Generic[TNum]):
         dtype: Element type ('int', 'float', 'bool' or 'byte')
         net: Underlying array net in the computation graph.
     """
-    def __init__(self, values: 'Sequence[TNum] | Sequence[Sequence[TNum]] | Sequence[Any]', dtype: str | None = None):
+    @overload
+    def __init__(self: 'array[float]', values: Sequence[Any], dtype: Literal['float']) -> None: ...
+    @overload
+    def __init__(self: 'array[int]', values: Sequence[Any], dtype: Literal['int', 'bool', 'byte']) -> None: ...
+    @overload
+    def __init__(self: 'array[int]', values: '_Nested[int]', dtype: None = None) -> None: ...
+    @overload
+    def __init__(self: 'array[float]', values: '_Nested[float]', dtype: None = None) -> None: ...
+    @overload
+    def __init__(self, values: Sequence[Any], dtype: str | None = None) -> None: ...
+    def __init__(self, values: Sequence[Any], dtype: str | None = None) -> None:
         """Create an array from (nested) sequences of numbers or copapy values.
         An array of numbers can be overwritten on the target with Target.write_value.
         An array containing copapy values is filled with the current values on

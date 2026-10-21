@@ -26,7 +26,7 @@ from ._math import sqrt, atan2, maximum
 from ._flow import iif
 from ._helper_types import U
 
-T = TypeVar("T")
+T = TypeVar("T", bound='value[Any] | ArrayType[Any] | tuple[Any, ...] | list[Any] | int | float')
 
 dt: value[float] = value(Net('float', TimeStep()), 'float')
 """Period of the task computing the value in seconds. It is set at deployment,

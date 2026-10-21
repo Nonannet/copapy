@@ -206,7 +206,7 @@ def _mapped(arr: array[Any] | ArrayType[Any], export: str) -> array[Any]:
     return ret
 
 
-def map_to_buffer(arr: array[Any] | ArrayType[Any]) -> array[Any]:
+def map_to_buffer(arr: array[T] | ArrayType[T]) -> array[T]:
     """Mark an array, vector or tensor to be read out as memoryview
     instead of nested lists.
 
@@ -222,7 +222,7 @@ def map_to_buffer(arr: array[Any] | ArrayType[Any]) -> array[Any]:
     return _mapped(arr, 'buffer')
 
 
-def map_to_numpy(arr: array[Any] | ArrayType[Any], copy: bool = False) -> array[Any]:
+def map_to_numpy(arr: array[T] | ArrayType[T], copy: bool = False) -> array[T]:
     """Mark an array, vector or tensor to be returned by read out as
     numpy array (uint8, int32 or float32) instead of nested lists.
 
