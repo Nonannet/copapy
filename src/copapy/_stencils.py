@@ -132,12 +132,29 @@ def get_stencil_position(func: pelfy.elf_symbol) -> tuple[int, int]:
     function_size = func.section.fields['sh_size']
 
     # Check if jump is the last instruction and can be striped
-    if last_instr + 5 >= function_size:
+    if last_instr + 5 >= function_size or get_thumb_padding(func, last_instr):
         end_index = last_instr
     else:
         end_index = function_size
 
     return start_index, end_index
+
+
+def get_thumb_padding(func: pelfy.elf_symbol, last_instr: int) -> bytes:
+    """Returns the nop padding following the last jump instruction of a
+    Thumb function if it is the only content after the jump, otherwise b''.
+
+    On ARM Thumb the 4 byte jump at a 2 mod 4 offset is followed by a 2 byte
+    nop to pad the function to 4 bytes. If the jump is stripped, the nop must
+    be kept so that stencil lengths remain multiples of 4 (required for the
+    4 byte alignment of following stencils).
+    """
+    if not func.thumb_mode or last_instr < 0:
+        return b''
+    assert func.section
+    tail = func.section.data[func.offset_in_section + last_instr + 4:]
+    nop = b'\x00\xbf'  # Thumb nop instruction (little endian only)
+    return tail if tail == nop else b''
 
 
 def get_last_relocation(func: pelfy.elf_symbol) -> pelfy.elf_relocation:
@@ -216,7 +233,7 @@ class stencil_database():
         #    self.elf.symbols[name].data
 
         self._relocation_cache: dict[tuple[str, bool], list[relocation_entry]] = {}
-        self._stencil_cache: dict[str, tuple[int, int]] = {}
+        self._stencil_cache: dict[str, tuple[int, int, bytes]] = {}
 
         # Functions by code section index (with -ffunction-sections each
         # function has its own section)
@@ -508,7 +525,7 @@ class stencil_database():
             Striped function code
         """
         if name in self._stencil_cache:
-            start_index, lengths = self._stencil_cache[name]
+            start_index, lengths, padding = self._stencil_cache[name]
         else:
             func = self.elf.symbols[name]
             start_stencil, end_stencil = get_stencil_position(func)
@@ -516,9 +533,10 @@ class stencil_database():
 
             start_index = func.offset_in_file + start_stencil
             lengths = end_stencil - start_stencil
-            self._stencil_cache[name] = (start_index, lengths)
+            padding = get_thumb_padding(func, end_stencil)
+            self._stencil_cache[name] = (start_index, lengths, padding)
 
-        return self.elf.read_bytes(start_index, lengths)
+        return self.elf.read_bytes(start_index, lengths) + padding
 
     def get_sub_functions(self, names: Iterable[str]) -> set[str]:
         """Return recursively all functions called by stencils or by other functions
