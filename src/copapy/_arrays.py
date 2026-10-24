@@ -646,22 +646,14 @@ class array(Generic[TNum]):
         node = _add_array_op(f"dot_{self.net.dtype}arr_{other.net.dtype}arr", [self.net, other.net, n])
         return value(node.result)
 
-    @overload
-    def matmul(self: 'array[int]', other: 'array[int]') -> 'value[int] | array[int]': ...
-    @overload
-    def matmul(self, other: 'array[float]') -> 'value[float] | array[float]': ...
-    @overload
-    def matmul(self: 'array[float]', other: 'array[Any]') -> 'value[float] | array[float]': ...
-    @overload
-    def matmul(self, other: 'array[Any]') -> 'value[Any] | array[Any]': ...
-    def matmul(self, other: 'array[Any]') -> Any:
+    def _matmul(self, other: 'array[Any]') -> Any:
         """Matrix multiplication for 1D and 2D operands (numpy semantics)."""
         if self.ndim == 1 and other.ndim == 1:
             if self.size != other.size:
                 raise ValueError(f"Shape mismatch: {self.shape} @ {other.shape}")
             return self.dot(other)
         if self.ndim == 1 and other.ndim == 2:
-            ret = self.reshape(1, self.size).matmul(other)
+            ret = self.reshape(1, self.size)._matmul(other)
             assert isinstance(ret, array)
             return ret.reshape(ret.size)
         if self.ndim == 2 and other.ndim == 2:
@@ -694,7 +686,10 @@ class array(Generic[TNum]):
     @overload
     def __matmul__(self, other: 'array[Any]') -> 'value[Any] | array[Any]': ...
     def __matmul__(self, other: 'array[Any]') -> Any:
-        return self.matmul(other)
+        """Matrix multiplication for 1D and 2D operands."""
+        if not isinstance(other, array):
+            return NotImplemented
+        return self._matmul(other)
 
     def get_values(self, data: Sequence[int | float]) -> list[Any]:
         """Nest flat element data according to the array shape"""

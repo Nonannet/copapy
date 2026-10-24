@@ -2,6 +2,7 @@ from typing import Iterable, overload, TypeVar, Any, Callable, TypeAlias
 from . import _binwrite as binw
 from coparun_module import coparun, read_data_mem, data_mem, create_target, clear_target
 import importlib
+import copapy as cp
 import struct
 from ._basic_types import value, Net, Node, Store, NumLike, stencil_db_from_package, ArrayOp, ArrayElement, ArrayConst, ArrayPack, Delay, ArrayDelay, TimeStep, transl_type
 from ._arrays import array, ArrayType
@@ -271,6 +272,8 @@ def collect_roots(values: Any) -> list[Node]:
                         add_root(v.net)
         elif isinstance(input, value):
             add_root(input.net)
+        elif isinstance(input, cp.cxvalue | cp.cxtensor):
+            add((input.real, input.imag))
         elif isinstance(input, dict):
             add(list(input.values()))
         elif isinstance(input, Iterable) and not isinstance(input, str | bytes):
@@ -379,6 +382,12 @@ class _TargetBase():
                 array_type: Any = type(variables)
                 return array_type(self.read_value(packed))
             return variables.map(lambda v: self.read_value(v))
+
+        if isinstance(variables, cp.cxvalue):
+            return complex(self.read_value(variables.real), self.read_value(variables.imag))
+
+        if isinstance(variables, cp.cxtensor):
+            return cp.cxtensor(self.read_value(variables.real), self.read_value(variables.imag))
 
         if isinstance(variables, dict):
             return {k: self.read_value(v) for k, v in variables.items()}

@@ -174,13 +174,13 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
 
         elif opn == 'matvec':
             (m,), (n,) = _const_ints(node.args[2]), _const_ints(node.args[3])
-            add_grad(a, g.reshape(m, 1).matmul(b.reshape(1, n)))
-            add_grad(b, a.reshape(m, n).T.matmul(g))
+            add_grad(a, g.reshape(m, 1) @ b.reshape(1, n))
+            add_grad(b, a.reshape(m, n).T @ g)
 
         elif opn == 'matmul':
             m, k, n = _const_ints(node.args[2])
-            add_grad(a, g.reshape(m, n).matmul(b.reshape(k, n).T))
-            add_grad(b, a.reshape(m, k).T.matmul(g.reshape(m, n)))
+            add_grad(a, g.reshape(m, n) @ b.reshape(k, n).T)
+            add_grad(b, a.reshape(m, k).T @ g.reshape(m, n))
 
         elif opn == 'solve':
             # x = a^-1 b: the gradient of b is a^-T g, the gradient of a is -(a^-T g) x^T
@@ -189,7 +189,7 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
             sol: array[Any] = array._from_net(out_net, (n, r))
             g_b = solve_arrays(a.reshape(n, n).T, g.reshape(n, r))
             add_grad(b, g_b)
-            add_grad(a, -g_b.matmul(sol.T))
+            add_grad(a, -(g_b @ sol.T))
 
         elif opn == 'det':
             # The gradient of det(a) is det(a) a^-T (not defined for a singular matrix)

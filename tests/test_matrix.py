@@ -53,7 +53,7 @@ def test_matrix_matrix_multiplication(a: list[list[float]], b: list[list[float]]
     assert isinstance(res, cp.tensor)
     assert res.shape == (len(a), len(b[0]))
     assert res.values == pytest.approx(flat(ref))  # pyright: ignore[reportUnknownMemberType]
-    assert cp.tensor(a).matmul(cp.tensor(b)).values == pytest.approx(flat(ref))  # pyright: ignore[reportUnknownMemberType]
+    assert cp.matmul(cp.tensor(a), cp.tensor(b)).values == pytest.approx(flat(ref))  # pyright: ignore[reportUnknownMemberType]
 
     res, = evaluate(variables(a) @ cp.tensor(b))
     assert res.shape == (len(a), len(b[0]))

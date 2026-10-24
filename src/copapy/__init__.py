@@ -40,8 +40,9 @@ from . import devices
 from ._basic_types import NumLike, value, generic_sdb
 from ._vectors import vector, cross, dot, distance, scalar_projection, angle_between, rotate_vector, vector_projection
 from ._quaternion import quaternion
-from ._tensors import tensor, zeros, ones, arange, eye, identity, diagonal, concat, ravel
+from ._tensors import tensor, zeros, ones, arange, eye, identity, diagonal, concat, ravel, matmul
 from ._math import sqrt, abs, sign, sin, cos, tan, tanh, asin, acos, atan, atan2, log, exp, pow, get_42, clamp, minimum, maximum, min, max
+from ._complex import cxvalue, cxtensor
 from ._casts import cast, to_float, to_int, to_bool, to_byte, pack, unpack
 from ._linalg import solve, inv, det, cholesky, solve_triangular, cho_solve
 from ._interp import interp, lerp
@@ -93,6 +94,7 @@ __all__ = [
     "ones",
     "diagonal",
     "arange",
+    "matmul",
     "sqrt",
     "abs",
     "sin",
@@ -128,6 +130,8 @@ __all__ = [
     "rotate_vector",
     "vector_projection",
     "quaternion",
+    "cxvalue",
+    "cxtensor",
     "grad",
     "jacobian",
     "solve",

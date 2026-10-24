@@ -94,7 +94,7 @@ class vector(ArrayType[TNum]):
     @overload
     def __add__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __add__(self, other: VecNumLike) -> Any:
-        if isinstance(other, cp.tensor):
+        if isinstance(other, cp.tensor | cp.cxvalue | cp.cxtensor):
             return NotImplemented
         ret = self._try_array_op(other, 'add')
         if ret is not None:
@@ -124,7 +124,7 @@ class vector(ArrayType[TNum]):
     @overload
     def __sub__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __sub__(self, other: VecNumLike) -> Any:
-        if isinstance(other, cp.tensor):
+        if isinstance(other, cp.tensor | cp.cxvalue | cp.cxtensor):
             return NotImplemented
         ret = self._try_array_op(other, 'sub')
         if ret is not None:
@@ -143,7 +143,7 @@ class vector(ArrayType[TNum]):
     @overload
     def __rsub__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __rsub__(self, other: VecNumLike) -> Any:
-        if isinstance(other, cp.tensor):
+        if isinstance(other, cp.tensor | cp.cxvalue | cp.cxtensor):
             return NotImplemented
         ret = self._try_array_op(other, 'sub', reverse=True)
         if ret is not None:
@@ -162,7 +162,7 @@ class vector(ArrayType[TNum]):
     @overload
     def __mul__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __mul__(self, other: VecNumLike) -> Any:
-        if isinstance(other, cp.tensor):
+        if isinstance(other, cp.tensor | cp.cxvalue | cp.cxtensor):
             return NotImplemented
         ret = self._try_array_op(other, 'mul')
         if ret is not None:
@@ -192,7 +192,7 @@ class vector(ArrayType[TNum]):
     @overload
     def __pow__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __pow__(self, other: VecNumLike) -> Any:
-        if isinstance(other, cp.tensor):
+        if isinstance(other, cp.tensor | cp.cxvalue | cp.cxtensor):
             return NotImplemented
         ret = self._try_array_op(other, 'pow')
         if ret is not None:
@@ -211,7 +211,7 @@ class vector(ArrayType[TNum]):
     @overload
     def __rpow__(self, other: VecNumLike) -> 'vector[Any]': ...
     def __rpow__(self, other: VecNumLike) -> Any:
-        if isinstance(other, cp.tensor):
+        if isinstance(other, cp.tensor | cp.cxvalue | cp.cxtensor):
             return NotImplemented
         ret = self._try_array_op(other, 'pow', reverse=True)
         if ret is not None:
@@ -222,7 +222,7 @@ class vector(ArrayType[TNum]):
         return vector(other ** a for a in self.values)
 
     def __truediv__(self, other: VecNumLike) -> 'vector[float]':
-        if isinstance(other, cp.tensor):
+        if isinstance(other, cp.tensor | cp.cxvalue | cp.cxtensor):
             return NotImplemented
         ret: 'vector[Any] | None' = self._try_array_op(other, 'div')
         if ret is not None:
@@ -233,7 +233,7 @@ class vector(ArrayType[TNum]):
         return vector(a / other for a in self.values)
 
     def __rtruediv__(self, other: VecNumLike) -> 'vector[float]':
-        if isinstance(other, cp.tensor):
+        if isinstance(other, cp.tensor | cp.cxvalue | cp.cxtensor):
             return NotImplemented
         ret: 'vector[Any] | None' = self._try_array_op(other, 'div', reverse=True)
         if ret is not None:
@@ -291,7 +291,9 @@ class vector(ArrayType[TNum]):
             if other.ndim != 2:
                 raise ValueError(f"vector @ tensor requires a 2D tensor, not {other.ndim}D (use dot for 1D)")
             from ._tensors import _to_vector
-            return _to_vector(cp.tensor(self).matmul(other))
+            return _to_vector(cp.tensor(self) @ other)
+        if not isinstance(other, vector):
+            return NotImplemented
         return self.dot(other)
 
     def cross(self: 'vector[float]', other: 'vector[float]') -> 'vector[float]':
@@ -313,7 +315,7 @@ class vector(ArrayType[TNum]):
         ])
 
     def __gt__(self, other: VecNumLike) -> 'vector[int]':
-        if isinstance(other, cp.tensor):
+        if isinstance(other, cp.tensor | cp.cxvalue | cp.cxtensor):
             return NotImplemented
         ret: 'vector[Any] | None' = self._try_array_op(other, 'gt')
         if ret is not None:
@@ -324,7 +326,7 @@ class vector(ArrayType[TNum]):
         return vector(a > other for a in self.values)
 
     def __lt__(self, other: VecNumLike) -> 'vector[int]':
-        if isinstance(other, cp.tensor):
+        if isinstance(other, cp.tensor | cp.cxvalue | cp.cxtensor):
             return NotImplemented
         ret: 'vector[Any] | None' = self._try_array_op(other, 'gt', reverse=True)
         if ret is not None:
@@ -335,7 +337,7 @@ class vector(ArrayType[TNum]):
         return vector(a < other for a in self.values)
 
     def __ge__(self, other: VecNumLike) -> 'vector[int]':
-        if isinstance(other, cp.tensor):
+        if isinstance(other, cp.tensor | cp.cxvalue | cp.cxtensor):
             return NotImplemented
         ret: 'vector[Any] | None' = self._try_array_op(other, 'ge')
         if ret is not None:
@@ -346,7 +348,7 @@ class vector(ArrayType[TNum]):
         return vector(a >= other for a in self.values)
 
     def __le__(self, other: VecNumLike) -> 'vector[int]':
-        if isinstance(other, cp.tensor):
+        if isinstance(other, cp.tensor | cp.cxvalue | cp.cxtensor):
             return NotImplemented
         ret: 'vector[Any] | None' = self._try_array_op(other, 'ge', reverse=True)
         if ret is not None:
@@ -357,7 +359,7 @@ class vector(ArrayType[TNum]):
         return vector(a <= other for a in self.values)
 
     def __eq__(self, other: VecNumLike | Sequence[int | float]) -> 'vector[int]':  # type: ignore
-        if isinstance(other, cp.tensor):
+        if isinstance(other, cp.tensor | cp.cxvalue | cp.cxtensor):
             return NotImplemented
         ret: 'vector[Any] | None' = None if isinstance(other, Sequence) else self._try_array_op(other, 'eq')
         if ret is not None:
@@ -368,7 +370,7 @@ class vector(ArrayType[TNum]):
         return vector(a == other for a in self.values)
 
     def __ne__(self, other: VecNumLike) -> 'vector[int]':  # type: ignore
-        if isinstance(other, cp.tensor):
+        if isinstance(other, cp.tensor | cp.cxvalue | cp.cxtensor):
             return NotImplemented
         ret: 'vector[Any] | None' = self._try_array_op(other, 'ne')
         if ret is not None:

@@ -1,4 +1,5 @@
 from . import value
+import copapy as cp
 from ._arrays import array, ArrayType
 from ._vectors import vector, VecFloatLike, VecIntLike, VecNumLike
 from ._mixed import mixed_sum
@@ -447,6 +448,8 @@ class tensor(ArrayType[TNum]):
                 gt, ge, eq, ne)
             reverse: The array operation computes other (op) self
         """
+        if isinstance(other, cp.cxvalue | cp.cxtensor):
+            return NotImplemented  # cxtensor and cxvalue implement the reflected operation
         if array_op:
             if isinstance(other, Sequence | vector):
                 other = tensor(other)
@@ -691,42 +694,6 @@ class tensor(ArrayType[TNum]):
             size *= dim
         return size
 
-    @overload
-    def matmul(self: 'tensor[int]', other: 'vector[int]') -> 'vector[int]': ...
-    @overload
-    def matmul(self, other: 'vector[float]') -> 'vector[float]': ...
-    @overload
-    def matmul(self: 'tensor[float]', other: 'vector[int] | vector[float]') -> 'vector[float]': ...
-    @overload
-    def matmul(self: 'tensor[int]', other: 'tensor[int]') -> 'tensor[int]': ...
-    @overload
-    def matmul(self, other: 'tensor[float]') -> 'tensor[float]': ...
-    @overload
-    def matmul(self: 'tensor[float]', other: 'tensor[int] | tensor[float]') -> 'tensor[float]': ...
-    def matmul(self, other: 'tensor[Any] | vector[Any]') -> Any:
-        """Matrix multiplication (@ operator). The type of the result does not
-        depend on the shapes: it is a tensor, 0-d for 1D @ 1D (use item() for
-        the scalar). With a vector as other, the tensor must be 2D and the
-        result is a vector.
-
-        Arguments:
-            other: Another tensor or a vector to multiply with.
-
-        Returns:
-            Result of matrix multiplication.
-
-        Raises:
-            ValueError: If shapes are incompatible for matrix multiplication.
-        """
-        if isinstance(other, vector):
-            if self.ndim != 2:
-                raise ValueError(f"tensor @ vector requires a 2D tensor, not {self.ndim}D (use dot for 1D)")
-            ret = self._matmul(other)
-            assert isinstance(ret, tensor)  # 2D @ 1D is no scalar
-            return _to_vector(ret)
-        ret = self._matmul(other)
-        return ret if isinstance(ret, tensor) else tensor(ret)
-
     def _matmul(self, other: 'tensor[Any] | vector[Any]') -> 'int | float | value[Any] | tensor[Any]':
         if self.ndim < 1 or other.ndim < 1:
             raise ValueError("matmul requires tensors with at least 1 dimension")
@@ -738,7 +705,7 @@ class tensor(ArrayType[TNum]):
                 a = a if a is not None else self._get_array(force=True)
                 b = b if b is not None else other_t._get_array(force=True)
                 if a is not None and b is not None:
-                    ret = a.matmul(b)
+                    ret = a @ b
                     if isinstance(ret, value):
                         return ret
                     packed_result: tensor[Any] = tensor._from_array(ret)
@@ -801,8 +768,28 @@ class tensor(ArrayType[TNum]):
     @overload
     def __matmul__(self: 'tensor[float]', other: 'tensor[int] | tensor[float]') -> 'tensor[float]': ...
     def __matmul__(self, other: 'tensor[Any] | vector[Any]') -> Any:
-        """Matrix multiplication operator (@)."""
-        return self.matmul(other)
+        """Matrix multiplication. With a vector as other,
+        the tensor must be 2D and the result is a vector.
+
+        Arguments:
+            other: Another tensor or a vector to multiply with.
+
+        Returns:
+            Result of matrix multiplication.
+
+        Raises:
+            ValueError: If shapes are incompatible for matrix multiplication.
+        """
+        if isinstance(other, vector):
+            if self.ndim != 2:
+                raise ValueError(f"tensor @ vector requires a 2D tensor, not {self.ndim}D (use dot for 1D)")
+            ret = self._matmul(other)
+            assert isinstance(ret, tensor)  # 2D @ 1D is no scalar
+            return _to_vector(ret)
+        if not isinstance(other, tensor):
+            return NotImplemented
+        ret = self._matmul(other)
+        return ret if isinstance(ret, tensor) else tensor(ret)
 
     @overload
     def sum(self, axis: None = None, keepdims: Literal[False] = False) -> TNum | value[TNum]: ...
@@ -962,6 +949,51 @@ def _to_vector(t: tensor[TNum]) -> vector[TNum]:
     if t._array is not None:
         return vector._from_array(t._array, t._packed)
     return vector(t.values, t._packed)
+
+
+@overload
+def matmul(a: 'cp.cxtensor', b: 'cp.cxtensor | tensor[Any] | vector[Any]') -> 'cp.cxtensor': ...
+@overload
+def matmul(a: tensor[Any] | vector[Any], b: 'cp.cxtensor') -> 'cp.cxtensor': ...
+@overload
+def matmul(a: tensor[int], b: vector[int]) -> vector[int]: ...
+@overload
+def matmul(a: tensor[Any], b: vector[Any]) -> vector[float]: ...
+@overload
+def matmul(a: vector[int], b: tensor[int]) -> vector[int]: ...
+@overload
+def matmul(a: vector[Any], b: tensor[Any]) -> vector[float]: ...
+@overload
+def matmul(a: tensor[int], b: tensor[int]) -> tensor[int]: ...
+@overload
+def matmul(a: tensor[Any], b: tensor[Any]) -> tensor[float]: ...
+@overload
+def matmul(a: vector[int], b: vector[int]) -> int | value[int]: ...
+@overload
+def matmul(a: vector[Any], b: vector[Any]) -> float | value[float]: ...
+@overload
+def matmul(a: array[int], b: array[int]) -> value[int] | array[int]: ...
+@overload
+def matmul(a: array[Any], b: array[Any]) -> value[float] | array[float]: ...
+def matmul(a: Any, b: Any) -> Any:
+    """Matrix product a @ b for 1D and 2D operands.
+
+    For tensors the result is a tensor (0-d for 1D @ 1D, a 2D
+    tensor and a vector give a vector, two vectors their dot
+    product. With a cxtensor operand the result is a cxtensor.
+
+    Arguments:
+        a: Left operand
+        b: Right operand
+
+    Returns:
+        The matrix product
+
+    Raises:
+        TypeError: For operand types that are not supported
+        ValueError: If shapes are incompatible for matrix multiplication
+    """
+    return a @ b
 
 
 def zeros(shape: Sequence[int] | int) -> tensor[int]:

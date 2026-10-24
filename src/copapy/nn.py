@@ -147,7 +147,7 @@ def linear(x: array[Any] | tensor[Any] | vector[Any], weight: ArrayLike, bias: A
         raise ValueError(f"linear requires a 1D or 2D input and 2D weights, got shapes {xa.shape} and {wa.shape}")
     if xa.shape[-1] != wa.shape[1]:
         raise ValueError(f"Input with {xa.shape[-1]} features does not match weights for {wa.shape[1]} features")
-    ret: Any = wa.matmul(xa.T if xa.ndim == 2 else xa)
+    ret: Any = wa @ (xa.T if xa.ndim == 2 else xa)
     if xa.ndim == 2:
         ret = ret.T  # (out_features, batch) to (batch, out_features)
     if bias is not None:
