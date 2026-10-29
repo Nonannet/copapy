@@ -351,27 +351,34 @@ class value(Generic[TNum]):
 
     @scalar_op
     def __and__(self, other: uniint) -> 'value[int]':
-        return add_op('bwand', [self, other], True)
+        return add_op('bwand', [self, other], True, dtype=_logic_dtype(self, other))
 
     @scalar_op
     def __rand__(self, other: uniint) -> 'value[int]':
-        return add_op('bwand', [other, self], True)
+        return add_op('bwand', [other, self], True, dtype=_logic_dtype(self, other))
 
     @scalar_op
     def __or__(self, other: uniint) -> 'value[int]':
-        return add_op('bwor', [self, other], True)
+        return add_op('bwor', [self, other], True, dtype=_logic_dtype(self, other))
 
     @scalar_op
     def __ror__(self, other: uniint) -> 'value[int]':
-        return add_op('bwor', [other, self], True)
+        return add_op('bwor', [other, self], True, dtype=_logic_dtype(self, other))
 
     @scalar_op
     def __xor__(self, other: uniint) -> 'value[int]':
-        return add_op('bwxor', [self, other], True)
+        return add_op('bwxor', [self, other], True, dtype=_logic_dtype(self, other))
 
     @scalar_op
     def __rxor__(self, other: uniint) -> 'value[int]':
-        return add_op('bwxor', [other, self], True)
+        return add_op('bwxor', [other, self], True, dtype=_logic_dtype(self, other))
+
+
+def _logic_dtype(a: Any, b: Any) -> str | None:
+    """'bool' for a bitwise operation of two booleans"""
+    def is_bool(x: Any) -> bool:
+        return x.dtype == 'bool' if isinstance(x, value) else isinstance(x, bool)
+    return 'bool' if is_bool(a) and is_bool(b) else None
 
 
 class HeadNode(Node):

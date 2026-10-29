@@ -51,6 +51,8 @@ from ._tensors import tensor as matrix
 from ._arrays import array
 from ._flow import iif
 from ._temporal import delay, integrate, rate, integrate_rotation, angular_rate, feedback, dt
+from ._logic import rising, falling, latch, hysteresis, held, released
+from ._statemachine import StateMachine, State, ANY, after
 from ._ringbuffer import ringbuffer
 from ._sorting import sort, argsort
 from . import nn
@@ -84,6 +86,16 @@ __all__ = [
     "angular_rate",
     "feedback",
     "dt",
+    "rising",
+    "falling",
+    "latch",
+    "hysteresis",
+    "held",
+    "released",
+    "StateMachine",
+    "State",
+    "ANY",
+    "after",
     "ringbuffer",
     "vector",
     "tensor",
