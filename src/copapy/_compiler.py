@@ -4,7 +4,7 @@ from ._stencils import stencil_database, patch_entry, TRICORE_BRANCH_RELOCATIONS
 from collections import defaultdict
 import heapq
 import struct
-from ._basic_types import Net, Node, Store, HeadNode, Constant, Op, transl_type, ArrayNet, ArrayConst, ArrayDelay, ArrayOp, ArrayElement, ArrayPack
+from ._basic_types import Net, Node, Store, HeadNode, Constant, TimeStep, Op, transl_type, ArrayNet, ArrayConst, ArrayDelay, ArrayOp, ArrayElement, ArrayPack
 
 # Pseudo operation: store register 0 to an array element of an ArrayPack
 PACK_STORE = "pack_store"
@@ -84,6 +84,8 @@ def _node_key(node: Node, arg_ids: tuple[int, ...]) -> tuple[Any, ...] | None:
         # Floats by bit pattern: 0.0 and -0.0 are different constants
         bits = struct.pack('d', node.value) if node.dtype == 'float' else node.value
         return ('const', node.dtype, bits)
+    if isinstance(node, TimeStep):
+        return ('dt', node.factor, node.exponent)
     if not arg_ids:
         return None  # Input and ArrayConst: each node is distinct
     if isinstance(node, ArrayElement):

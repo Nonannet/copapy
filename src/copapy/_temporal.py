@@ -35,9 +35,6 @@ a task using it must have a period."""
 _METHODS = ('forward', 'backward', 'trapezoid')
 _FRAMES = ('body', 'world')
 
-# Time constants by factor and exponent of dt
-_time_constants: dict[tuple[float, int], value[float]] = {(1.0, 1): dt}
-
 
 def _initial(init: Any, dtype: str) -> int | float:
     """Initial value of a delay as number of the type of the delayed value"""
@@ -63,7 +60,7 @@ def _init_values(init: Any, x: ArrayType[Any]) -> list[Any]:
     return values
 
 
-def _delay_value(x: value[Any] | int | float, init: Any) -> value[Any]:
+def delay_value(x: value[Any] | int | float, init: Any) -> value[Any]:
     xv = x if isinstance(x, value) else value_from_number(x)
     node = Delay(_initial(init, xv.dtype), xv.net)
     return value(Net(node.dtype, node), xv.dtype)
@@ -101,7 +98,7 @@ def delay(x: Any, init: Any = 0, n: int = 1) -> Any:
     if isinstance(x, int | float):
         x = value_from_number(x)  # A value also for n = 0
     for _ in range(n):
-        x = _map_init(x, init, _delay_value)
+        x = _map_init(x, init, delay_value)
     return x
 
 
@@ -195,23 +192,21 @@ def feedback(func: Callable[[Any], T], init: Any) -> T:
     return out
 
 
-def _time_constant(dt_: 'unifloat | None', factor: float, exponent: int) -> unifloat:
+def time_constant(dt_: 'unifloat | None', factor: float, exponent: int) -> unifloat:
     """factor * dt^exponent (exponent 1, 2 or -1). For the period of the task it
-    is written to the memory of the task at deployment, so it costs no operation."""
+    is written to the memory of the task at deployment, so it costs no operation.
+    Time constants of the same factor and exponent are merged by the compiler."""
     if dt_ is None:
-        key = (factor, exponent)
-        if key not in _time_constants:
-            _time_constants[key] = value(Net('float', TimeStep(factor, exponent)), 'float')
-        return _time_constants[key]
+        return value(Net('float', TimeStep(factor, exponent)), 'float')
     if exponent == -1:
         return factor / dt_
     return factor * dt_ * dt_ if exponent == 2 else factor * dt_
 
 
-def _gated(c: unifloat) -> value[float]:
+def gated(c: unifloat) -> value[float]:
     """0.0 at the first run of the task, then c: for an increment that is
     zero at the first run without masking the elements of the increment"""
-    return _delay_value(c, 0.0)
+    return delay_value(c, 0.0)
 
 
 def _like(x: Any, init: Any) -> Any:
@@ -270,11 +265,11 @@ def integrate(x: Any, init: Any = 0.0, method: str = 'trapezoid', dt: 'unifloat 
     if isinstance(x, tuple | list | array):
         raise TypeError(f"Unsupported type {type(x).__name__}, use a vector or tensor")
     if method == 'forward':
-        increment = delay(x) * _time_constant(dt, 1.0, 1)
+        increment = delay(x) * time_constant(dt, 1.0, 1)
     elif method == 'backward':
-        increment = x * _gated(_time_constant(dt, 1.0, 1))
+        increment = x * gated(time_constant(dt, 1.0, 1))
     else:
-        increment = (x + delay(x)) * _gated(_time_constant(dt, 0.5, 1))
+        increment = (x + delay(x)) * gated(time_constant(dt, 0.5, 1))
     return feedback(lambda prev: prev + increment, _like(x, init))
 
 
@@ -302,7 +297,7 @@ def rate(x: Any, dt: 'unifloat | None' = None) -> Any:
                         "use angular_rate for the angular velocity")
     if isinstance(x, tuple | list | array):
         raise TypeError(f"Unsupported type {type(x).__name__}, use a vector or tensor")
-    return (x - delay(x)) * _gated(_time_constant(dt, 1.0, -1))
+    return (x - delay(x)) * gated(time_constant(dt, 1.0, -1))
 
 
 # Truncation error of the series of the rotation (float32 precision)
@@ -428,14 +423,14 @@ def integrate_rotation(omega: 'vector[Any] | Sequence[unifloat]', init: quaterni
 
     # Half of the rotation vector of the time step
     if method == 'forward':
-        half = delay(omega) * _time_constant(dt, 0.5, 1)
+        half = delay(omega) * time_constant(dt, 0.5, 1)
     elif method == 'backward':
-        half = omega * _gated(_time_constant(dt, 0.5, 1))
+        half = omega * gated(time_constant(dt, 0.5, 1))
     else:
         # The coning term is zero at the first run (the delayed omega is zero)
         prev = delay(omega)
-        half = (omega + prev) * _gated(_time_constant(dt, 0.25, 1)) + \
-            cross(prev, omega) * _time_constant(dt, 1 / 24 if body else -1 / 24, 2)
+        half = (omega + prev) * gated(time_constant(dt, 0.25, 1)) + \
+            cross(prev, omega) * time_constant(dt, 1 / 24 if body else -1 / 24, 2)
     rotation = _rotation(half, max_angle)
 
     def step_rotation(q: quaternion) -> quaternion:
@@ -465,4 +460,4 @@ def angular_rate(q: quaternion, dt: 'unifloat | None' = None, frame: str = 'body
         raise TypeError(f"The orientation must be a quaternion, not {type(q).__name__}")
     # The previous orientation at the first run is the identity, the result is zero
     d = _mul_conjugate(delay(q, init=(1.0, 0.0, 0.0, 0.0)), q, body)
-    return _rotation_vector(d) * _gated(_time_constant(dt, 1.0, -1))
+    return _rotation_vector(d) * gated(time_constant(dt, 1.0, -1))
