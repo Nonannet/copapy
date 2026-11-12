@@ -279,9 +279,9 @@ class StateMachine:
         return to_float(runs) * (self.dt if self.dt is not None else dt)
 
     @overload
-    def select(self, outputs: Mapping[State, uniint], default: uniint | None = None) -> value[int]: ...  # type: ignore[overload-overlap]  # pyright: ignore[reportOverlappingOverload]
+    def select(self, outputs: Mapping[State, uniint], default: 'uniint | None' = None) -> value[int]: ...  # type: ignore[overload-overlap]  # pyright: ignore[reportOverlappingOverload]
     @overload
-    def select(self, outputs: Mapping[State, NumLike], default: NumLike | None = None) -> value[float]: ...
+    def select(self, outputs: Mapping[State, NumLike], default: 'NumLike | None' = None) -> value[float]: ...
     @overload
     def select(self, outputs: Mapping[State, TContainer], default: TContainer | None = None) -> TContainer: ...
     def select(self, outputs: Mapping[State, Any], default: Any = None) -> Any:

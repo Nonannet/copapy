@@ -106,7 +106,7 @@ def pow(x: Any, y: Any) -> Any:
     """x to the power of y. The result is an int if both operands are
     int, otherwise a float. An int power is exact up to the wrap around of
     32 bit ints on overflow, a negative int exponent gives 1 / x^-y truncated
-    towards zero (0 for |x| > 1 and for x = 0).
+    towards zero (0 for ``abs(x) > 1`` and for ``x = 0``).
 
     Arguments:
         x: Input value

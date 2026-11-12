@@ -58,7 +58,7 @@ class ringbuffer(array[TNum], Generic[TNum, TSample]):
     the cost per run is independent of n. Before n runs the remaining slots
     hold the initial value.
 
-    The ring buffer is an array of shape (n, *shape of x) in time order: the
+    The ring buffer is an array of shape ``(n, *x.shape)`` in time order: the
     oldest value first and the current value last. Using it as array copies
     the buffer once per run into time order. Reductions that are independent
     of the order (sum, min, max and sort, and sums along the time axis 0)
@@ -77,7 +77,7 @@ class ringbuffer(array[TNum], Generic[TNum, TSample]):
     Attributes:
         n: Number of values in the buffer
         index: Slot of the current value in slots (0 to n - 1)
-        slots: The memory of the buffer as array of shape (n, *shape of x) in
+        slots: The memory of the buffer as array of shape ``(n, *x.shape)`` in
             the order of the slots, reading it costs no copy.
     """
     @overload
