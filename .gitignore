@@ -21,6 +21,7 @@ benchmark_results*.json
 benchmark_results*.png
 docs/build
 docs/source/api
+docs/source/stencil_doc/
 /libs/
 *.core
 core

@@ -3,11 +3,11 @@ Listing of all stencils with their C source and the machine code for all archite
 
 ```{toctree}
 :maxdepth: 1
-stencil_doc_load_store
-stencil_doc_conversion
-stencil_doc_scalar_arith
-stencil_doc_scalar_math
-stencil_doc_array_elementwise
-stencil_doc_array_linalg
-stencil_doc_aux
+stencil_doc/load_store
+stencil_doc/conversion
+stencil_doc/scalar_arith
+stencil_doc/scalar_math
+stencil_doc/array_elementwise
+stencil_doc/array_linalg
+stencil_doc/auxiliary
 ```
