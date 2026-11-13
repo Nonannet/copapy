@@ -43,20 +43,20 @@ dev = [
     "mypy",
     "types-pyserial",
     "pytest",
-    "pelfy>=1.0.10",
+    "pelfy>=1.0.11",
     "numpy",
     "scipy"
 ]
 mindev = [
     "pytest",
-    "pelfy>=1.0.10"
+    "pelfy>=1.0.11"
 ]
 doc_build = [
     "sphinx",
     "pydata_sphinx_theme",
     "sphinx-autodoc-typehints",
     "myst-parser",
-    "pelfy>=1.0.10"
+    "pelfy>=1.0.11"
 ]
 
 [tool.mypy]
