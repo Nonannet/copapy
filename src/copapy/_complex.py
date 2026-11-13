@@ -1,8 +1,8 @@
 from typing import Any, Callable, Iterator, Sequence, TypeAlias, overload
-from ._basic_types import value, to_float, unifloat, NumLike
+from ._basic_types import value, to_float, unifloat, NumLike, ComplexType
 from ._vectors import vector
 from ._tensors import tensor
-from ._arrays import _flatten
+from ._arrays import array, _flatten
 from ._casts import to_float as _tensor_to_float
 from ._math import sqrt, abs as _abs, atan2, exp, cos, sin, log
 
@@ -37,10 +37,14 @@ def _scalar_parts(x: Any) -> tuple[unifloat, unifloat] | None:
     return None
 
 
-class cxvalue:
+class cxvalue(ComplexType):
     """Complex scalar of two float parts. The parts are copapy values or
     float constants: operations with constant zero parts (e.g. with a
     real number) are removed at trace time.
+
+    A value combined with a Python complex number gives a cxvalue:
+
+        >>> z = x + 2j * y  # x and y are values
 
     Attributes:
         real: Real part
@@ -55,6 +59,8 @@ class cxvalue:
             imag: Imaginary part
         """
         if isinstance(real, complex):
+            if not _is_zero(imag):
+                raise TypeError("imag must not be given for a complex number as first parameter")
             real, imag = real.real, real.imag
         self.real: unifloat = _float(real)
         self.imag: unifloat = _float(imag)
@@ -96,6 +102,10 @@ class cxvalue:
     def log(self) -> 'cxvalue':
         """Principal value of the natural logarithm"""
         return cxvalue(log(abs(self)), self.angle())
+
+    def sqrt(self) -> 'cxvalue':
+        """Principal square root"""
+        return cxvalue.from_polar(sqrt(abs(self)), self.angle() * 0.5)
 
     def __neg__(self) -> 'cxvalue':
         return cxvalue(-self.real, -self.imag)
@@ -183,10 +193,15 @@ class cxvalue:
             return NotImplemented
         return _div_scalar(*p, self.real, self.imag)
 
-    def __pow__(self, n: int) -> 'cxvalue':
-        """Integer power by repeated squaring"""
+    def __pow__(self, n: CxScalarLike) -> 'cxvalue':
+        """Power: an int exponent by repeated squaring, a real exponent by the
+        polar form and a complex exponent as e^(n * log(z)) (principal values)"""
         if not isinstance(n, int):
-            return NotImplemented
+            if (p := _scalar_parts(n)) is None:
+                return NotImplemented
+            if _is_zero(p[1]):
+                return cxvalue.from_polar(abs(self) ** p[0], self.angle() * p[0])
+            return (cxvalue(*p) * self.log()).exp()
         if n < 0:
             return 1.0 / (self ** -n)
         result: cxvalue = cxvalue(1.0)
@@ -198,6 +213,12 @@ class cxvalue:
             if n:
                 base = base * base
         return result
+
+    def __rpow__(self, base: CxScalarLike) -> 'cxvalue':
+        """base^z as e^(z * log(base)) (principal value)"""
+        if (p := _scalar_parts(base)) is None:
+            return NotImplemented
+        return (self * cxvalue(*p).log()).exp()
 
     def __eq__(self, other: CxScalarLike) -> Any:  # type: ignore[override]
         """Equality of both parts: a bool or a value[int] (0 or 1)"""
@@ -271,11 +292,15 @@ def _tensor_parts(x: Any) -> tuple[Any, Any] | None:
     return None
 
 
-class cxtensor:
+class cxtensor(ComplexType):
     """Complex tensor of two float tensors for the real and the imaginary
     part. All operations are composed of tensor operations, so packed
     tensors use the array stencils. The imaginary part of a real tensor
     is not stored and generates no code.
+
+    Indexing and iteration give cxtensors like for a tensor (0-d for a
+    single element, use item() or get_scalar() for a cxvalue). The
+    magnitude and the division square the parts like for a cxvalue.
 
     Attributes:
         real: Real part (float tensor)
@@ -286,14 +311,14 @@ class cxtensor:
         """Create a complex tensor.
 
         Arguments:
-            real: Real part as tensor, vector or nested sequence, or a nested
-                sequence of complex numbers and cxvalues (imag must be None)
+            real: Real part as tensor, vector, array or nested sequence, or a
+                nested sequence of complex numbers and cxvalues (imag must be None)
             imag: Imaginary part with the shape of real, None for a real tensor
         """
         if isinstance(real, cxtensor):
             assert imag is None, "imag must be None for a cxtensor"
             re, im = real._re, real._im
-        elif imag is None and not isinstance(real, (tensor, vector)):
+        elif imag is None and not isinstance(real, (tensor, vector, array)):
             flat, shape = _flatten(real)
             parts = [_scalar_parts(v) for v in flat]
             if any(p is None for p in parts):
@@ -424,6 +449,63 @@ class cxtensor:
         if self._im is None:
             return cxtensor(e)
         return cxtensor(e * cos(self._im), e * sin(self._im))
+
+    def log(self) -> 'cxtensor':
+        """Element-wise principal value of the natural logarithm"""
+        return cxtensor(log(abs(self)), self.angle())
+
+    def sqrt(self) -> 'cxtensor':
+        """Element-wise principal square root"""
+        return cxtensor.from_polar(sqrt(abs(self)), self.angle() * 0.5)
+
+    def mean(self, axis: int | Sequence[int] | None = None, keepdims: bool = False) -> 'cxvalue | cxtensor':
+        """Mean of all elements as cxvalue for axis None without keepdims, else a cxtensor"""
+        total = self.sum(axis, keepdims)
+        count = self.size() // (total.size() if isinstance(total, cxtensor) else 1)
+        return total / count
+
+    def __pow__(self, n: CxTensorLike) -> 'cxtensor':
+        """Element-wise power: an int exponent by repeated squaring, a real
+        exponent by the polar form, a complex exponent as e^(n * log(z))"""
+        if isinstance(n, int):
+            if n < 0:
+                return 1.0 / (self ** -n)
+            result: cxtensor | None = None
+            base = self
+            while n:
+                if n & 1:
+                    result = base if result is None else result * base
+                n >>= 1
+                if n:
+                    base = base * base
+            return result if result is not None else cxtensor(_full(self.shape, 1.0))
+        if (p := _tensor_parts(n)) is None:
+            return NotImplemented
+        if p[1] is None:
+            return cxtensor.from_polar(abs(self) ** p[0], self.angle() * p[0])
+        return (n * self.log()).exp()
+
+    def __rpow__(self, base: CxTensorLike) -> 'cxtensor':
+        """Element-wise base^z as e^(z * log(base))"""
+        if (p := _scalar_parts(base)) is not None:
+            return (self * cxvalue(*p).log()).exp()
+        if _tensor_parts(base) is None:
+            return NotImplemented
+        return (self * cxtensor(base).log()).exp()
+
+    def __eq__(self, other: CxTensorLike) -> Any:  # type: ignore[override]
+        """Element-wise equality of both parts: an int tensor of 0 and 1"""
+        if (p := _tensor_parts(other)) is None:
+            return NotImplemented
+        return (self._re == p[0]) * (self.imag == (0.0 if p[1] is None else p[1]))
+
+    def __ne__(self, other: CxTensorLike) -> Any:  # type: ignore[override]
+        """Element-wise inequality: an int tensor of 0 and 1"""
+        if (p := _tensor_parts(other)) is None:
+            return NotImplemented
+        return 1 - (self == other)
+
+    __hash__ = None  # type: ignore[assignment]
 
     def __neg__(self) -> 'cxtensor':
         return cxtensor(-self._re, None if self._im is None else -self._im)

@@ -325,3 +325,127 @@ def test_tensor_has_no_matmul_method():
     assert not hasattr(cp.tensor, 'matmul')
     assert not hasattr(cxtensor, 'matmul')
     assert not hasattr(cp.array, 'matmul')
+
+
+# Mixing with Python complex numbers, math functions, comparison and delay
+
+def test_value_with_python_complex():
+    x, y = cp.value(1.5), cp.value(-2.0)
+    exprs = [x + 2j, 2j + x, x * 1j, x - 1j, 1j - x, x / (1 + 1j), (1 + 1j) / x, x + 1j * y, x == 1.5 + 0j, x != 1.5 + 0j]
+    refs = [1.5 + 2j, 1.5 + 2j, 1.5j, 1.5 - 1j, 1j - 1.5, 1.5 / (1 + 1j), (1 + 1j) / 1.5, Z1, 1, 0]
+    assert all(isinstance(e, cxvalue) for e in exprs[:8])
+    for result, ref in zip(evaluate(*exprs), refs):
+        assert result == approx(ref)
+    with pytest.raises(TypeError):
+        x > 1j  # type: ignore[operator]
+    with pytest.raises(TypeError):
+        x & 1j  # type: ignore[operator]
+
+
+def test_constructor_rejects_imag_for_complex():
+    with pytest.raises(TypeError):
+        cxvalue(1j, 5.0)
+    assert cxvalue(1j, 0.0) == cxvalue(0, 1)
+
+
+def test_math_functions_dispatch():
+    a = variable(Z1)
+    tol = trig_tol() * 10
+    results = evaluate(cp.exp(a), cp.log(a), cp.sqrt(a), cp.abs(a), cp.pow(a, 3), cp.pow(a, 0.5),
+                       cp.pow(2.0, a), cp.pow(a, Z2), a ** cp.value(1.5), 2 ** a, Z2 ** a,
+                       cp.sqrt(cxvalue(cp.value(-4.0))), cp.sqrt(cxvalue(cp.value(0.0), cp.value(0.0))))
+    refs = [cmath.exp(Z1), cmath.log(Z1), cmath.sqrt(Z1), abs(Z1), Z1 ** 3, Z1 ** 0.5,
+            2.0 ** Z1, Z1 ** Z2, Z1 ** 1.5, 2 ** Z1, Z2 ** Z1, 2j, 0j]
+    for result, ref in zip(results, refs):
+        assert result == approx(ref, max(tol, 1e-4) * max(1.0, abs(ref)))
+
+
+def test_tensor_math_functions(packed: bool):
+    a = variable_tensor(A)
+    flat = [z for r in A for z in r]
+    tol = max(trig_tol() * 20, 1e-4)
+    lg, sq, p3, pm1, ph, pc, rp, mean, row_mean, ex, ab = evaluate(
+        cp.log(a), cp.sqrt(a), a ** 3, a ** -1, a ** 0.5, a ** Z2, 2.0 ** a, a.mean(), a.mean(axis=1), cp.exp(a), cp.abs(a))
+    assert to_complex(lg) == approx([cmath.log(z) for z in flat], tol)
+    assert to_complex(sq) == approx([cmath.sqrt(z) for z in flat], tol)
+    assert to_complex(p3) == approx([z ** 3 for z in flat], tol * 10)
+    assert to_complex(pm1) == approx([1 / z for z in flat], tol)
+    assert to_complex(ph) == approx([z ** 0.5 for z in flat], tol)
+    assert to_complex(pc) == approx([z ** Z2 for z in flat], tol * 100)
+    assert to_complex(rp) == approx([2.0 ** z for z in flat], tol * 10)
+    assert mean == approx(sum(flat) / 4)
+    assert to_complex(row_mean) == approx([sum(r) / 2 for r in A])
+    assert to_complex(ex) == approx([cmath.exp(z) for z in flat], tol)
+    assert list(ab.values) == approx([abs(z) for z in flat])
+    assert to_complex(cxtensor(A) ** 0) == [1.0] * 4
+
+
+def test_tensor_compare(packed: bool):
+    a = variable_tensor(A)
+    other = [[1 + 2j, 1j], [0.5, 2 - 1j]]
+    eq, ne, eq_scalar, eq_real, eq_value = evaluate(
+        a == cxtensor(other), a != cxtensor(other), a == 0.5, cxtensor([[cp.value(1.0), 2.0]]) == cp.tensor([[1.0, 3.0]]),
+        variable(0.5 + 0j) == a)
+    assert list(eq.values) == [1, 0, 1, 1]
+    assert list(ne.values) == [0, 1, 0, 0]
+    assert list(eq_scalar.values) == [0, 0, 1, 0]
+    assert list(eq_real.values) == [1, 0]
+    assert list(eq_value.values) == [0, 0, 1, 0]
+
+
+def test_tensor_from_array_and_indexing():
+    t = cxtensor(cp.array([1.0, 2.0]), cp.array([3.0, 4.0]))
+    real = cxtensor(cp.array([1.0, 2.0]))
+    assert real._im is None
+    read, read_real = evaluate(t, real)
+    assert to_complex(read) == [1 + 3j, 2 + 4j]
+    assert to_complex(read_real) == [1 + 0j, 2 + 0j]
+    # Like a tensor: single elements are 0-d, item() gives the scalar
+    assert t[0].shape == () and [e.shape for e in t] == [(), ()]
+    assert isinstance(t[0].item(), cxvalue)
+
+
+def test_delay():
+    x = cp.value(0.0)
+    z = cxvalue(x, x * 2.0)
+    t = cxtensor([cxvalue(x, x), cxvalue(x * 3.0)])
+    real = cxtensor([x, x * 2.0])
+    outputs = [cp.delay(z, init=1 - 1j), cp.delay(t), cp.delay(real, n=2), cp.delay(real, init=1j)]
+    tg = cp.LocalTarget(tick=0.01)
+    tg.deploy(cp.Task(outputs, period=0.01))
+    results: list[Any] = []
+    for k, v in enumerate([1.0, 2.0, 3.0]):
+        tg.write_value(x, v)
+        tg.step((k + 1) * 0.01)
+        results.append(tg.read_value(outputs))
+    assert [r[0] for r in results] == [1 - 1j, 1 + 2j, 2 + 4j]
+    assert [to_complex(r[1]) for r in results] == [[0j, 0j], [1 + 1j, 3 + 0j], [2 + 2j, 6 + 0j]]
+    assert [to_complex(r[2]) for r in results] == [[0j, 0j], [0j, 0j], [1 + 0j, 2 + 0j]]
+    assert [to_complex(r[3]) for r in results] == [[1j, 1j], [1 + 0j, 2 + 0j], [2 + 0j, 4 + 0j]]
+    assert real._im is None and cp.delay(real)._im is None
+
+
+def test_delay_structures_and_inits():
+    x = cp.value(0.0)
+    z = cxvalue(x)
+    t = cxtensor([cxvalue(x, x), cxvalue(x * 3.0)])
+    # A constant part with the same initial value stays a constant
+    assert cp.delay(z).imag == 0.0 and isinstance(cp.delay(z, n=3).imag, float)
+    assert isinstance(cp.delay(z, init=1j).imag, cp.value)
+    outputs = [cp.delay([z, x], init=[2j, 5.0]), cp.delay((z, t)), cp.delay(t, init=[1 + 1j, 2]),
+               cp.delay(t, init=cp.tensor([4.0, 5.0]))]
+    tg = cp.LocalTarget(tick=0.01)
+    tg.deploy(cp.Task(outputs, period=0.01))
+    results: list[Any] = []
+    for k, v in enumerate([1.0, 2.0]):
+        tg.write_value(x, v)
+        tg.step((k + 1) * 0.01)
+        results.append(tg.read_value(outputs))
+    assert [r[0] for r in results] == [[2j, 5.0], [1 + 0j, 1.0]]
+    assert [(r[1][0], to_complex(r[1][1])) for r in results] == [(0j, [0j, 0j]), (1 + 0j, [1 + 1j, 3 + 0j])]
+    assert [to_complex(r[2]) for r in results] == [[1 + 1j, 2 + 0j], [1 + 1j, 3 + 0j]]
+    assert [to_complex(r[3]) for r in results] == [[4 + 0j, 5 + 0j], [1 + 1j, 3 + 0j]]
+    with pytest.raises(TypeError):
+        cp.delay(z, init=x)
+    with pytest.raises(ValueError):
+        cp.delay(t, init=[1j, 2j, 3j])

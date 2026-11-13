@@ -4,11 +4,14 @@ from ._vectors import VecNumLike, VecIntLike
 from ._tensors import TensorNumLike, TensorIntLike
 from ._arrays import array, ArrayType
 from . import value, NumLike
-from typing import TypeVar, Any, overload, Callable
-from ._basic_types import add_op, uniint, value_from_number
+from typing import TYPE_CHECKING, TypeVar, Any, overload, Callable
+from ._basic_types import add_op, uniint, value_from_number, ComplexType
 from functools import reduce
 import builtins
 import math
+
+if TYPE_CHECKING:
+    from ._complex import cxvalue, cxtensor  # _complex imports this module
 
 T = TypeVar("T", int, float, value[int], value[float])
 U = TypeVar("U", int, float)
@@ -24,6 +27,10 @@ def exp(x: vector[Any]) -> vector[float]: ...
 def exp(x: tensor[Any]) -> tensor[float]: ...
 @overload
 def exp(x: array[Any]) -> array[float]: ...
+@overload
+def exp(x: 'cxvalue') -> 'cxvalue': ...
+@overload
+def exp(x: 'cxtensor') -> 'cxtensor': ...
 def exp(x: Any) -> Any:
     """Exponential function to basis e
 
@@ -33,6 +40,8 @@ def exp(x: Any) -> Any:
     Returns:
         result of e**x
     """
+    if isinstance(x, ComplexType):
+        return x.exp()
     if isinstance(x, value):
         return add_op('exp', [x])
     if isinstance(x, vector | tensor | array):
@@ -50,6 +59,10 @@ def log(x: vector[Any]) -> vector[float]: ...
 def log(x: tensor[Any]) -> tensor[float]: ...
 @overload
 def log(x: array[Any]) -> array[float]: ...
+@overload
+def log(x: 'cxvalue') -> 'cxvalue': ...
+@overload
+def log(x: 'cxtensor') -> 'cxtensor': ...
 def log(x: Any) -> Any:
     """Logarithm to basis e
 
@@ -59,6 +72,8 @@ def log(x: Any) -> Any:
     Returns:
         result of ln(x)
     """
+    if isinstance(x, ComplexType):
+        return x.log()
     if isinstance(x, value):
         return add_op('log', [x])
     if isinstance(x, vector | tensor | array):
@@ -102,6 +117,14 @@ def pow(x: uniint, y: array[int]) -> array[int]: ...
 def pow(x: array[Any], y: array[Any] | NumLike) -> array[float]: ...
 @overload
 def pow(x: NumLike, y: array[Any]) -> array[float]: ...
+@overload
+def pow(x: 'cxvalue', y: 'cxvalue | complex | NumLike') -> 'cxvalue': ...
+@overload
+def pow(x: 'complex | NumLike', y: 'cxvalue') -> 'cxvalue': ...
+@overload
+def pow(x: 'cxtensor', y: Any) -> 'cxtensor': ...
+@overload
+def pow(x: Any, y: 'cxtensor') -> 'cxtensor': ...
 def pow(x: Any, y: Any) -> Any:
     """x to the power of y. The result is an int if both operands are
     int, otherwise a float. An int power is exact up to the wrap around of
@@ -115,6 +138,8 @@ def pow(x: Any, y: Any) -> Any:
     Returns:
         result of x**y
     """
+    if isinstance(x, ComplexType | complex) or isinstance(y, ComplexType | complex):
+        return x ** y
     if isinstance(x, tensor | array):
         return x ** y
     if isinstance(y, array) or (isinstance(y, tensor) and not isinstance(x, vector)):
@@ -160,6 +185,10 @@ def sqrt(x: vector[Any]) -> vector[float]: ...
 def sqrt(x: tensor[Any]) -> tensor[float]: ...
 @overload
 def sqrt(x: array[Any]) -> array[float]: ...
+@overload
+def sqrt(x: 'cxvalue') -> 'cxvalue': ...
+@overload
+def sqrt(x: 'cxtensor') -> 'cxtensor': ...
 def sqrt(x: Any) -> Any:
     """Square root function
 
@@ -169,6 +198,8 @@ def sqrt(x: Any) -> Any:
     Returns:
         Square root of x
     """
+    if isinstance(x, ComplexType):
+        return x.sqrt()
     if isinstance(x, value):
         return add_op('sqrt', [x])
     if isinstance(x, vector | tensor | array):
@@ -421,15 +452,21 @@ def abs(x: vector[U]) -> vector[U]: ...
 def abs(x: tensor[U]) -> tensor[U]: ...
 @overload
 def abs(x: array[U]) -> array[U]: ...
-def abs(x: U | value[U] | vector[U] | tensor[U] | array[U]) -> Any:
+@overload
+def abs(x: 'cxvalue') -> float | value[float]: ...
+@overload
+def abs(x: 'cxtensor') -> tensor[float]: ...
+def abs(x: Any) -> Any:
     """Absolute value function
 
     Arguments:
         x: Input value
 
     Returns:
-        Absolute value of x
+        Absolute value of x (magnitude of a complex number)
     """
+    if isinstance(x, ComplexType):
+        return x.__abs__()
     if isinstance(x, value):
         return add_op('abs', [x])
     if isinstance(x, vector | tensor | array):

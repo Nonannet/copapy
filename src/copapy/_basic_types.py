@@ -23,9 +23,13 @@ TFunc = TypeVar("TFunc", bound=Callable[..., Any])
 def scalar_op(func: TFunc) -> TFunc:
     """Decorator for binary operators of value: returns NotImplemented for
     non-scalar operands, so Python falls back to the reflected operator
-    of the other operand (e.g. vector.__rsub__ for value - vector)."""
+    of the other operand (e.g. vector.__rsub__ for value - vector). With a
+    Python complex number the operation is done by cxvalue (x + 2j)."""
     @functools.wraps(func)
     def wrapper(self: Any, other: Any) -> Any:
+        if isinstance(other, complex):
+            cx_op = getattr(cp.cxvalue, func.__name__, None)
+            return NotImplemented if cx_op is None else cx_op(cp.cxvalue(self), other)
         if not isinstance(other, (value, int, float)):
             return NotImplemented
         return func(self, other)
@@ -380,6 +384,24 @@ class value(Generic[TNum]):
     @scalar_op
     def __rxor__(self, other: uniint) -> 'value[int]':
         return add_op('bwxor', [other, self], True, dtype=_logic_dtype(self, other))
+
+
+class ComplexType:
+    """Base class of the complex types (cxvalue and cxtensor). The math
+    functions call these methods for them, so they do not depend on the
+    complex types."""
+
+    def exp(self) -> Any:
+        raise NotImplementedError
+
+    def log(self) -> Any:
+        raise NotImplementedError
+
+    def sqrt(self) -> Any:
+        raise NotImplementedError
+
+    def __abs__(self) -> Any:
+        raise NotImplementedError
 
 
 def _logic_dtype(a: Any, b: Any) -> str | None:
