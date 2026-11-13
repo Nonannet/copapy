@@ -775,14 +775,7 @@ def compile_programs(programs: Sequence[tuple[Iterable[Node], dict[Node, int]]],
 
     # write patch operations
     for patch in patch_list:
-        dw.write_com(binw.Command.PATCH)
-        dw.write_int(patch.address)
-        dw.write_int(patch.value, signed=True)
-        dw.write_int(patch.mask)
-        dw.write_byte(patch.encoding)
-        dw.write_byte(patch.shift)
-        dw.write_byte(patch.flags)
-        dw.write_byte(0)  # reserved
+        dw.write_patch(patch.address, patch.value, patch.mask, patch.encoding, patch.shift, patch.flags)
 
     return dw, all_variables, entry_points
 

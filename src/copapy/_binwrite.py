@@ -51,8 +51,12 @@ class PatchFlag(IntFlag):
 
 class data_writer():
     def __init__(self, byteorder: ByteOrder):
-        self._data: list[tuple[str, bytes, int]] = []
+        # Kind ('COM', 'INT', 'BYTE' or 'BYTES'), binary data and an info for
+        # print (command name, value or length) of each written item
+        self._data: list[tuple[str, bytes, object]] = []
         self.byteorder: ByteOrder = byteorder
+        # Command, address, value, mask, encoding, shift, flags and a reserved byte
+        self._pack_patch = struct.Struct({'little': '<', 'big': '>'}[byteorder] + 'IIiIBBBx').pack
 
     def copy(self) -> 'data_writer':
         cp = data_writer(self.byteorder)
@@ -60,16 +64,20 @@ class data_writer():
         return cp
 
     def write_int(self, value: int, num_bytes: int = 4, signed: bool = False) -> None:
-        self._data.append((f"INT {value}", value.to_bytes(length=num_bytes, byteorder=self.byteorder, signed=signed), 0))
+        self._data.append(('INT', value.to_bytes(length=num_bytes, byteorder=self.byteorder, signed=signed), value))
 
     def write_com(self, value: Command) -> None:
-        self._data.append((value.name, value.value.to_bytes(length=COMMAND_SIZE, byteorder=self.byteorder, signed=False), 1))
+        self._data.append(('COM', value.value.to_bytes(length=COMMAND_SIZE, byteorder=self.byteorder, signed=False), value.name))
 
     def write_byte(self, value: int) -> None:
-        self._data.append((f"BYTE {value}", bytes([value]), 0))
+        self._data.append(('BYTE', bytes([value]), value))
 
     def write_bytes(self, value: bytes) -> None:
-        self._data.append((f"BYTES {len(value)}", value, 0))
+        self._data.append(('BYTES', value, len(value)))
+
+    def write_patch(self, address: int, value: int, mask: int, encoding: int, shift: int, flags: int) -> None:
+        """Writes a complete PATCH command"""
+        self._data.append(('COM', self._pack_patch(Command.PATCH.value, address, value, mask, encoding, shift, flags), 'PATCH'))
 
     def write_value(self, value: int | float, num_bytes: int = 4) -> None:
         if isinstance(value, int):
@@ -85,9 +93,10 @@ class data_writer():
             self.write_bytes(data)
 
     def print(self) -> None:
-        for name, dat, flag in self._data:
-            if flag:
+        for kind, dat, info in self._data:
+            if kind == 'COM':
                 print('')
+            name = str(info) if kind == 'COM' else f"{kind} {info}"
             print(f"{name:18}" + ' '.join(f'{b:02X}' for b in dat))
 
     def get_data(self) -> bytes:
