@@ -316,3 +316,28 @@ def test_after_errors() -> None:
         cp.after(cp.after(u, 1.0), 1.0)  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="Unsupported type"):
         cp.after(u, 1.0) & "x"  # type: ignore[operator]
+
+
+def test_reserved_names() -> None:
+    for name in ['select', 'state', 'dt', 'states', 'transitions', 'initial', 'time_in', '_active']:
+        with pytest.raises(TypeError, match=f"{name} can not be used as name"):
+            type('M', (cp.StateMachine,), {'A': cp.State(), 'B': cp.State(), name: cp.State() >> cp.State()})
+    with pytest.raises(TypeError, match="fired can not be used as name"):
+        class StateNamed(cp.StateMachine):
+            fired = cp.State()  # type: ignore[assignment]
+
+
+def test_alias_is_rejected() -> None:
+    with pytest.raises(TypeError, match="M.ALIAS is the same state as A"):
+        class M(cp.StateMachine):
+            A = cp.State()
+            B = cp.State()
+            ALIAS = A
+            go = A >> B
+
+    with pytest.raises(TypeError, match="N.again is the same transition as go"):
+        class N(cp.StateMachine):
+            A = cp.State()
+            B = cp.State()
+            go = A >> B
+            again = go

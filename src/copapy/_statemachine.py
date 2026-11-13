@@ -166,6 +166,10 @@ def _evaluate(c: 'NumLike | Condition', expired: 'dict[after, value[int]]') -> '
     return truth(c)
 
 
+# Names of attributes of state machine instances and of the dt argument
+_RESERVED = ('state', 'dt', 'initial')
+
+
 class StateMachine:
     """Base class of state machines of periodic tasks. The states and the
     transitions between them are declared in a subclass, the conditions of
@@ -209,19 +213,34 @@ class StateMachine:
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
         attributes = list(vars(cls).items())
-        placeholders = [s for _, s in attributes if isinstance(s, State)]
+        declared = [(name, a) for name, a in attributes if isinstance(a, State | Sources | Transition)]
+        reserved = [name for name, _ in declared
+                    if name.startswith('_') or name in _RESERVED or hasattr(StateMachine, name)]
+        if reserved:
+            raise TypeError(f"{cls.__name__}: {', '.join(reserved)} can not be used as name of a state or "
+                            "transition (names of the StateMachine API and names starting with _)")
         if cls.states:
             # A subclass of a state machine inherits it unchanged
-            declared = [name for name, a in attributes if isinstance(a, State | Sources | Transition)]
             if declared:
-                raise TypeError(f"{cls.__name__} can not extend the state machine {cls.states[0].machine} "
-                                f"by {', '.join(declared)}: declare all states and transitions in one class")
+                raise TypeError(f"{cls.__name__} can not extend the state machine {cls.states[0].machine} by "
+                                f"{', '.join(name for name, _ in declared)}: "
+                                "declare all states and transitions in one class")
             return
+        placeholders = [s for _, s in declared if isinstance(s, State)]
         if not placeholders:
-            declared = [name for name, a in attributes if isinstance(a, Sources | Transition)]
             if declared:
-                raise TypeError(f"{cls.__name__} declares transitions ({', '.join(declared)}) but no states")
+                raise TypeError(f"{cls.__name__} declares transitions ({', '.join(name for name, _ in declared)}) "
+                                "but no states")
             return  # Abstract base of state machines
+
+        first_names: dict[int, str] = {}  # By id of the state or transition
+        for name, a in declared:
+            if isinstance(a, State | Transition):
+                if id(a) in first_names:
+                    raise TypeError(f"{cls.__name__}.{name} is the same {type(a).__name__.lower()} as "
+                                    f"{first_names[id(a)]}: each state and transition has one name")
+                first_names[id(a)] = name
+
         initials = [s for s in placeholders if s.initial]
         if len(initials) > 1:
             raise TypeError(f"{cls.__name__} has more than one initial state: {initials}")
