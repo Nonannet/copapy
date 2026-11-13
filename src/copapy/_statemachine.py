@@ -1,26 +1,4 @@
-"""State machines of periodic tasks. The states and the transitions between
-them are declared in a subclass of StateMachine, the conditions of the
-transitions are given at instantiation:
-
-    class Pump(cp.StateMachine):
-        RUN = cp.State(initial=True)
-        STANDBY = cp.State()
-        SHUTDOWN = cp.State()
-
-        trip = cp.ANY >> SHUTDOWN  # Declaration order is priority
-        idle = RUN >> STANDBY
-        start = STANDBY >> RUN
-        recover = SHUTDOWN >> STANDBY
-
-    pump = Pump(trip=pressure > 12.0, idle=cp.after(speed < 50.0, 300.0),
-                start=start_cmd, recover=ack & (pressure < 10.0))
-    motor = pump.select({Pump.RUN: pid_out}, default=0.0)
-
-The state is a signal like any other value. At each run of the task at most
-one transition fires: the first declared one whose source is the state of the
-previous run and whose condition is true. The new state applies to the same
-run, so outputs selected by the state react without delay.
-"""
+"""State machines of periodic tasks, see StateMachine."""
 import itertools
 from typing import Any, ClassVar, Mapping, overload
 from ._basic_types import value, unifloat, uniint, NumLike, to_float, value_from_number
@@ -124,7 +102,32 @@ class after:
 
 
 class StateMachine:
-    """Base class of state machines (see module documentation).
+    """Base class of state machines of periodic tasks. The states and the
+    transitions between them are declared in a subclass, the conditions of
+    the transitions are given at instantiation::
+
+        class Pump(cp.StateMachine):
+            RUN = cp.State(initial=True)
+            STANDBY = cp.State()
+            SHUTDOWN = cp.State()
+
+            trip = cp.ANY >> SHUTDOWN  # Declaration order is priority
+            idle = RUN >> STANDBY
+            start = STANDBY >> RUN
+            recover = SHUTDOWN >> STANDBY
+
+        pump = Pump(trip=pressure > 12.0, idle=cp.after(speed < 50.0, 300.0),
+                    start=start_cmd, recover=ack & (pressure < 10.0))
+        motor = pump.select({Pump.RUN: pid_out}, default=0.0)
+
+    The state is a signal like any other value. At each run of the task at most
+    one transition fires: the first declared one whose source is the state of the
+    previous run and whose condition is true. The new state applies to the same
+    run, so outputs selected by the state react without delay.
+
+    All states and transitions of a state machine are declared in one class:
+    a subclass of it inherits them and can add methods, but no states or
+    transitions.
 
     Attributes:
         states: The states in declaration order, indexed by their number:
@@ -142,7 +145,17 @@ class StateMachine:
         super().__init_subclass__(**kwargs)
         attributes = list(vars(cls).items())
         placeholders = [s for _, s in attributes if isinstance(s, State)]
+        if cls.states:
+            # A subclass of a state machine inherits it unchanged
+            declared = [name for name, a in attributes if isinstance(a, State | Sources | Transition)]
+            if declared:
+                raise TypeError(f"{cls.__name__} can not extend the state machine {cls.states[0].machine} "
+                                f"by {', '.join(declared)}: declare all states and transitions in one class")
+            return
         if not placeholders:
+            declared = [name for name, a in attributes if isinstance(a, Sources | Transition)]
+            if declared:
+                raise TypeError(f"{cls.__name__} declares transitions ({', '.join(declared)}) but no states")
             return  # Abstract base of state machines
         initials = [s for s in placeholders if s.initial]
         if len(initials) > 1:
@@ -194,6 +207,7 @@ class StateMachine:
                                       ([f"no transition {', '.join(unknown)}"] if unknown else [])))
         self.dt = dt
         self._active: list[value[int] | int] = []
+        self._time_in: dict[int, value[float]] = {}  # By the number of the state
         # Condition of each transition, for an after condition with the limit of its runs count
         plain: dict[Transition, value[int] | int] = {}
         timers: dict[Transition, tuple[value[int] | int, unifloat]] = {}
@@ -273,10 +287,12 @@ class StateMachine:
 
     def time_in(self, s: State) -> value[float]:
         """Time in seconds since s became the state, 0.0 if s is not the state"""
-        self._check(s)
-        stayed = (self.state == int(s)) & (self._previous == int(s))
-        runs = feedback(lambda n: iif(stayed, n + (n < _MAX_RUNS), 0), init=0)
-        return to_float(runs) * (self.dt if self.dt is not None else dt)
+        number = int(self._check(s))
+        if number not in self._time_in:
+            stayed = (self.state == number) & (self._previous == number)
+            runs = feedback(lambda n: iif(stayed, n + (n < _MAX_RUNS), 0), init=0)
+            self._time_in[number] = to_float(runs) * (self.dt if self.dt is not None else dt)
+        return self._time_in[number]
 
     @overload
     def select(self, outputs: Mapping[State, uniint], default: 'uniint | None' = None) -> value[int]: ...  # type: ignore[overload-overlap]  # pyright: ignore[reportOverlappingOverload]

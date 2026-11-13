@@ -31,6 +31,18 @@ def test_bool_dtype_of_logic_ops() -> None:
     assert ((a > 0.0) & cp.value(3)).dtype == 'int'
 
 
+def test_invert() -> None:
+    x = cp.value(0.0)
+    n = cp.value(5)
+    results = run_sequence([~(x > 1.0), ~(x > 1.0) & (x > -1.0), ~n], {x: [0.0, 2.0, -2.0]})
+    assert column(results, 0) == [1, 0, 1]
+    assert column(results, 1) == [1, 0, 0]
+    assert column(results, 2) == [-6, -6, -6]
+    assert (~(x > 1.0)).dtype == 'bool' and (~n).dtype == 'int'
+    with pytest.raises(TypeError):
+        ~x  # type: ignore[misc]
+
+
 def test_edges() -> None:
     u = cp.value(0)
     xs = [1, 1, 0, 0, 1, 0]
@@ -217,3 +229,31 @@ def test_select_types() -> None:
 
     single = Single()
     assert isinstance(single.select({Single.ONLY: 4.0}), cp.value)
+
+
+def test_time_in_is_cached() -> None:
+    pump = Pump(trip=cp.value(0), idle=cp.value(0), start=cp.value(0), recover=cp.value(0))
+    assert pump.time_in(Pump.RUN) is pump.time_in(Pump.RUN)
+    assert pump.time_in(Pump.RUN) is not pump.time_in(Pump.STANDBY)
+
+
+def test_subclass_can_not_extend() -> None:
+    class Named(Pump):
+        def running(self) -> cp.value[int]:
+            return self.in_(Pump.RUN)
+
+    assert Named.states is Pump.states and Named.transitions is Pump.transitions
+    c = cp.value(0)
+    assert Named(trip=c, idle=c, start=c, recover=c).running().dtype == 'bool'
+
+    with pytest.raises(TypeError, match="can not extend the state machine Pump by EXTRA"):
+        class MoreStates(Pump):
+            EXTRA = cp.State()
+
+    with pytest.raises(TypeError, match="can not extend the state machine Pump by stop"):
+        class MoreTransitions(Pump):
+            stop = Pump.RUN >> Pump.SHUTDOWN
+
+    with pytest.raises(TypeError, match="declares transitions"):
+        class NoStates(cp.StateMachine):
+            stop = Pump.RUN >> Pump.SHUTDOWN

@@ -259,6 +259,14 @@ class value(Generic[TNum]):
     def __neg__(self: 'value[TNum]') -> 'value[TNum]':
         return add_op('neg', [self])
 
+    def __invert__(self: 'value[int]') -> 'value[int]':
+        """Logical not of a bool value (~(a > b)), bitwise not of an int value"""
+        if self.dtype == 'bool':
+            return add_op('eq', [self, 0], True, dtype='bool')
+        if transl_type(self.dtype) != 'int':
+            raise TypeError(f"~ is not defined for a {self.dtype} value")
+        return add_op('bwxor', [self, -1], True)
+
     @scalar_op
     def __gt__(self, other: TVarNumb) -> 'value[int]':
         return add_op('gt', [self, other], dtype='bool')

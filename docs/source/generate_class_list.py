@@ -89,7 +89,9 @@ if __name__ == "__main__":
     with open(f'{api_dir}/index.md', 'w') as f:
         f.write('# User API\n\n')
 
-        write_classes(f, ['*'], 'copapy', title='Classes', api_dir=api_dir)
+        state_machine_classes = ['StateMachine', 'State', 'after']
+
+        write_classes(f, ['*'], 'copapy', title='Classes', exclude=state_machine_classes, api_dir=api_dir)
 
         write_functions(f, ['*'], 'copapy', title='General functions', path_patterns=['*_autograd.py', '*_basic_types.py', '*_target.py', '*_sorting.py', '*_flow.py'], api_dir=api_dir)
 
@@ -100,6 +102,10 @@ if __name__ == "__main__":
         write_functions(f, ['*'], 'copapy', title='Vector functions', path_patterns=['*_vectors*'], api_dir=api_dir)
 
         write_functions(f, ['*'], 'copapy', title='Tensor/Matrix functions', path_patterns=['*_tensors*'], api_dir=api_dir)
+
+        write_functions(f, ['*'], 'copapy', title='Logic functions', path_patterns=['*_logic*'], api_dir=api_dir)
+
+        write_classes(f, state_machine_classes, 'copapy', title='State machines', api_dir=api_dir)
 
         write_functions(f, ['*'], 'copapy', title='Interpolation functions', path_patterns=['*_interp*'], api_dir=api_dir)
 
