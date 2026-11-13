@@ -83,6 +83,18 @@ def test_held_and_released() -> None:
     assert column(run_sequence([cp.released(u, 0.02)], {u: [0, 0, 1, 0]}), 0) == [0, 0, 1, 1]
 
 
+def test_timers_with_half_period_duration() -> None:
+    # A duration of k + 0.5 periods is rounded up, the timers must still expire
+    u = cp.value(0)
+    xs = [1, 1, 1, 1, 1, 0, 0, 0, 0, 0]
+    results = run_sequence([cp.held(u, 1.25), cp.held(u, 0.25), cp.released(u, 1.25), cp.held(u, 1.0)],
+                           {u: xs}, period=0.5)
+    assert column(results, 0) == [0, 0, 0, 1, 1, 0, 0, 0, 0, 0]
+    assert column(results, 1) == [0, 1, 1, 1, 1, 0, 0, 0, 0, 0]
+    assert column(results, 2) == [1, 1, 1, 1, 1, 1, 1, 1, 0, 0]
+    assert column(results, 3) == [0, 0, 1, 1, 1, 0, 0, 0, 0, 0]
+
+
 def test_held_long_duration() -> None:
     u = cp.value(1)
     tg = cp.LocalTarget(tick=0.001)

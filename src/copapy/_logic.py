@@ -118,7 +118,8 @@ def _timer(cond: 'value[int] | int', seconds: unifloat, dt: 'unifloat | None', e
     """True if cond is true since at least seconds"""
     limit = runs_limit(seconds, dt)
     # Runs since cond became true, -1 while false; it stops counting above the limit
-    count = feedback(lambda n: iif(cond, n + (n < limit), -1), init=_EXPIRED if expired else -1)
+    # (n <= limit: the count must exceed a limit that is a whole number of runs)
+    count = feedback(lambda n: iif(cond, n + (n <= limit), -1), init=_EXPIRED if expired else -1)
     return as_bool(count > limit)
 
 
