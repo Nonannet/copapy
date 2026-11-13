@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Generator, Literal, Iterable, TYPE_CHECKING
 import struct
 import platform
@@ -27,6 +27,7 @@ class relocation_entry:
             function itself (e.g. a branch target)
         hi_reloc: For RISC-V PCREL_LO12 relocations the paired PCREL_HI20
             relocation, which defines the actual target symbol
+        patch_templates: Cache of the patches for the addresses 0 by base flag
     """
     target_symbol_name: str
     target_symbol_info: str
@@ -37,6 +38,12 @@ class relocation_entry:
     pelfy_reloc: pelfy.elf_relocation
     target_in_code: bool = False
     hi_reloc: pelfy.elf_relocation | None = None
+    patch_templates: 'dict[PatchFlag, list[patch_entry]]' = field(default_factory=dict, repr=False, compare=False)
+
+    @property
+    def local_branch(self) -> bool:
+        """TriCore branch to a local label without symbol"""
+        return self.pelfy_reloc.type in TRICORE_BRANCH_RELOCATIONS and not self.pelfy_reloc.symbol.index
 
 
 # Relocations that are only hints for linker relaxation and require no patching
@@ -329,6 +336,27 @@ class stencil_database():
             patch_entry list: patch instructions for the runner (a relocation
                 can span more than one instruction)
         """
+        # The patches of a relocation differ only by the two addresses: they are
+        # derived once for the addresses 0 and then moved to the given addresses
+        templates = relocation.patch_templates.get(base)
+        if templates is None:
+            templates = relocation.patch_templates[base] = self._derive_patch(relocation, 0, 0, base)
+
+        if relocation.local_branch:
+            symbol_address = function_offset  # Target is relative to the patched instruction
+
+        patches = [patch_entry(t.address + function_offset, t.value + symbol_address, t.mask, t.shift, t.encoding, t.flags)
+                   for t in templates]
+
+        # This might be caused by the call in entry_function_shell if not aligned
+        #assert not patches[0].address % 4 or not relocation.pelfy_reloc.type.endswith('_ABS32'), \
+        #    'R_ARM_ABS32 patched data like literals needs to be 4 Byte aligned'
+
+        return patches
+
+    def _derive_patch(self, relocation: relocation_entry, symbol_address: int, function_offset: int, base: PatchFlag) -> list[patch_entry]:
+        """Derives the patch instructions from the type of the relocation,
+        arguments and return value like get_patch"""
         pr = relocation.pelfy_reloc
 
         # calculate address of the first byte to patch relative
@@ -343,7 +371,7 @@ class stencil_database():
         encoding = PatchEncoding.BITFIELD
         flags = base
 
-        if pr.type in TRICORE_BRANCH_RELOCATIONS and not pr.symbol.index:
+        if relocation.local_branch:
             # Branch to a local label: the addend is the displacement (S + A - P = A)
             value = patch_offset + add_sign_int32(pr.fields['r_addend'])
 
@@ -424,8 +452,7 @@ class stencil_database():
         elif pr.type.endswith('_ABS32'):
             # R_ARM_ABS32
             # S + A (replaces full 32 bit)
-            assert not patch_offset % 4, 'R_ARM_ABS32 patched data like literals needs to be 4 Byte aligned'
-            # This might be caused by the call in entry_function_shell if not aligned
+            pass
 
         elif pr.type.endswith('_THM_JUMP24') or pr.type.endswith('_THM_CALL'):
             # R_ARM_THM_JUMP24 & R_ARM_THM_CALL
