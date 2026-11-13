@@ -257,3 +257,50 @@ def test_subclass_can_not_extend() -> None:
     with pytest.raises(TypeError, match="declares transitions"):
         class NoStates(cp.StateMachine):
             stop = Pump.RUN >> Pump.SHUTDOWN
+
+
+def test_after_combined() -> None:
+    class Door(cp.StateMachine):
+        CLOSED = cp.State()
+        OPEN = cp.State()
+        open = CLOSED >> OPEN
+        close = OPEN >> CLOSED
+
+    a, b, c = cp.value(0), cp.value(0), cp.value(0)
+    # a since 0.02 s and b since 0.01 s in CLOSED and not c; back by c or 0.03 s in OPEN
+    door = Door(open=cp.after(a, 0.02) & ~(c > 0) & cp.after(b, 0.01), close=c | cp.after(1, 0.03))
+    seq = {a: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+           b: [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+           c: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0]}
+    results = run_sequence([door.state, door.fired(Door.open), door.fired(Door.close)], seq)
+    # Both times are reached at run 4, where c blocks: open at run 5. Closed by its time
+    # at run 8. The times restart in CLOSED: reached at run 10, where c blocks again
+    assert column(results, 0) == [0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1]
+    assert column(results, 1) == [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1]
+    assert column(results, 2) == [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0]
+
+
+def test_after_inverted_and_reflected() -> None:
+    class Lamp(cp.StateMachine):
+        OFF = cp.State()
+        ON = cp.State()
+        on = OFF >> ON
+        off = ON >> OFF
+
+    u = cp.value(0)
+    timer = cp.after(u, 0.02)
+    # The same after in two transitions has a time for each of them
+    lamp = Lamp(on=u & ~timer, off=(u > 0) | (timer | 0))
+    results = run_sequence([lamp.state], {u: [0, 1, 1, 1, 1, 1, 0, 0]})
+    # on at once while u is not yet true for 0.02 s in OFF, off by u at the next run
+    assert column(results, 0) == [0, 1, 0, 1, 0, 1, 1, 1]
+
+
+def test_after_errors() -> None:
+    u = cp.value(0)
+    with pytest.raises(TypeError, match="no truth value"):
+        bool(cp.after(u, 1.0) & u)
+    with pytest.raises(TypeError, match="can not contain after"):
+        cp.after(cp.after(u, 1.0), 1.0)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="Unsupported type"):
+        cp.after(u, 1.0) & "x"  # type: ignore[operator]

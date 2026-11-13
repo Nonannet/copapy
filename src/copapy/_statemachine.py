@@ -85,7 +85,41 @@ class Transition:
         return f"{self.name}: {Sources(self.sources)} >> {self.target!r}"
 
 
-class after:
+class Condition:
+    """Condition of a transition containing after: an expression that is
+    evaluated by the state machine it is given to. Conditions are combined
+    by &, | and ~ with each other and with values.
+    """
+    def __and__(self, other: 'NumLike | Condition') -> 'Condition':
+        return _Combined('and', (self, other))
+
+    def __rand__(self, other: 'NumLike | Condition') -> 'Condition':
+        return _Combined('and', (other, self))
+
+    def __or__(self, other: 'NumLike | Condition') -> 'Condition':
+        return _Combined('or', (self, other))
+
+    def __ror__(self, other: 'NumLike | Condition') -> 'Condition':
+        return _Combined('or', (other, self))
+
+    def __invert__(self) -> 'Condition':
+        return _Combined('not', (self,))
+
+    def __bool__(self) -> bool:
+        raise TypeError("A condition with after has no truth value, combine conditions by &, | and ~")
+
+
+class _Combined(Condition):
+    """Operation (and, or, not) of conditions"""
+    def __init__(self, op: str, operands: 'tuple[NumLike | Condition, ...]'):
+        for x in operands:
+            if not isinstance(x, value | int | float | Condition):
+                raise TypeError(f"Unsupported type {type(x).__name__} for a condition")
+        self.op = op
+        self.operands = operands
+
+
+class after(Condition):
     """Condition of a transition that is true continuously since at least
     seconds while the state machine is in the source state of the transition.
     The time restarts when the source state is entered, the run entering it
@@ -93,12 +127,43 @@ class after:
 
         >>> pump = Pump(idle=cp.after(speed < 50.0, 300.0), ...)
 
+    It can be combined by &, | and ~ with values and other after conditions,
+    each after has its own time:
+
+        >>> pump = Pump(idle=cp.after(speed < 50.0, 300.0) & ~busy | cp.after(off, 1.0), ...)
+
     Outside of a state machine held is the equivalent.
     """
     def __init__(self, condition: NumLike, seconds: unifloat, dt: 'unifloat | None' = None):
+        if isinstance(condition, Condition):
+            raise TypeError("The condition of after can not contain after")
         self.condition = condition
         self.seconds = seconds
         self.dt = dt
+
+
+def _afters(c: 'NumLike | Condition') -> 'list[after]':
+    """The after conditions of c in the order of their first occurrence"""
+    if isinstance(c, after):
+        return [c]
+    found: list[after] = []
+    if isinstance(c, _Combined):
+        for x in c.operands:
+            found += [a for a in _afters(x) if all(a is not f for f in found)]
+    return found
+
+
+def _evaluate(c: 'NumLike | Condition', expired: 'dict[after, value[int]]') -> 'value[int] | int':
+    """c as boolean with the given results of its after conditions"""
+    if isinstance(c, after):
+        return expired[c]
+    if isinstance(c, _Combined):
+        results = [_evaluate(x, expired) for x in c.operands]
+        if c.op == 'not':
+            return ~results[0] if isinstance(results[0], value) else int(not results[0])
+        return results[0] & results[1] if c.op == 'and' else results[0] | results[1]
+    assert not isinstance(c, Condition)
+    return truth(c)
 
 
 class StateMachine:
@@ -187,14 +252,14 @@ class StateMachine:
         cls.transitions = tuple(transitions)
         cls.initial = states[id(first)]
 
-    def __init__(self, *, dt: 'unifloat | None' = None, **conditions: 'NumLike | after'):
+    def __init__(self, *, dt: 'unifloat | None' = None, **conditions: 'NumLike | Condition'):
         """Creates the state signal of the state machine.
 
         Arguments:
             dt: Time step of the timers (after, time_in), by default the
                 period of the task
             conditions: Condition of each transition by its name: a value,
-                number or after
+                number, after or a combination of them by &, | and ~
         """
         if not self.states:
             raise TypeError(f"{type(self).__name__} declares no states")
@@ -208,34 +273,27 @@ class StateMachine:
         self.dt = dt
         self._active: list[value[int] | int] = []
         self._time_in: dict[int, value[float]] = {}  # By the number of the state
-        # Condition of each transition, for an after condition with the limit of its runs count
-        plain: dict[Transition, value[int] | int] = {}
-        timers: dict[Transition, tuple[value[int] | int, unifloat]] = {}
+        # Condition and limit of the runs count of each after of each transition
+        timers: dict[tuple[Transition, after], tuple[value[int] | int, unifloat]] = {}
         for t in self.transitions:
-            c = conditions[t.name]
-            if isinstance(c, after):
-                timers[t] = (truth(c.condition), runs_limit(c.seconds, c.dt if c.dt is not None else dt))
-            else:
-                plain[t] = truth(c)
+            for a in _afters(conditions[t.name]):
+                timers[t, a] = (truth(a.condition), runs_limit(a.seconds, a.dt if a.dt is not None else dt))
 
         def step(previous: tuple[value[int], ...]) -> tuple[value[int], ...]:
             state = previous[0]
             counts = dict(zip(timers, previous[1:]))
             for t in self.transitions:
-                if t in timers:
-                    cond, limit = timers[t]
-                    active = cond & self._source(state, t) & (counts[t] + 1 > limit)
-                else:
-                    active = plain[t] & self._source(state, t)
-                self._active.append(active)
+                expired = {a: cond & (counts[tt, a] + 1 > limit)
+                           for (tt, a), (cond, limit) in timers.items() if tt is t}
+                self._active.append(_evaluate(conditions[t.name], expired) & self._source(state, t))
             new_state: value[int] | int = state
             for t, fires in reversed(list(zip(self.transitions, self._active))):
                 new_state = iif(fires, int(t.target), new_state)
             new_state = value(new_state) if isinstance(new_state, int) else new_state
             # Runs since the condition is true in the source state, -1 otherwise:
             # counted on the new state, so the run entering the source counts
-            new_counts = [iif(cond & self._source(new_state, t), counts[t] + (counts[t] < limit), -1)
-                          for t, (cond, limit) in timers.items()]
+            new_counts = [iif(cond & self._source(new_state, key[0]), counts[key] + (counts[key] < limit), -1)
+                          for key, (cond, limit) in timers.items()]
             return (new_state, *new_counts)
 
         self.state: value[int] = feedback(step, init=(int(self.initial),) + (-1,) * len(timers))[0]
