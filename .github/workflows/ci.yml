@@ -137,7 +137,7 @@ jobs:
 
   build-ubuntu32:
     needs: [build_stencils]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v7
     - uses: actions/download-artifact@v8
@@ -146,8 +146,9 @@ jobs:
         path: src/copapy/obj
     - name: Build and test 32-bit
       run: |
-        docker run --rm -v $PWD:/app -w /app ghcr.io/nonannet/x86_test:1 \
+        docker run --rm --network host -v $PWD:/app -w /app ghcr.io/nonannet/x86_test:1 \
         bash -lc "set -x && \
+                  cat /etc/resolv.conf && (getent hosts pypi.org || true) && \
                   . /opt/venv/bin/activate && \
                   pip install .[mindev] && \
                   mkdir -p build/runner && \

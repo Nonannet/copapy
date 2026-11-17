@@ -128,16 +128,22 @@ def build_asm_code_dict(asm_glob_pattern: str) -> dict[str, dict[str, str]]:
     return asm_code
 
 
-# Category key and page title; each key needs a matching stencil_doc_<key>.md page
-CATEGORIES: list[tuple[str, str]] = [
-    ('load_store', 'Load and store stencils'),
-    ('conversion', 'Conversion and copy stencils'),
-    ('scalar_arith', 'Scalar arithmetic and logic stencils'),
-    ('scalar_math', 'Scalar math stencils'),
-    ('array_elementwise', 'Array element-wise stencils'),
-    ('array_linalg', 'Array reduction and linear algebra stencils'),
-    ('aux', 'Auxiliary functions'),
+# Category key, page title and introduction; one page <output dir>/<key>.md is
+# generated per category, stencil_doc.md links them. Keys must not be reserved
+# Windows file names (e.g. "aux")
+CATEGORIES: list[tuple[str, str, str]] = [
+    ('load_store', 'Load and store stencils', ''),
+    ('conversion', 'Conversion and copy stencils', ''),
+    ('scalar_arith', 'Scalar arithmetic and logic stencils', ''),
+    ('scalar_math', 'Scalar math stencils', ''),
+    ('array_elementwise', 'Array element-wise stencils', ''),
+    ('array_linalg', 'Array reduction and linear algebra stencils', ''),
+    ('auxiliary', 'Auxiliary functions', 'Helper functions called by the stencils.'),
 ]
+
+# Categories with more generated markdown than this are split into sub-pages
+# by operation; small operations are combined onto one sub-page
+MAX_PAGE_SIZE = 1_000_000
 
 LOAD_STORE_OPS = {'load', 'store'}
 CONVERSION_OPS = {'float', 'int', 'bool', 'byte', 'copy32', 'copy8', 'roll32', 'put32'}
@@ -160,7 +166,7 @@ def get_category(func_name: str, stencil_names: set[str]) -> str:
         Category key from CATEGORIES
     """
     if func_name not in stencil_names:
-        return 'aux'
+        return 'auxiliary'
 
     op, *arg_types = func_name.split('_')
     is_array = any(t.endswith('arr') for t in arg_types)
@@ -178,10 +184,71 @@ def get_category(func_name: str, stencil_names: set[str]) -> str:
     return 'scalar_arith'
 
 
+def get_operation(func_name: str) -> str:
+    """
+    Determine the operation of a function by its name, used to split
+    categories into sub-pages.
+
+    Args:
+        func_name: Function name, e.g. "add_floatarr_float" or "aux_arr_add_int_int_vv"
+
+    Returns:
+        Operation name, e.g. "add"
+    """
+    name = func_name.lstrip('_')
+    for prefix in ('aux_arr_', 'aux_'):
+        if name.startswith(prefix):
+            name = name[len(prefix):]
+            break
+    return name.split('_')[0]
+
+
+def split_pages(sections: list[tuple[str, str]], max_size: int) -> list[list[tuple[str, str]]]:
+    """
+    Split the function sections of a category into pages, one page per
+    operation; operations are sorted by name and consecutive small ones
+    share a page as long as it stays below max_size.
+
+    Args:
+        sections: (function name, markdown) pairs in source order
+        max_size: Maximum markdown size of a page
+
+    Returns:
+        List of pages, each a list of (function name, markdown) pairs
+    """
+    if sum(len(md) for _, md in sections) <= max_size:
+        return [sections]
+
+    by_op: dict[str, list[tuple[str, str]]] = {}
+    for name, md in sections:
+        by_op.setdefault(get_operation(name), []).append((name, md))
+
+    pages: list[list[tuple[str, str]]] = []
+    page_size = 0
+    for op in sorted(by_op):
+        op_size = sum(len(md) for _, md in by_op[op])
+        if not pages or page_size + op_size > max_size:
+            pages.append([])
+            page_size = 0
+        pages[-1] += by_op[op]
+        page_size += op_size
+    return pages
+
+
+def page_operations(page: list[tuple[str, str]]) -> list[str]:
+    """Sorted, unique operations of the functions on a page."""
+    return sorted({get_operation(name) for name, _ in page})
+
+
+# Placeholder for the page of a linked auxiliary function, which is only known
+# after the auxiliary functions are split into pages; see resolve_links
+AUX_PAGE_PLACEHOLDER = '@aux-page:{}@'
+
+
 def highlight_code(code: str, language: str, link_names: list[str]) -> str:
     """
     Syntax highlight code as a raw HTML block in which all references to the
-    given auxiliary functions link to their entry on the auxiliary functions page.
+    given auxiliary functions link to their entry on the page documenting them.
 
     Args:
         code: Source or disassembly code
@@ -189,7 +256,8 @@ def highlight_code(code: str, language: str, link_names: list[str]) -> str:
         link_names: Names of the auxiliary functions to link
 
     Returns:
-        MyST raw HTML block with the same markup Sphinx uses for code blocks
+        MyST raw HTML block with the same markup Sphinx uses for code blocks;
+        link targets are placeholders to be replaced by resolve_links
     """
     html_code = highlight(code, get_lexer_by_name(language), HtmlFormatter(nowrap=True))
 
@@ -199,11 +267,27 @@ def highlight_code(code: str, language: str, link_names: list[str]) -> str:
         pattern = r'(?<!\w)(' + '|'.join(re.escape(n) for n in names) + r')(?!\w)'
         html_code = re.sub(
             pattern,
-            lambda m: f'<a class="aux-call" href="stencil_doc_aux.html#{make_id(m.group(1))}">{m.group(1)}</a>',
+            lambda m: (f'<a class="aux-call" href="{AUX_PAGE_PLACEHOLDER.format(m.group(1))}'
+                       f'#{make_id(m.group(1))}">{m.group(1)}</a>'),
             html_code)
 
     return (f'````{{raw}} html\n<div class="highlight-{language} notranslate"><div class="highlight">'
             f'<pre>{html_code}</pre></div></div>\n````')
+
+
+def resolve_links(markdown: str, aux_pages: dict[str, str]) -> str:
+    """
+    Replace the link placeholders inserted by highlight_code.
+
+    Args:
+        markdown: Page content
+        aux_pages: Auxiliary function names mapped to the name of their HTML page
+
+    Returns:
+        Page content with resolved links
+    """
+    pattern = re.escape(AUX_PAGE_PLACEHOLDER).replace(re.escape('{}'), r'(\w+)')
+    return re.sub(pattern, lambda m: aux_pages[m.group(1)], markdown)
 
 
 # Example usage:
@@ -211,7 +295,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate stencils documentation from C and assembly code")
     parser.add_argument('--input', default='build/stencils.c', help='Path to input C file')
     parser.add_argument('--asm-pattern', default='build/tmp/runner-*/stencils.asm', help='Glob pattern for assembly files')
-    parser.add_argument('--output', default='docs/build/stencils.md', help='Output markdown file path')
+    parser.add_argument('--output-dir', default='docs/source/stencil_doc',
+                        help='Directory for the generated markdown pages (inside the Sphinx source directory)')
 
     args = parser.parse_args()
 
@@ -223,7 +308,7 @@ if __name__ == "__main__":
     asm_code = build_asm_code_dict(args.asm_pattern)
 
     documented = [name for name in functions if 'get_42' not in name]
-    aux_names = [name for name in documented if get_category(name, stencil_names) == 'aux']
+    aux_names = [name for name in documented if get_category(name, stencil_names) == 'auxiliary']
 
     #@norm_indent
     def get_stencil_section(func_name: str) -> str:
@@ -247,17 +332,46 @@ if __name__ == "__main__":
 {arch_asm_code}
 """
 
-    category_md: dict[str, str] = {key: '' for key, _ in CATEGORIES}
+    category_sections: dict[str, list[tuple[str, str]]] = {key: [] for key, _, _ in CATEGORIES}
 
     for function_name in documented:
-        category_md[get_category(function_name, stencil_names)] += get_stencil_section(function_name)
+        category = get_category(function_name, stencil_names)
+        category_sections[category].append((function_name, get_stencil_section(function_name)))
 
-    # One file per category: <output stem>_<category key><output suffix>
-    output_path = Path(args.output)
-    for key, title in CATEGORIES:
-        category_path = output_path.with_name(f"{output_path.stem}_{key}{output_path.suffix}")
-        with open(category_path, 'wt') as f:
-            f.write(category_md[key])
-        print(f"Generated {category_path} ({title})")
+    # Page content and auxiliary function locations; a category is one page
+    # <key>.md or, if too large, an index page <key>.md with sub-pages <key>_<first operation>.md
+    pages: dict[str, str] = {}
+    aux_pages: dict[str, str] = {}
+    for key, title, intro in CATEGORIES:
+        header = f"# {title}\n{intro}\n" if intro else f"# {title}\n"
+        split = split_pages(category_sections[key], MAX_PAGE_SIZE)
 
-    print(f"Generated documentation for {len(functions)} stencil functions")
+        if len(split) == 1:
+            page_names = [key]
+            pages[key] = header + ''.join(md for _, md in split[0])
+        else:
+            page_names = [f"{key}_{page_operations(page)[0]}" for page in split]
+            toc = '\n'.join(f"{', '.join(page_operations(page))} <{name}>"
+                            for name, page in zip(page_names, split))
+            pages[key] = f"{header}\n```{{toctree}}\n:maxdepth: 1\n{toc}\n```\n"
+            for name, page in zip(page_names, split):
+                pages[name] = (f"# {title}: {', '.join(page_operations(page))}\n"
+                               + ''.join(md for _, md in page))
+
+        if key == 'auxiliary':
+            for name, page in zip(page_names, split):
+                aux_pages.update({func_name: f"{name}.html" for func_name, _ in page})
+
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Remove pages of a previous run, which may have been split differently
+    for key, _, _ in CATEGORIES:
+        for old_page in [*output_dir.glob(f"{key}.md"), *output_dir.glob(f"{key}_*.md")]:
+            old_page.unlink()
+
+    for name, markdown in pages.items():
+        with open(output_dir / f"{name}.md", 'wt', encoding='utf-8') as f:
+            f.write(resolve_links(markdown, aux_pages))
+
+    print(f"Generated {len(pages)} pages in {output_dir} for {len(documented)} stencil functions")

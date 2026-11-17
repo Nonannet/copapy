@@ -18,15 +18,16 @@ delayed time constant, which is zero at the first run, instead of masking.
 import math
 from typing import Any, Callable, Sequence, TypeVar, overload
 from ._basic_types import value, Net, Delay, TimeStep, transl_type, value_from_number, to_float, unifloat
-from ._arrays import array, ArrayType
+from ._arrays import array, ArrayType, _flatten
 from ._vectors import vector, cross
 from ._tensors import tensor
 from ._quaternion import quaternion
 from ._math import sqrt, atan2, maximum
 from ._flow import iif
+from ._complex import cxvalue, cxtensor
 from ._helper_types import U
 
-T = TypeVar("T")
+T = TypeVar("T", bound='value[Any] | ArrayType[Any] | tuple[Any, ...] | list[Any] | int | float')
 
 dt: value[float] = value(Net('float', TimeStep()), 'float')
 """Period of the task computing the value in seconds. It is set at deployment,
@@ -34,9 +35,6 @@ a task using it must have a period."""
 
 _METHODS = ('forward', 'backward', 'trapezoid')
 _FRAMES = ('body', 'world')
-
-# Time constants by factor and exponent of dt
-_time_constants: dict[tuple[float, int], value[float]] = {(1.0, 1): dt}
 
 
 def _initial(init: Any, dtype: str) -> int | float:
@@ -63,7 +61,7 @@ def _init_values(init: Any, x: ArrayType[Any]) -> list[Any]:
     return values
 
 
-def _delay_value(x: value[Any] | int | float, init: Any) -> value[Any]:
+def delay_value(x: value[Any] | int | float, init: Any) -> value[Any]:
     xv = x if isinstance(x, value) else value_from_number(x)
     node = Delay(_initial(init, xv.dtype), xv.net)
     return value(Net(node.dtype, node), xv.dtype)
@@ -82,13 +80,17 @@ def delay(x: vector[U], init: Any = 0, n: int = 1) -> vector[U]: ...
 @overload
 def delay(x: tensor[U], init: Any = 0, n: int = 1) -> tensor[U]: ...
 @overload
+def delay(x: cxvalue, init: Any = 0, n: int = 1) -> cxvalue: ...
+@overload
+def delay(x: cxtensor, init: Any = 0, n: int = 1) -> cxtensor: ...
+@overload
 def delay(x: Sequence[Any], init: Any = 0, n: int = 1) -> Any: ...
 def delay(x: Any, init: Any = 0, n: int = 1) -> Any:
     """Value of x at the n-th previous run of the task (z^-n). For the
     first n runs the result is the initial value.
 
     Arguments:
-        x: Value, vector, tensor or a tuple or list of them
+        x: Value, vector, tensor, cxvalue, cxtensor or a tuple or list of them
         init: Initial value: a number for all elements or the same
             structure as x
         n: Number of runs to delay
@@ -101,7 +103,7 @@ def delay(x: Any, init: Any = 0, n: int = 1) -> Any:
     if isinstance(x, int | float):
         x = value_from_number(x)  # A value also for n = 0
     for _ in range(n):
-        x = _map_init(x, init, _delay_value)
+        x = _map_init(x, init, delay_value)
     return x
 
 
@@ -114,10 +116,41 @@ def _item_inits(init: Any, x: tuple[Any, ...] | list[Any]) -> list[Any]:
     return inits
 
 
+def _complex_init(init: Any) -> complex:
+    if isinstance(init, value | cxvalue | cxtensor):
+        raise TypeError("Initial values must be numbers, not copapy values")
+    return complex(init)
+
+
+def _map_part(part: unifloat, init: float, func: Callable[[Any, Any], Any]) -> unifloat:
+    """Applies func to a part of a cxvalue. A constant part with the same
+    initial value never changes: it stays a constant (e.g. the zero
+    imaginary part of a real number)"""
+    if not isinstance(part, value) and part == init:
+        return part
+    ret: unifloat = func(part, init)
+    return ret
+
+
 def _map_init(x: Any, init: Any, func: Callable[[Any, Any], Any]) -> Any:
     """Applies func to each scalar of x and its initial value"""
     if isinstance(x, value | int | float):
         return func(x, init)
+    if isinstance(x, cxvalue):
+        c = _complex_init(init)
+        return cxvalue(_map_part(x.real, c.real, func), _map_part(x.imag, c.imag, func))
+    if isinstance(x, cxtensor):
+        # One complex number for all elements or the structure of x
+        re_init: Any
+        im_init: Any
+        if isinstance(init, int | float | complex):
+            re_init, im_init = init.real, init.imag
+        else:
+            cx_init = cxtensor(init if isinstance(init, tensor | vector) else [_complex_init(i) for i in _flatten(init)[0]])
+            re_init, im_init = cx_init.real.flatten(), cx_init.imag.flatten()
+        if x._im is None and isinstance(im_init, int | float) and im_init == 0:
+            return cxtensor(_map_init(x.real, re_init, func))  # A real tensor stays real
+        return cxtensor(_map_init(x.real, re_init, func), _map_init(x.imag, im_init, func))
     if isinstance(x, ArrayType):
         inits = iter(_init_values(init, x))
         return x.map(lambda e: func(e, next(inits)))
@@ -195,23 +228,21 @@ def feedback(func: Callable[[Any], T], init: Any) -> T:
     return out
 
 
-def _time_constant(dt_: 'unifloat | None', factor: float, exponent: int) -> unifloat:
+def time_constant(dt_: 'unifloat | None', factor: float, exponent: int) -> unifloat:
     """factor * dt^exponent (exponent 1, 2 or -1). For the period of the task it
-    is written to the memory of the task at deployment, so it costs no operation."""
+    is written to the memory of the task at deployment, so it costs no operation.
+    Time constants of the same factor and exponent are merged by the compiler."""
     if dt_ is None:
-        key = (factor, exponent)
-        if key not in _time_constants:
-            _time_constants[key] = value(Net('float', TimeStep(factor, exponent)), 'float')
-        return _time_constants[key]
+        return value(Net('float', TimeStep(factor, exponent)), 'float')
     if exponent == -1:
         return factor / dt_
     return factor * dt_ * dt_ if exponent == 2 else factor * dt_
 
 
-def _gated(c: unifloat) -> value[float]:
+def gated(c: unifloat) -> value[float]:
     """0.0 at the first run of the task, then c: for an increment that is
     zero at the first run without masking the elements of the increment"""
-    return _delay_value(c, 0.0)
+    return delay_value(c, 0.0)
 
 
 def _like(x: Any, init: Any) -> Any:
@@ -270,11 +301,11 @@ def integrate(x: Any, init: Any = 0.0, method: str = 'trapezoid', dt: 'unifloat 
     if isinstance(x, tuple | list | array):
         raise TypeError(f"Unsupported type {type(x).__name__}, use a vector or tensor")
     if method == 'forward':
-        increment = delay(x) * _time_constant(dt, 1.0, 1)
+        increment = delay(x) * time_constant(dt, 1.0, 1)
     elif method == 'backward':
-        increment = x * _gated(_time_constant(dt, 1.0, 1))
+        increment = x * gated(time_constant(dt, 1.0, 1))
     else:
-        increment = (x + delay(x)) * _gated(_time_constant(dt, 0.5, 1))
+        increment = (x + delay(x)) * gated(time_constant(dt, 0.5, 1))
     return feedback(lambda prev: prev + increment, _like(x, init))
 
 
@@ -302,7 +333,7 @@ def rate(x: Any, dt: 'unifloat | None' = None) -> Any:
                         "use angular_rate for the angular velocity")
     if isinstance(x, tuple | list | array):
         raise TypeError(f"Unsupported type {type(x).__name__}, use a vector or tensor")
-    return (x - delay(x)) * _gated(_time_constant(dt, 1.0, -1))
+    return (x - delay(x)) * gated(time_constant(dt, 1.0, -1))
 
 
 # Truncation error of the series of the rotation (float32 precision)
@@ -428,14 +459,14 @@ def integrate_rotation(omega: 'vector[Any] | Sequence[unifloat]', init: quaterni
 
     # Half of the rotation vector of the time step
     if method == 'forward':
-        half = delay(omega) * _time_constant(dt, 0.5, 1)
+        half = delay(omega) * time_constant(dt, 0.5, 1)
     elif method == 'backward':
-        half = omega * _gated(_time_constant(dt, 0.5, 1))
+        half = omega * gated(time_constant(dt, 0.5, 1))
     else:
         # The coning term is zero at the first run (the delayed omega is zero)
         prev = delay(omega)
-        half = (omega + prev) * _gated(_time_constant(dt, 0.25, 1)) + \
-            cross(prev, omega) * _time_constant(dt, 1 / 24 if body else -1 / 24, 2)
+        half = (omega + prev) * gated(time_constant(dt, 0.25, 1)) + \
+            cross(prev, omega) * time_constant(dt, 1 / 24 if body else -1 / 24, 2)
     rotation = _rotation(half, max_angle)
 
     def step_rotation(q: quaternion) -> quaternion:
@@ -465,4 +496,4 @@ def angular_rate(q: quaternion, dt: 'unifloat | None' = None, frame: str = 'body
         raise TypeError(f"The orientation must be a quaternion, not {type(q).__name__}")
     # The previous orientation at the first run is the identity, the result is zero
     d = _mul_conjugate(delay(q, init=(1.0, 0.0, 0.0, 0.0)), q, body)
-    return _rotation_vector(d) * _gated(_time_constant(dt, 1.0, -1))
+    return _rotation_vector(d) * gated(time_constant(dt, 1.0, -1))

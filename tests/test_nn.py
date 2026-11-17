@@ -185,7 +185,7 @@ def test_softmax() -> None:
     with pytest.raises(ValueError):
         nn.softmax(cp.array([[1.0, 2.0], [3.0, 4.0]]))
     with pytest.raises(TypeError):
-        nn.softmax(1.0)  # type: ignore[type-var]
+        nn.softmax(1.0)  # type: ignore[call-overload]
 
 
 def test_small_cnn() -> None:

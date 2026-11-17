@@ -8,7 +8,7 @@ tg.write_value while the task is running (e.g. for tuning).
 """
 from typing import Any
 from ._basic_types import value, unifloat
-from ._temporal import delay, feedback, rate, _time_constant, _gated, _delay_value
+from ._temporal import delay, feedback, rate, time_constant, gated, delay_value
 from ._math import minimum, maximum
 from ._flow import iif
 
@@ -42,9 +42,9 @@ def _derivative(x: unifloat, kd: unifloat, tf: unifloat, dt: 'unifloat | None') 
     It is 0 at the first run of the task."""
     if _is_number(tf, 0.0):
         return kd * rate(x, dt)
-    inverse = 1.0 / (tf + _time_constant(dt, 1.0, 1))
+    inverse = 1.0 / (tf + time_constant(dt, 1.0, 1))
     pole = tf * inverse
-    gain = _gated(kd * inverse)
+    gain = gated(kd * inverse)
     diff = x - delay(x)
     filtered: value[float] = feedback(lambda prev: pole * prev + gain * diff, 0.0)
     return filtered
@@ -133,7 +133,7 @@ def pid(setpoint: unifloat, measurement: unifloat, kp: unifloat, ki: unifloat = 
             v = v + default_out
         return _as_value(_limit(v if switch is None else iif(switch, v, default_out), out_min, out_max))
 
-    step = _time_constant(dt, 1.0, 1)
+    step = time_constant(dt, 1.0, 1)
     if limited:
         if tt is None:
             if _is_number(kp, 0.0):
@@ -143,7 +143,7 @@ def pid(setpoint: unifloat, measurement: unifloat, kp: unifloat, ki: unifloat = 
             tracking = step / tt
     if isinstance(default_out, value):
         # The integral starts at 0, default_out is added at the first run
-        first_run = _delay_value(0.0, 1.0)
+        first_run = delay_value(0.0, 1.0)
         initial = 0.0
     else:
         initial = float(default_out)

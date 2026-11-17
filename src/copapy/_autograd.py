@@ -10,7 +10,7 @@ from ._linalg import solve_arrays, inv_array
 from ._interp import get_table_delta
 
 # Operations with a derivative of 0 (integer results)
-_ZERO_GRAD_OPS = ('ge', 'gt', 'eq', 'ne', 'floordiv', 'bwand', 'bwor', 'bwxor', 'int', 'bool', 'byte', 'sign', 'argsort', 'gtabs')
+_ZERO_GRAD_OPS = ('ge', 'gt', 'eq', 'ne', 'floordiv', 'floordivc', 'lshift', 'rshift', 'bwand', 'bwor', 'bwxor', 'int', 'bool', 'byte', 'sign', 'argsort', 'gtabs')
 
 # Array operations without a derivative rule
 _UNSUPPORTED_ARRAY_OPS = ('copy32', 'copy8', 'sort', 'conv2d', 'maxpool2d', 'avgpool2d')
@@ -174,13 +174,13 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
 
         elif opn == 'matvec':
             (m,), (n,) = _const_ints(node.args[2]), _const_ints(node.args[3])
-            add_grad(a, g.reshape(m, 1).matmul(b.reshape(1, n)))
-            add_grad(b, a.reshape(m, n).T.matmul(g))
+            add_grad(a, g.reshape(m, 1) @ b.reshape(1, n))
+            add_grad(b, a.reshape(m, n).T @ g)
 
         elif opn == 'matmul':
             m, k, n = _const_ints(node.args[2])
-            add_grad(a, g.reshape(m, n).matmul(b.reshape(k, n).T))
-            add_grad(b, a.reshape(m, k).T.matmul(g.reshape(m, n)))
+            add_grad(a, g.reshape(m, n) @ b.reshape(k, n).T)
+            add_grad(b, a.reshape(m, k).T @ g.reshape(m, n))
 
         elif opn == 'solve':
             # x = a^-1 b: the gradient of b is a^-T g, the gradient of a is -(a^-T g) x^T
@@ -189,7 +189,7 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
             sol: array[Any] = array._from_net(out_net, (n, r))
             g_b = solve_arrays(a.reshape(n, n).T, g.reshape(n, r))
             add_grad(b, g_b)
-            add_grad(a, -g_b.matmul(sol.T))
+            add_grad(a, -(g_b @ sol.T))
 
         elif opn == 'det':
             # The gradient of det(a) is det(a) a^-T (not defined for a singular matrix)
@@ -245,7 +245,7 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
             add_grad(a, g / b)
             add_grad(b, g * (-a) / (b**2))
 
-        elif opn == 'mod':
+        elif opn in ('mod', 'modc'):
             add_grad(a, g)
             add_grad(b, g * (-a) / b)
 

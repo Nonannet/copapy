@@ -86,7 +86,7 @@ def test_feedback_vector() -> None:
     rot = cp.feedback(lambda p: m @ p, init=cp.vector([1.0, 0.0]))
     large = cp.feedback(lambda p: p + u, init=cp.vector([float(i) for i in range(40)]))
     results = run_sequence([rot, large], u, [1.0, 1.0, 1.0, 1.0])
-    assert [r[0].values for r in results] == approx([(0.0, 1.0), (-1.0, 0.0), (0.0, -1.0), (1.0, 0.0)])
+    assert [r[0].values for r in results] == [approx(v) for v in [(0.0, 1.0), (-1.0, 0.0), (0.0, -1.0), (1.0, 0.0)]]
     assert results[-1][1].values == approx([i + 4.0 for i in range(40)])
 
 
@@ -120,7 +120,7 @@ def test_rate() -> None:
     xs = [1.0, 2.0, 4.0, 4.0]
     results = run_sequence([cp.rate(u), cp.rate(cp.vector([u, u * u]), dt=1.0)], u, xs)
     assert [r[0] for r in results] == approx([0.0, 100.0, 200.0, 0.0])
-    assert [r[1].values for r in results] == approx([(0.0, 0.0), (1.0, 3.0), (2.0, 12.0), (0.0, 0.0)])
+    assert [r[1].values for r in results] == [approx(v) for v in [(0.0, 0.0), (1.0, 3.0), (2.0, 12.0), (0.0, 0.0)]]
 
 
 def test_closed_loop() -> None:
@@ -235,3 +235,30 @@ def test_errors() -> None:
         cp.integrate(u, method='simpson')
     with pytest.raises(NotImplementedError):
         cp.delay(cp.array([1.0, 2.0]))  # type: ignore[call-overload]
+
+
+def deployed_size(outputs: Any) -> tuple[cp.LocalTarget, int]:
+    """Target with a task computing outputs and the size of the deployed data"""
+    tg = cp.LocalTarget(tick=0.01)
+    send = tg._send  # pyright: ignore[reportPrivateUsage]
+    sizes: list[int] = []
+
+    def spy(dw: Any) -> None:
+        sizes.append(len(dw.get_data()))
+        send(dw)
+    tg._send = spy  # type: ignore[method-assign]  # pyright: ignore[reportPrivateUsage]
+    tg.deploy(cp.Task(outputs, period=0.01))
+    return tg, sum(sizes)
+
+
+def test_time_constants_merged() -> None:
+    from copapy._temporal import time_constant
+    u = cp.value(2.0)
+    shared = time_constant(None, 0.5, 1)
+    _, size_shared = deployed_size([u + shared, u * shared])
+    outputs = [u + time_constant(None, 0.5, 1), u * time_constant(None, 0.5, 1)]
+    tg, size_separate = deployed_size(outputs)
+    # Separately created time constants share one memory slot and one load
+    assert size_separate == size_shared
+    tg.step(0.01)
+    assert tg.read_value(outputs) == [approx(2.005), approx(0.01)]

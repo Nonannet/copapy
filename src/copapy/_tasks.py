@@ -315,15 +315,19 @@ class _TaskTarget(_TargetBase):
         for task, (roots, cuts, heads, _) in zip(task_list, isolated):
             external: dict[Node, int] = {}
             copies: list[tuple[int, int, int]] = []
+            time_steps: dict[tuple[float, int], int] = {}  # Address of each time constant of the task
             for node, net in get_head_nets(roots, TimeStep).items():
                 if task.period is None:
                     raise ValueError(f"{task} uses dt but has no period, "
                                      "a time step must be given explicitly (dt argument)")
-                addr, size = alloc(net)
-                external[node] = addr
                 assert isinstance(node, TimeStep)
-                constant = node.factor * task.period ** node.exponent
-                init.append((addr, struct.pack({'little': '<', 'big': '>'}[sdb.byteorder] + ('f' if size == 4 else 'd'), constant)))
+                key = (node.factor, node.exponent)
+                if key not in time_steps:
+                    addr, size = alloc(net)
+                    time_steps[key] = addr
+                    constant = node.factor * task.period ** node.exponent
+                    init.append((addr, struct.pack({'little': '<', 'big': '>'}[sdb.byteorder] + ('f' if size == 4 else 'd'), constant)))
+                external[node] = time_steps[key]
             for node, nets in heads.items():
                 addr, size = input_addr[node]
                 if isinstance(node, ArrayConst):

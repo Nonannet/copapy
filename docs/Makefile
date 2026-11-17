@@ -18,7 +18,7 @@ prepare-docs:
 	mkdir -p $(BUILDDIR)
 	python $(SOURCEDIR)/generate_class_list.py --api-dir $(SOURCEDIR)/api
 	python $(SOURCEDIR)/extract_section.py --readme $(SOURCEDIR)/../../README.md --build-dir $(BUILDDIR)
-	python $(SOURCEDIR)/stencil_doc.py --input $(SOURCEDIR)/../../build/stencils/stencils.c --asm-pattern "$(SOURCEDIR)/../../build/tmp/runner-linux-*/stencils.asm" --output $(BUILDDIR)/stencils.md
+	python $(SOURCEDIR)/stencil_doc.py --input $(SOURCEDIR)/../../build/stencils/stencils.c --asm-pattern "$(SOURCEDIR)/../../build/tmp/runner-linux-*/stencils.asm" --output-dir $(SOURCEDIR)/stencil_doc
 	python $(SOURCEDIR)/example_asm.py --input $(SOURCEDIR)/../../tools/make_example.py --asm-pattern "$(SOURCEDIR)/../../build/tmp/runner-linux-*/example.asm" --output $(BUILDDIR)/compiled_example.md
 
 # Build documentation (generate API and extract sections first)

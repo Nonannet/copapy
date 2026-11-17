@@ -12,7 +12,7 @@ entry_func_prefix = ''
 
 stack_size = 128
 
-includes = ['stencil_helper.h', 'aux_functions.c']
+includes = ['stencil_helper.h', 'aux_functions.c', 'fixed_stencils.c']
 
 
 def read_files(files: list[str]) -> str:
@@ -160,19 +160,12 @@ def get_op_code_float(op: str, type1: str, type2: str) -> str:
 
 @norm_indent
 def get_floordiv(op: str, type1: str, type2: str) -> str:
-    if type1 == 'int' and type2 == 'int':
-        return f"""
-        STENCIL void {op}_{type1}_{type2}({type1} a, {type2} b) {{
-            int result = a / b - ((a % b != 0) && ((a < 0) != (b < 0)));
-            result_int_{type2}(result, b);
-        }}
-        """
-    else:
-        return f"""
-        STENCIL void {op}_{type1}_{type2}({type1} a, {type2} b) {{
-            result_float_{type2}(floorf((float)a / (float)b), b);
-        }}
-        """
+    """Float floor division, the int variant is in fixed_stencils.c"""
+    return f"""
+    STENCIL void {op}_{type1}_{type2}({type1} a, {type2} b) {{
+        result_float_{type2}(floorf((float)a / (float)b), b);
+    }}
+    """
 
 
 @norm_indent
@@ -402,24 +395,6 @@ def get_arr_matmul_code(type1: str, type2: str) -> str:
 
 
 @norm_indent
-def get_arr_solve_code() -> str:
-    """The kernels aux_arr_solve_float and aux_arr_det_float are in aux_functions.c"""
-    return """
-    STENCIL void solve_floatarr_floatarr(void) {
-        // Solution of a linear system
-        aux_arr_solve_float(REF(ref_arg0), REF(ref_arg1), REF(ref_out), REF(ref_arg3), REF(ref_arg2));
-        result_float_ref();
-    }
-
-    STENCIL void det_floatarr(void) {
-        // Determinant of a square matrix
-        *(float *)REF(ref_out) = aux_arr_det_float(REF(ref_arg0), REF(ref_arg2), *(int *)REF(ref_arg1));
-        result_float_ref();
-    }
-    """
-
-
-@norm_indent
 def get_arr_interp_code() -> str:
     """The kernels are in aux_functions.c"""
     descriptions = {'lerp': 'Table lookup at a fractional index',
@@ -475,58 +450,6 @@ def get_arr_cast_code(name: str, type1: str, expr: str, type_out: str) -> str:
         {kernel}(REF(ref_arg0), REF(ref_out), *(int *)REF(ref_arg1));
         result_{type_out}_ref();
     }}
-    """
-
-
-@norm_indent
-def get_arr_copy_code() -> str:
-    """The kernels aux_arr_copy32 and aux_arr_copy8 are in aux_functions.c"""
-    return """
-    STENCIL void copy32_arr(void) {
-        // Strided copy of 32 bit elements
-        aux_arr_copy32(REF(ref_arg0), REF(ref_out), REF(ref_arg1));
-        result_void();
-    }
-
-    STENCIL void copy8_arr(void) {
-        // Strided copy of bytes
-        aux_arr_copy8(REF(ref_arg0), REF(ref_out), REF(ref_arg1));
-        result_void();
-    }
-    """
-
-
-@norm_indent
-def get_arr_ring_code() -> str:
-    """Ring buffer of 32 bit elements, the kernel aux_arr_roll32 is in aux_functions.c"""
-    return """
-    SHORT_LOOP STENCIL void put32_arr(void) {
-        // Writes the m elements of ref_arg1 in place to the elements i * m to i * m + m - 1
-        // of a ring buffer (ref_out is the memory of the buffer ref_arg0, i = ref_arg2, m = ref_arg3)
-        const int *a = REF(ref_arg1);
-        int m = *(int *)REF(ref_arg3);
-        int *o = (int *)REF(ref_out) + *(int *)REF(ref_arg2) * m;
-        for (int i = 0; i < m; i++) o[i] = a[i];
-        result_void();
-    }
-
-    STENCIL void roll32_arr(void) {
-        // Copies the ring buffer ref_arg0 of n elements (ref_arg2) starting at the element ref_arg1
-        aux_arr_roll32(REF(ref_arg0), REF(ref_out), *(int *)REF(ref_arg1), *(int *)REF(ref_arg2));
-        result_void();
-    }
-    """
-
-
-@norm_indent
-def get_arr_conv_code() -> str:
-    """The kernel aux_arr_conv2d is in aux_functions.c"""
-    return """
-    STENCIL void conv2d_floatarr_floatarr(void) {
-        // 2D convolution
-        aux_arr_conv2d(REF(ref_arg0), REF(ref_arg1), REF(ref_arg2), REF(ref_out), REF(ref_arg3));
-        result_float_ref();
-    }
     """
 
 
@@ -770,27 +693,12 @@ if __name__ == "__main__":
         code += get_math_func1(fn + 'f', 'float', fn)
 
     code += get_math_func1('fabsf', 'float', 'abs')
-    code += get_custom_stencil('abs_int(int arg1)', 'result_int(__builtin_abs(arg1));')
 
     for t in types:
         code += get_custom_stencil(f"sign_{t}({t} arg1)", "result_int((arg1 > 0) - (arg1 < 0));")
 
     for fn in ['atan2', 'pow']:
         code += get_math_func2(fn, 'float', 'float')
-    code += get_custom_stencil('pow_int_int(int arg1, int arg2)', 'result_int_int(aux_ipow(arg1, arg2), arg2);')
-
-    # Branch-free selection
-    gtabs_comment = 'Branch-free selection: int mask -1 if |arg1| > |arg2| else 0'
-    mask_comment = 'Branch-free selection: arg1 where the mask arg2 is set, otherwise 0'
-    masknot_comment = 'Branch-free selection: arg1 where the mask arg2 is not set, otherwise 0'
-    code += get_custom_stencil('gtabs_float_float(float arg1, float arg2)',
-                               'result_int_float(-(fabsf(arg1) > fabsf(arg2)), arg2);', gtabs_comment)
-    code += get_custom_stencil('mask_float_int(float arg1, int arg2)',
-                               'union { float f; int i; } x = {arg1}; x.i &= arg2; result_float_int(x.f, arg2);', mask_comment)
-    code += get_custom_stencil('masknot_float_int(float arg1, int arg2)',
-                               'union { float f; int i; } x = {arg1}; x.i &= ~arg2; result_float_int(x.f, arg2);', masknot_comment)
-    code += get_custom_stencil('mask_int_int(int arg1, int arg2)', 'result_int_int(arg1 & arg2, arg2);', mask_comment)
-    code += get_custom_stencil('masknot_int_int(int arg1, int arg2)', 'result_int_int(arg1 & ~arg2, arg2);', masknot_comment)
 
     for t in types:
         code += get_min(t, t)
@@ -798,7 +706,8 @@ if __name__ == "__main__":
 
     for op, t in permutate(ops, types):
         if op == 'floordiv':
-            code += get_floordiv('floordiv', t, t)
+            if t == 'float':
+                code += get_floordiv('floordiv', t, t)
         elif op == 'div':
             if t == 'float':
                 code += get_op_code_float(op, t, t)
@@ -809,8 +718,6 @@ if __name__ == "__main__":
 
     for op in int_ops:
         code += get_op_code(op, 'int', 'int', 'int')
-
-    code += get_op_code('mod', 'int', 'int', 'int')
 
     for t1, t2, t_out in permutate(types, types, types):
         code += get_load_reg0_code(t1, t2, t_out)
@@ -851,7 +758,6 @@ if __name__ == "__main__":
         code += get_arr_dot_code(t1, t2)
         code += get_arr_matmul_code(t1, t2)
 
-    code += get_arr_solve_code()
     code += get_arr_interp_code()
 
     code += get_arr_cast_code('float', 'int', '(float)a[i]', 'float')
@@ -865,9 +771,6 @@ if __name__ == "__main__":
     code += get_arr_cast_code('byte', 'int', '(byte)(a[i] > 255 ? 255 : a[i] > 0 ? a[i] : 0)', 'byte')
     code += get_arr_cast_code('byte', 'float', '(byte)(a[i] > 255.0f ? 255.0f : a[i] > 0.0f ? a[i] : 0.0f)', 'byte')
 
-    code += get_arr_copy_code()
-    code += get_arr_ring_code()
-    code += get_arr_conv_code()
     code += get_arr_pool_code('max')
     code += get_arr_pool_code('avg')
 

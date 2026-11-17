@@ -23,9 +23,13 @@ TFunc = TypeVar("TFunc", bound=Callable[..., Any])
 def scalar_op(func: TFunc) -> TFunc:
     """Decorator for binary operators of value: returns NotImplemented for
     non-scalar operands, so Python falls back to the reflected operator
-    of the other operand (e.g. vector.__rsub__ for value - vector)."""
+    of the other operand (e.g. vector.__rsub__ for value - vector). With a
+    Python complex number the operation is done by cxvalue (x + 2j)."""
     @functools.wraps(func)
     def wrapper(self: Any, other: Any) -> Any:
+        if isinstance(other, complex):
+            cx_op = getattr(cp.cxvalue, func.__name__, None)
+            return NotImplemented if cx_op is None else cx_op(cp.cxvalue(self), other)
         if not isinstance(other, (value, int, float)):
             return NotImplemented
         return func(self, other)
@@ -241,7 +245,7 @@ class value(Generic[TNum]):
     def __floordiv__(self, other: TVarNumb) -> 'value[float] | value[int]': ...
     @scalar_op
     def __floordiv__(self, other: TVarNumb) -> Any:
-        return add_op('floordiv', [self, other])
+        return int_div_op('floordiv', self, other)
 
     @overload
     def __rfloordiv__(self: 'value[TNum]', other: TNum) -> 'value[TNum]': ...
@@ -251,13 +255,21 @@ class value(Generic[TNum]):
     def __rfloordiv__(self, other: float) -> 'value[float]': ...
     @scalar_op
     def __rfloordiv__(self, other: NumLike) -> Any:
-        return add_op('floordiv', [other, self])
+        return int_div_op('floordiv', other, self)
 
     def __abs__(self: 'value[TNum]') -> 'value[TNum]':
         return cp.abs(self)
 
     def __neg__(self: 'value[TNum]') -> 'value[TNum]':
         return add_op('neg', [self])
+
+    def __invert__(self: 'value[int]') -> 'value[int]':
+        """Logical not of a bool value (~(a > b)), bitwise not of an int value"""
+        if self.dtype == 'bool':
+            return add_op('eq', [self, 0], True, dtype='bool')
+        if transl_type(self.dtype) != 'int':
+            raise TypeError(f"~ is not defined for a {self.dtype} value")
+        return add_op('bwxor', [self, -1], True)
 
     @scalar_op
     def __gt__(self, other: TVarNumb) -> 'value[int]':
@@ -295,7 +307,7 @@ class value(Generic[TNum]):
     def __mod__(self, other: TVarNumb) -> 'value[float] | value[int]': ...
     @scalar_op
     def __mod__(self, other: TVarNumb) -> Any:
-        return add_op('mod', [self, other])
+        return int_div_op('mod', self, other)
 
     @overload
     def __rmod__(self: 'value[TNum]', other: TNum) -> 'value[TNum]': ...
@@ -305,7 +317,7 @@ class value(Generic[TNum]):
     def __rmod__(self, other: float) -> 'value[float]': ...
     @scalar_op
     def __rmod__(self, other: NumLike) -> Any:
-        return add_op('mod', [other, self])
+        return int_div_op('mod', other, self)
 
     @overload
     def __pow__(self: 'value[TNum]', other: 'value[TNum] | TNum') -> 'value[TNum]': ...
@@ -351,27 +363,52 @@ class value(Generic[TNum]):
 
     @scalar_op
     def __and__(self, other: uniint) -> 'value[int]':
-        return add_op('bwand', [self, other], True)
+        return add_op('bwand', [self, other], True, dtype=_logic_dtype(self, other))
 
     @scalar_op
     def __rand__(self, other: uniint) -> 'value[int]':
-        return add_op('bwand', [other, self], True)
+        return add_op('bwand', [other, self], True, dtype=_logic_dtype(self, other))
 
     @scalar_op
     def __or__(self, other: uniint) -> 'value[int]':
-        return add_op('bwor', [self, other], True)
+        return add_op('bwor', [self, other], True, dtype=_logic_dtype(self, other))
 
     @scalar_op
     def __ror__(self, other: uniint) -> 'value[int]':
-        return add_op('bwor', [other, self], True)
+        return add_op('bwor', [other, self], True, dtype=_logic_dtype(self, other))
 
     @scalar_op
     def __xor__(self, other: uniint) -> 'value[int]':
-        return add_op('bwxor', [self, other], True)
+        return add_op('bwxor', [self, other], True, dtype=_logic_dtype(self, other))
 
     @scalar_op
     def __rxor__(self, other: uniint) -> 'value[int]':
-        return add_op('bwxor', [other, self], True)
+        return add_op('bwxor', [other, self], True, dtype=_logic_dtype(self, other))
+
+
+class ComplexType:
+    """Base class of the complex types (cxvalue and cxtensor). The math
+    functions call these methods for them, so they do not depend on the
+    complex types."""
+
+    def exp(self) -> Any:
+        raise NotImplementedError
+
+    def log(self) -> Any:
+        raise NotImplementedError
+
+    def sqrt(self) -> Any:
+        raise NotImplementedError
+
+    def __abs__(self) -> Any:
+        raise NotImplementedError
+
+
+def _logic_dtype(a: Any, b: Any) -> str | None:
+    """'bool' for a bitwise operation of two booleans"""
+    def is_bool(x: Any) -> bool:
+        return x.dtype == 'bool' if isinstance(x, value) else isinstance(x, bool)
+    return 'bool' if is_bool(a) and is_bool(b) else None
 
 
 class HeadNode(Node):
@@ -548,6 +585,10 @@ class ArrayElement(Node):
 _constant_nets: 'weakref.WeakValueDictionary[tuple[type, int | bytes], Net]' = weakref.WeakValueDictionary()
 
 
+@overload
+def value_from_number(val: int) -> value[int]: ...
+@overload
+def value_from_number(val: float) -> value[float]: ...
 def value_from_number(val: int | float) -> value[Any]:
     """Anonymous constant that can be removed during optimization. Constants
     of the same type and value share one node: they can not change, so the
@@ -570,7 +611,7 @@ def select_by_mask(mask: value[int], x: Any, y: Any) -> Any:
     return kept_x + kept_y
 
 
-def to_float(val: value[Any]) -> value[Any]:
+def to_float(val: value[Any]) -> value[float]:
     """Convert an int value to float: constants at trace time, variables by
     the float_int stencil. Float values are returned unchanged."""
     if transl_type(val.dtype) != 'int':
@@ -579,6 +620,45 @@ def to_float(val: value[Any]) -> value[Any]:
     if isinstance(source, Constant):
         return value_from_number(float(source.value))
     return add_op('float', [val])
+
+
+def int_div_op(op: str, a: value[Any] | int | float, b: value[Any] | int | float) -> value[Any]:
+    """Floor division ('floordiv') or modulo ('mod') rounded towards -inf like
+    in Python. For int operands with a divisor known at trace time (a number
+    or an anonymous constant) a division by zero raises ZeroDivisionError
+    here, divisions by 1, -1 and powers of 2 need no division, and other
+    divisors use the stencil variant without handling of the operands the
+    division instruction traps for. With a variable divisor x // 0 gives 0
+    and x % 0 gives x at runtime."""
+    def is_int(x: Any) -> bool:
+        return transl_type(x.dtype) == 'int' if isinstance(x, value) else isinstance(x, int)
+
+    if not (is_int(a) and is_int(b)):
+        return add_op(op, [a, b])
+    if isinstance(b, value):
+        source = b.net.source
+        if not isinstance(source, Constant):
+            return add_op(op, [a, b])  # Variable divisor
+        d = int(source.value)
+    else:
+        d = int(b)
+    if d == 0:
+        raise ZeroDivisionError('integer division or modulo by zero')
+
+    a_val = a if isinstance(a, value) else value_from_number(int(a))
+    if op == 'mod':
+        if d in (1, -1):
+            return value_from_number(0)
+        if d > 0 and d & (d - 1) == 0:
+            return add_op('bwand', [a_val, d - 1])
+        return add_op('modc', [a_val, d])
+    if d == 1:
+        return value(a_val.net, 'int')
+    if d == -1:
+        return add_op('neg', [a_val])
+    if d > 0 and d & (d - 1) == 0:
+        return add_op('rshift', [a_val, d.bit_length() - 1])  # Arithmetic shift rounds towards -inf
+    return add_op('floordivc', [a_val, d])
 
 
 def add_op(op: str, args: list[value[Any] | int | float], commutative: bool = False, dtype: str | None = None) -> value[Any]:
