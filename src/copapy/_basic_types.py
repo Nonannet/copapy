@@ -245,7 +245,7 @@ class value(Generic[TNum]):
     def __floordiv__(self, other: TVarNumb) -> 'value[float] | value[int]': ...
     @scalar_op
     def __floordiv__(self, other: TVarNumb) -> Any:
-        return add_op('floordiv', [self, other])
+        return int_div_op('floordiv', self, other)
 
     @overload
     def __rfloordiv__(self: 'value[TNum]', other: TNum) -> 'value[TNum]': ...
@@ -255,7 +255,7 @@ class value(Generic[TNum]):
     def __rfloordiv__(self, other: float) -> 'value[float]': ...
     @scalar_op
     def __rfloordiv__(self, other: NumLike) -> Any:
-        return add_op('floordiv', [other, self])
+        return int_div_op('floordiv', other, self)
 
     def __abs__(self: 'value[TNum]') -> 'value[TNum]':
         return cp.abs(self)
@@ -307,7 +307,7 @@ class value(Generic[TNum]):
     def __mod__(self, other: TVarNumb) -> 'value[float] | value[int]': ...
     @scalar_op
     def __mod__(self, other: TVarNumb) -> Any:
-        return add_op('mod', [self, other])
+        return int_div_op('mod', self, other)
 
     @overload
     def __rmod__(self: 'value[TNum]', other: TNum) -> 'value[TNum]': ...
@@ -317,7 +317,7 @@ class value(Generic[TNum]):
     def __rmod__(self, other: float) -> 'value[float]': ...
     @scalar_op
     def __rmod__(self, other: NumLike) -> Any:
-        return add_op('mod', [other, self])
+        return int_div_op('mod', other, self)
 
     @overload
     def __pow__(self: 'value[TNum]', other: 'value[TNum] | TNum') -> 'value[TNum]': ...
@@ -620,6 +620,45 @@ def to_float(val: value[Any]) -> value[float]:
     if isinstance(source, Constant):
         return value_from_number(float(source.value))
     return add_op('float', [val])
+
+
+def int_div_op(op: str, a: value[Any] | int | float, b: value[Any] | int | float) -> value[Any]:
+    """Floor division ('floordiv') or modulo ('mod') rounded towards -inf like
+    in Python. For int operands with a divisor known at trace time (a number
+    or an anonymous constant) a division by zero raises ZeroDivisionError
+    here, divisions by 1, -1 and powers of 2 need no division, and other
+    divisors use the stencil variant without handling of the operands the
+    division instruction traps for. With a variable divisor x // 0 gives 0
+    and x % 0 gives x at runtime."""
+    def is_int(x: Any) -> bool:
+        return transl_type(x.dtype) == 'int' if isinstance(x, value) else isinstance(x, int)
+
+    if not (is_int(a) and is_int(b)):
+        return add_op(op, [a, b])
+    if isinstance(b, value):
+        source = b.net.source
+        if not isinstance(source, Constant):
+            return add_op(op, [a, b])  # Variable divisor
+        d = int(source.value)
+    else:
+        d = int(b)
+    if d == 0:
+        raise ZeroDivisionError('integer division or modulo by zero')
+
+    a_val = a if isinstance(a, value) else value_from_number(int(a))
+    if op == 'mod':
+        if d in (1, -1):
+            return value_from_number(0)
+        if d > 0 and d & (d - 1) == 0:
+            return add_op('bwand', [a_val, d - 1])
+        return add_op('modc', [a_val, d])
+    if d == 1:
+        return value(a_val.net, 'int')
+    if d == -1:
+        return add_op('neg', [a_val])
+    if d > 0 and d & (d - 1) == 0:
+        return add_op('rshift', [a_val, d.bit_length() - 1])  # Arithmetic shift rounds towards -inf
+    return add_op('floordivc', [a_val, d])
 
 
 def add_op(op: str, args: list[value[Any] | int | float], commutative: bool = False, dtype: str | None = None) -> value[Any]:

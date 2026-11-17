@@ -10,7 +10,7 @@ from ._linalg import solve_arrays, inv_array
 from ._interp import get_table_delta
 
 # Operations with a derivative of 0 (integer results)
-_ZERO_GRAD_OPS = ('ge', 'gt', 'eq', 'ne', 'floordiv', 'bwand', 'bwor', 'bwxor', 'int', 'bool', 'byte', 'sign', 'argsort', 'gtabs')
+_ZERO_GRAD_OPS = ('ge', 'gt', 'eq', 'ne', 'floordiv', 'floordivc', 'lshift', 'rshift', 'bwand', 'bwor', 'bwxor', 'int', 'bool', 'byte', 'sign', 'argsort', 'gtabs')
 
 # Array operations without a derivative rule
 _UNSUPPORTED_ARRAY_OPS = ('copy32', 'copy8', 'sort', 'conv2d', 'maxpool2d', 'avgpool2d')
@@ -245,7 +245,7 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
             add_grad(a, g / b)
             add_grad(b, g * (-a) / (b**2))
 
-        elif opn == 'mod':
+        elif opn in ('mod', 'modc'):
             add_grad(a, g)
             add_grad(b, g * (-a) / b)
 

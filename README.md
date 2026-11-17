@@ -376,7 +376,7 @@ The tests `tests/test_runner_zephyr.py` and `tests/test_serial_target.py` run it
 
 This project is licensed under the MIT license - see the [LICENSE](LICENSE) file for details.
 
-[^1]: Errors like divide-by-zero are currently still possible. The feasibility of tracking value ranges in the type system is under investigation to enable compile-time checks.
+[^1]: Floating-point operations follow IEEE 754 and produce inf or nan instead of errors, e.g. for a division by zero. Integer floor division and modulo are rounded towards -inf like in Python: dividing by a constant zero raises `ZeroDivisionError` when the computation is traced; with a variable divisor `x // 0` gives 0 and `x % 0` gives `x` at runtime.
 
 [^2]: The compiler must support tail-call optimization (TCO). Currently, GCC is supported. Porting to a new architecture requires implementing a subset of relocation types used by that architecture.
 
