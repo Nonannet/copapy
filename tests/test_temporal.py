@@ -86,7 +86,7 @@ def test_feedback_vector() -> None:
     rot = cp.feedback(lambda p: m @ p, init=cp.vector([1.0, 0.0]))
     large = cp.feedback(lambda p: p + u, init=cp.vector([float(i) for i in range(40)]))
     results = run_sequence([rot, large], u, [1.0, 1.0, 1.0, 1.0])
-    assert [r[0].values for r in results] == approx([(0.0, 1.0), (-1.0, 0.0), (0.0, -1.0), (1.0, 0.0)])
+    assert [r[0].values for r in results] == [approx(v) for v in [(0.0, 1.0), (-1.0, 0.0), (0.0, -1.0), (1.0, 0.0)]]
     assert results[-1][1].values == approx([i + 4.0 for i in range(40)])
 
 
@@ -120,7 +120,7 @@ def test_rate() -> None:
     xs = [1.0, 2.0, 4.0, 4.0]
     results = run_sequence([cp.rate(u), cp.rate(cp.vector([u, u * u]), dt=1.0)], u, xs)
     assert [r[0] for r in results] == approx([0.0, 100.0, 200.0, 0.0])
-    assert [r[1].values for r in results] == approx([(0.0, 0.0), (1.0, 3.0), (2.0, 12.0), (0.0, 0.0)])
+    assert [r[1].values for r in results] == [approx(v) for v in [(0.0, 0.0), (1.0, 3.0), (2.0, 12.0), (0.0, 0.0)]]
 
 
 def test_closed_loop() -> None:
