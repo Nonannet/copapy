@@ -1,5 +1,6 @@
 from typing import Any, Generic, Literal, Sequence, Iterable, Callable, TypeVar, TypeAlias, overload
-from ._basic_types import value, Net, ArrayNet, ArrayConst, ArrayOp, ArrayElement, ArrayPack, NumLike, transl_type, value_from_number, generic_sdb, to_float, add_op
+from ._basic_types import value, Net, ArrayNet, ArrayConst, ArrayOp, ArrayElement, ArrayPack, \
+     NumLike, transl_type, value_from_number, generic_sdb, to_float, add_op
 from ._helper_types import TNum
 
 
@@ -883,3 +884,5 @@ def _op_result(arr: array[Any], op: str) -> array[Any]:
     scalar operations comparisons are bool"""
     return array._from_net(arr.net, arr.shape, 'bool') if op in COMPARISONS else arr
 
+ArrayLike: TypeAlias = array[Any] | ArrayType[Any] | Sequence[Any]
+ArrayLike1D: TypeAlias = array[Any] | ArrayType[Any] | Sequence[float | value[Any]]

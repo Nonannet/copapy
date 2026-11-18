@@ -94,6 +94,50 @@ def test_code_size() -> None:
     assert sum(stats.values()) < 200  # O(n^2) implementation: 12475 operations
 
 
+@pytest.mark.parametrize('n', [1, 2, 4, 5, 8, 13])
+@pytest.mark.parametrize('dtype', ['int', 'float'])
+def test_median_mean_input_types(n: int, dtype: str) -> None:
+    """median and mean of vectors, tensors, quaternions, arrays and sequences"""
+    data = sample(n, dtype, n + 50)
+    inputs: list[Any] = [cp.vector(cp.value(x) for x in data),
+                         cp.vector((cp.value(x) for x in data), packed=False),
+                         cp.tensor([cp.value(x) for x in data]),
+                         cp.array(data),  # data on the target, computed at runtime
+                         cp.array([cp.value(x) for x in data]),
+                         [cp.value(x) for x in data],
+                         [cp.value(data[0]), *data[1:]]]  # mixed sequence
+    if n == 4:
+        inputs.append(cp.quaternion(*(cp.value(x) for x in data)))
+
+    results = [f(x) for x in inputs for f in (filters.median, filters.mean)]
+    assert all(isinstance(r, cp.value) for r in results)
+    outs = evaluate(*results)
+    ref = [statistics.median(data), statistics.mean(data)] * len(inputs)
+    assert outs == pytest.approx(ref, abs=1e-5)
+    assert all(isinstance(o, float) for o in outs)
+
+
+@pytest.mark.parametrize('data', [[4.0, 1.0, 3.0, 2.0], [5, 1, 4, 2], [3], [2.5, -1.0, 7.0]])
+def test_median_mean_constants(data: list[Any]) -> None:
+    """Constant vectors, tensors and sequences are evaluated at trace time"""
+    inputs: list[Any] = [cp.vector(data), cp.tensor([float(x) for x in data]), data]
+    for x in inputs:
+        m, a = filters.median(x), filters.mean(x)
+        assert m == statistics.median(data) and isinstance(m, float)
+        assert a == pytest.approx(statistics.mean(data)) and isinstance(a, float)
+
+
+def test_median_mean_errors() -> None:
+    for f in (filters.median, filters.mean):
+        x: Any
+        for x in (cp.vector([]), [], cp.tensor([[1.0, 2.0], [3.0, 4.0]]),
+                  cp.tensor([[cp.value(1.0), cp.value(2.0)]]), cp.array([[1.0, 2.0], [3.0, 4.0]])):
+            with pytest.raises(ValueError):
+                f(x)
+        with pytest.raises(TypeError):
+            f(cp.value(1.0))  # type: ignore[arg-type]
+
+
 def convolve_ref(a: list[float], v: list[float], mode: str) -> list[float]:
     """Definition of the discrete convolution with the output ranges of numpy.convolve"""
     n, m = len(a), len(v)

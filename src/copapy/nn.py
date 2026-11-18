@@ -1,16 +1,15 @@
 from . import vector
 from . import tensor
 from . import value
-from typing import TypeVar, TypeAlias, Any, Sequence, overload
+from typing import TypeVar, Any, Sequence, overload
 import copapy as cp
-from ._arrays import array, ArrayType, _add_array_op, _size
+from ._arrays import array, ArrayType, ArrayLike, _add_array_op, _size
 from ._basic_types import ArrayNet
 
 __all__ = ["relu", "sigmoid", "softmax", "linear", "conv1d", "conv2d",
            "max_pool1d", "max_pool2d", "avg_pool1d", "avg_pool2d", "global_avg_pool2d"]
 
 U = TypeVar("U", int, float)
-ArrayLike: TypeAlias = array[Any] | ArrayType[Any] | Sequence[Any]
 
 
 @overload

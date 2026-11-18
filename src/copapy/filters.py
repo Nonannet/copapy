@@ -1,35 +1,49 @@
 from ._vectors import vector
 from ._tensors import tensor
 from ._basic_types import value, unifloat
-from ._arrays import array, ArrayType, _size
+from ._arrays import array, ArrayType, ArrayLike1D, _size
 from .nn import _float_array, _conv
 from ._casts import to_float
 from ._sorting import _as_array
-from typing import Any, Sequence, TypeAlias, overload
+from ._mixed import mixed_sum
+from typing import Any, Sequence, overload
 import math
 
 __all__ = ["median", "convolve", "firwin", "lowpass", "highpass", "bandpass","gaussian_filter","mean"]
 
-ConvLike: TypeAlias = 'ArrayType[Any] | array[Any] | Sequence[float | value[Any]]'
+
+def _1d_input(x: Any) -> ArrayType[Any] | array[Any]:
+    """Non-empty 1D vector, tensor or array, a sequence is converted to a vector"""
+    if isinstance(x, Sequence) and not isinstance(x, str):
+        x = vector(x)
+    if not isinstance(x, ArrayType | array):
+        raise TypeError(f"Function requires a vector, a tensor, an array or a sequence, not {type(x).__name__}")
+    if x.ndim != 1:
+        raise ValueError(f"Function requires a 1D input, got shape {x.shape}")
+    if not x.shape[0]:
+        raise ValueError(f"Function for an empty input is not defined")
+    return x
 
 
-def median(input_vector: ArrayType[float]) -> unifloat:
+def median(a: ArrayLike1D) -> unifloat:
     """
-    Median of the elements of a vector: the middle element of the sorted
+    Median of the elements of a 1D input: the middle element of the sorted
     elements or the average of the two middle elements for an even number
     of elements.
 
     Arguments:
-        input_vector: The input vector (or 1D tensor) containing numerical values.
+        a: 1D vector, tensor, array or sequence of numbers and copapy values.
 
     Returns:
-        The median value of the input vector.
+        The median of the elements.
     """
-    n = len(input_vector.values)
-    if input_vector._is_constant():
-        data: list[Any] = sorted(input_vector.values)
+    x = _1d_input(a)
+    n = x.shape[0]
+    if isinstance(x, ArrayType) and x._is_constant():
+        # Constants are evaluated at trace time
+        data: list[Any] = sorted(x.values)
         return float(data[n // 2]) if n % 2 else (data[n // 2 - 1] + data[n // 2]) / 2
-    sorted_arr = _as_array(input_vector).sort()
+    sorted_arr = (x if isinstance(x, array) else _as_array(x)).sort()
     if n % 2:
         return to_float(sorted_arr.element(n // 2))
     return (sorted_arr.element(n // 2 - 1) + sorted_arr.element(n // 2)) * 0.5
@@ -45,11 +59,11 @@ def _constants(x: Any) -> list[Any] | None:
 
 
 @overload
-def convolve(a: vector[Any], v: ConvLike, mode: str = 'full') -> vector[float]: ...
+def convolve(a: vector[Any], v: ArrayLike1D, mode: str = 'full') -> vector[float]: ...
 @overload
-def convolve(a: tensor[Any], v: ConvLike, mode: str = 'full') -> tensor[float]: ...
+def convolve(a: tensor[Any], v: ArrayLike1D, mode: str = 'full') -> tensor[float]: ...
 @overload
-def convolve(a: 'array[Any] | Sequence[float | value[Any]]', v: ConvLike, mode: str = 'full') -> array[float]: ...
+def convolve(a: 'array[Any] | Sequence[float | value[Any]]', v: ArrayLike1D, mode: str = 'full') -> array[float]: ...
 def convolve(a: Any, v: Any, mode: str = 'full') -> Any:
     """
     Discrete linear convolution of two 1D sequences.
@@ -336,14 +350,22 @@ def bandpass(a: Any, cutoff: Sequence[float], numtaps: int | None = None, window
     return _fir_filter(a, cutoff, 'bandpass', numtaps, window, fs, width)
 
 
-def mean(input_vector: vector[Any]) -> unifloat:
+def mean(a: ArrayLike1D) -> unifloat:
     """
-    Applies a mean filter to the input vector and returns the mean as a unifloat.
+    Arithmetic mean of the elements of a 1D input.
 
     Arguments:
-        input_vector (vector): The input vector containing numerical values.
+        a: 1D vector, tensor, array or sequence of numbers and copapy values.
 
     Returns:
-        unifloat: The mean value of the input vector.
+        The mean of the elements.
     """
-    return input_vector.sum() / len(input_vector)
+    x = _1d_input(a)
+    n = x.shape[0]
+    if isinstance(x, array):
+        return x.sum() / n
+    if x._is_constant():
+        constants: list[float] = list(x.values)  # type: ignore[arg-type]
+        return float(sum(constants)) / n
+    arr = x._get_array()
+    return to_float(arr.sum() if arr is not None else mixed_sum(x.values)) / n
