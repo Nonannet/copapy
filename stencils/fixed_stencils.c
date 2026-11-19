@@ -104,6 +104,12 @@ STENCIL void det_floatarr(void) {
     result_float_ref();
 }
 
+STENCIL void svd_floatarr(void) {
+    // Singular value decomposition, the result is u, s and vh packed
+    aux_arr_svd_float(REF(ref_arg0), REF(ref_out), REF(ref_arg2), REF(ref_arg1));
+    result_float_ref();
+}
+
 STENCIL void copy32_arr(void) {
     // Strided copy of 32 bit elements
     aux_arr_copy32(REF(ref_arg0), REF(ref_out), REF(ref_arg1));

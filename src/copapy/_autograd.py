@@ -5,7 +5,7 @@ import copapy.backend as cpb
 from typing import Any, Sequence, overload
 import copapy as cp
 from ._arrays import array
-from ._basic_types import Net, Node, unifloat, ArrayNet, ArrayConst, ArrayOp, ArrayPack, ArrayElement, HeadNode, add_op
+from ._basic_types import Net, Node, unifloat, ArrayNet, ArrayConst, ArrayOp, ArrayPack, ArrayElement, HeadNode, Constant, add_op
 from ._linalg import solve_arrays, inv_array
 from ._interp import get_table_delta
 
@@ -36,6 +36,56 @@ def _const_ints(net: Net) -> tuple[int, ...]:
     source = net.source
     assert isinstance(source, HeadNode | ArrayConst), "Dimensions of an array operation must be constants"
     return tuple(int(v) for v in (source.values if isinstance(source, ArrayConst) else (source.value,)))
+
+
+def _zero_elements(arr: array[Any], start: int, stop: int) -> bool:
+    """True if the elements start to stop of the array are constant zeros"""
+    source = arr.net.source
+    if isinstance(source, ArrayConst):
+        return all(v == 0 for v in source.values[start:stop])
+    if isinstance(source, ArrayPack):
+        return all(isinstance(net.source, Constant) and net.source.value == 0 for net in source.args[start:stop])
+    return False
+
+
+def _svd_grad(out: array[Any], g: array[Any], m: int, n: int) -> array[Any]:
+    """Gradient of the matrix decomposed by the svd stencil (J. Townsend,
+    Differentiating the Singular Value Decomposition, 2016)
+
+    Arguments:
+        out: Result of the svd stencil: u (m x k), s (k) and vh (k x n) packed
+        g: Gradient of out
+    """
+    def mm(x: array[Any], y: array[Any]) -> array[Any]:
+        ret = x._matmul(y)  # 2D operands: always an array
+        assert isinstance(ret, array)
+        return ret
+
+    k = min(m, n)
+    mk, size = m * k, m * k + k + k * n
+    u, s, vh = out[0:mk].reshape(m, k), out[mk:mk + k], out[mk + k:size].reshape(k, n)
+    g_s = g[mk:mk + k].reshape(1, k)
+    if _zero_elements(g, 0, mk) and _zero_elements(g, mk + k, size):
+        # Only singular values are used: defined also for equal singular values
+        return mm(u * g_s, vh)
+
+    g_u, g_vh = g[0:mk].reshape(m, k), g[mk + k:size].reshape(k, n)
+    v, g_v = vh.T, g_vh.T
+    s2 = s * s
+    diff = s2.reshape(1, k) - s2.reshape(k, 1)  # s_j^2 - s_i^2
+    nonzero = diff != 0
+    f = nonzero / (diff + (1 - nonzero))  # 1 / (s_j^2 - s_i^2), 0 on the diagonal
+    eye = array([[float(i == j) for j in range(k)] for i in range(k)], 'float')
+    j_u = f * (mm(u.T, g_u) - mm(g_u.T, u))
+    j_v = f * (mm(vh, g_v) - mm(g_vh, v))
+    inner = j_u * s.reshape(1, k) + eye * g_s + s.reshape(k, 1) * j_v
+    ret = mm(mm(u, inner), vh)
+    inv_s = (1.0 / s).reshape(1, k)
+    if m > k:
+        ret = ret + mm((g_u - mm(u, mm(u.T, g_u))) * inv_s, vh)
+    if n > k:
+        ret = ret + mm(u * inv_s, g_vh - mm(mm(g_vh, v), vh))
+    return ret
 
 
 @overload
@@ -196,6 +246,11 @@ def grad(x: Any, y: value[Any] | Sequence[value[Any]] | vector[Any] | tensor[Any
             (n,) = _const_ints(node.args[1])
             assert out_net is not None
             add_grad(a, inv_array(a.reshape(n, n).T) * (value(out_net) * g))
+
+        elif opn == 'svd':
+            m, n, _ = _const_ints(node.args[1])
+            assert isinstance(out_net, ArrayNet)
+            add_grad(a, _svd_grad(array._from_net(out_net, (out_net.length,)), g, m, n))
 
         elif opn in ('lerp', 'bsearch'):
             # a is the table (lerp) or the grid (bsearch), b the position

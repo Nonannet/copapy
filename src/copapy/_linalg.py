@@ -1,4 +1,5 @@
-from typing import Any, Sequence, overload
+import math
+from typing import Any, Literal, Sequence, overload
 from functools import lru_cache
 from ._basic_types import value, ArrayNet, add_op, to_float, value_from_number, select_by_mask
 from ._arrays import array, _add_array_op
@@ -451,3 +452,147 @@ def cho_solve(c: Any, b: Any) -> Any:
     y = _solve_triangular_values(c_values, b_values, n, r, True, False, False)
     values = _solve_triangular_values(c_values, y, n, r, True, True, False)
     return _solution(values, b)
+
+
+def _svd_sweeps(k: int) -> int:
+    """Number of Jacobi sweeps for float precision. Measured: random matrices and
+    matrices with clustered singular values up to 32 x 32 reach float precision
+    after 5 sweeps (4 up to 8 x 8), the default has a margin of 1 to 2 sweeps."""
+    return 6 + (k > 8) + (k > 32)
+
+
+def _svd_array(a: array[Any], sweeps: int) -> array[float]:
+    """SVD of an m x n array by the svd array stencil: u (m x k), s (k) and
+    vh (k x n) packed into one flat array, k = min(m, n)"""
+    m, n = a.shape
+    k, r = min(m, n), max(m, n)
+    params = array([m, n, sweeps], 'int')
+    work: array[float] = array([0.0] * (k * r + k * k), 'float')
+    node = _add_array_op('svd_floatarr', [_cast_array(a, 'float').net, params.net, work.net], m * k + k + k * n)
+    assert isinstance(node.result, ArrayNet)
+    return array._from_net(node.result, (m * k + k + k * n,))
+
+
+def _svd_constants(a: Sequence[Any], m: int, n: int) -> tuple[list[float], list[float], list[float]]:
+    """SVD of numbers at trace time by the algorithm of the array stencil in
+    double precision (see aux_arr_svd_float), the sweeps are repeated until
+    the columns are orthogonal.
+
+    Returns:
+        u (m x k), s (k) and vh (k x n) as flat lists (row-major)
+    """
+    tall = m >= n
+    r, k = (m, n) if tall else (n, m)
+    amax = max(abs(float(x)) for x in a)
+    shift = -math.frexp(amax)[1] if amax else 0  # Exact scaling by a power of 2
+    b = [[math.ldexp(float(a[i * n + j] if tall else a[j * n + i]), shift) for i in range(r)] for j in range(k)]
+    v = [[float(i == j) for i in range(k)] for j in range(k)]
+
+    for _ in range(100):
+        rotated = False
+        for p in range(k - 1):
+            for q in range(p + 1, k):
+                bp, bq = b[p], b[q]
+                alpha = sum(x * x for x in bp)
+                beta = sum(y * y for y in bq)
+                gamma = sum(x * y for x, y in zip(bp, bq))
+                if abs(gamma) > 1e-15 * math.sqrt(alpha * beta):
+                    rotated = True
+                d = beta - alpha
+                den = abs(d) + math.sqrt(d * d + 4.0 * gamma * gamma)
+                t = 2.0 * gamma * math.copysign(1.0, d) / den if den else 0.0
+                c = 1.0 / math.sqrt(1.0 + t * t)
+                s = c * t
+                if alpha - t * gamma < beta + t * gamma:
+                    c1, s1, c2, s2 = s, c, c, -s
+                else:
+                    c1, s1, c2, s2 = c, -s, s, c
+                b[p], b[q] = [c1 * x + s1 * y for x, y in zip(bp, bq)], [c2 * x + s2 * y for x, y in zip(bp, bq)]
+                vp, vq = v[p], v[q]
+                v[p], v[q] = [c1 * x + s1 * y for x, y in zip(vp, vq)], [c2 * x + s2 * y for x, y in zip(vp, vq)]
+        if not rotated:
+            break
+
+    sv = [math.sqrt(sum(x * x for x in col)) for col in b]
+    order = sorted(range(k), key=lambda j: -sv[j])
+    sv, b, v = [sv[j] for j in order], [b[j] for j in order], [v[j] for j in order]
+
+    tol = sv[0] * r * 2.220446049250313e-16
+    u_b: list[list[float]] = []
+    for j in range(k):
+        if sv[j] > tol:
+            col = [x / sv[j] for x in b[j]]
+        else:
+            # Unit vector with the largest part orthogonal to the previous columns
+            best = max(range(r), key=lambda i: 1.0 - sum(u[i] * u[i] for u in u_b))
+            col = [float(i == best) for i in range(r)]
+        for _ in range(2):
+            for u in u_b:
+                dl = sum(x * y for x, y in zip(u, col))
+                col = [y - dl * x for x, y in zip(u, col)]
+        nrm = math.sqrt(sum(x * x for x in col))
+        u_b.append([x / nrm for x in col])
+
+    sv = [math.ldexp(x, -shift) for x in sv]
+    if tall:
+        return [u_b[j][i] for i in range(m) for j in range(k)], sv, [v[j][i] for j in range(k) for i in range(n)]
+    return [v[j][i] for i in range(m) for j in range(k)], sv, [u_b[j][i] for j in range(k) for i in range(n)]
+
+
+@overload
+def svd(a: tensor[Any], compute_uv: Literal[True] = True,
+        sweeps: int | None = None) -> tuple[tensor[float], vector[float], tensor[float]]: ...
+@overload
+def svd(a: tensor[Any], *, compute_uv: Literal[False], sweeps: int | None = None) -> vector[float]: ...
+def svd(a: Any, compute_uv: bool = True, sweeps: int | None = None) -> Any:
+    """Singular value decomposition a = u @ diag(s) @ vh of an m x n matrix.
+
+    Computed by a single array stencil with the one-sided Jacobi method with a fixed
+    number of sweeps, the execution time only depends on the size of the matrix,
+    not on the values.
+
+    The singular values are sorted descending and are not negative. The columns
+    of u and the rows of vh are orthonormal, also for rank deficient matrices:
+    the singular vectors of singular values close to zero are completed to an
+    orthonormal basis.
+
+    Automatic differentiation is supported. The derivatives by u and vh are not
+    defined for equal singular values and for singular values of zero (if
+    m != n), the derivative of s is defined for all matrices.
+
+    Arguments:
+        a: Matrix (2D tensor) with m rows and n columns
+        compute_uv: Return u and vh, otherwise only s
+        sweeps: Number of Jacobi sweeps, by default chosen for float precision
+            depending on min(m, n)
+
+    Returns:
+        (u, s, vh): u as m x k tensor, s as vector with k elements and vh as
+        k x n tensor with k = min(m, n). Only s if compute_uv is False.
+    """
+    _no_array(a)
+    mat: tensor[Any] = a if isinstance(a, tensor) else tensor(a)
+    if mat.ndim != 2:
+        raise ValueError(f"svd requires a matrix (2D tensor), got shape {mat.shape}")
+    m, n = mat.shape
+    k = min(m, n)
+
+    if sweeps is None:
+        sweeps = _svd_sweeps(k)
+    elif sweeps < 0:
+        raise ValueError("The number of sweeps must not be negative")
+
+    u: list[Any]
+    s: list[Any]
+    vh: list[Any]
+    if mat._is_constant():
+        u, s, vh = _svd_constants(mat.values, m, n)
+    else:
+        packed = _svd_array(mat._force_array(), sweeps)
+        # The results are references into the packed array (no code)
+        elements = [packed.element(i) for i in range(packed.size)]
+        u, s, vh = elements[:m * k], elements[m * k:m * k + k], elements[m * k + k:]
+
+    if not compute_uv:
+        return vector(s)
+    return tensor(u, (m, k)), vector(s), tensor(vh, (k, n))

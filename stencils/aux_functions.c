@@ -204,6 +204,155 @@ KERNEL float aux_arr_det_float(const float *restrict a, float *restrict w, int n
     return det.f;
 }
 
+// x if all bits of the int mask m are set, y if no bit is set (exact, an inf
+// or nan in the operand that is not selected has no effect)
+static inline float select_float(int m, float x, float y) {
+    union { float f; int i; } a = {x}, b = {y}, r;
+    r.i = (a.i & m) | (b.i & ~m);
+    return r.f;
+}
+
+// Singular value decomposition a = u diag(s) vh of a row-major m x n matrix a by
+// the one-sided Jacobi method (Hestenes) with a fixed number of sweeps, without
+// data dependent branches: the execution time only depends on the size.
+//
+// The columns of b = a (m >= n) or b = a^T (m < n), r x k with r = max(m, n) and
+// k = min(m, n), are rotated pairwise until they are orthogonal. The rotations
+// accumulate to v: b = u_b diag(s) v^T with s the column norms. For a wide matrix
+// a = v diag(s) u_b^T, u and vh are swapped. Each rotation puts the column with
+// the larger norm first, a final sort orders the singular values descending.
+//
+// The matrix is scaled by a power of 2 (exact) to a largest magnitude of 1 to 2:
+// the squared column norms neither overflow nor underflow for any finite input.
+// Columns of u_b for singular values <= r * eps * s[0] (rank deficient matrices)
+// are not defined by b: they are completed by the unit vector with the largest
+// part orthogonal to the previous columns. All columns are orthogonalized (two
+// Gram-Schmidt passes), u and vh are orthonormal also for singular matrices.
+//
+// Arguments:
+//     o: Result u (m x k), s (k) and vh (k x n), row-major
+//     w: Work memory of k * r + k * k floats
+//     p: Parameters m, n and the number of sweeps
+KERNEL void aux_arr_svd_float(const float *restrict a, float *restrict o, float *restrict w, const int *restrict p) {
+    int m = p[0], n = p[1], sweeps = p[2];
+    int tall = m >= n;
+    int r = tall ? m : n, k = tall ? n : m;
+    int sr = tall ? n : 1, sc = tall ? 1 : n;  // b[i][j] = a[i * sr + j * sc]
+    float *b = w;          // k columns of b with r elements
+    float *v = w + k * r;  // k columns of v with k elements
+    float *s = o + m * k;
+
+    // Exact scaling by 2^(127 - e) for a largest magnitude of 2^(e - 127) * 1.x
+    union { float f; unsigned int u; } amax = {0.0f}, scale, unscale;
+    for (int i = 0; i < m * n; i++) amax.f = select_float(-(fabsf(a[i]) > amax.f), fabsf(a[i]), amax.f);
+    int e = (int)(amax.u >> 23);  // Sign bit is 0
+    e = e < 2 ? 2 : e > 253 ? 253 : e;
+    scale.u = (unsigned int)(254 - e) << 23;
+    unscale.u = (unsigned int)e << 23;
+
+    for (int j = 0; j < k; j++) {
+        for (int i = 0; i < r; i++) b[j * r + i] = a[i * sr + j * sc] * scale.f;
+        for (int i = 0; i < k; i++) v[j * k + i] = (float)(i == j);
+    }
+
+    for (int sweep = 0; sweep < sweeps; sweep++) {
+        for (int pi = 0; pi < k - 1; pi++) {
+            for (int qi = pi + 1; qi < k; qi++) {
+                float *restrict bp = b + pi * r, *restrict bq = b + qi * r;
+                float *restrict vp = v + pi * k, *restrict vq = v + qi * k;
+                float alpha = 0.0f, beta = 0.0f, gamma = 0.0f;
+                for (int i = 0; i < r; i++) {
+                    alpha += bp[i] * bp[i];
+                    beta += bq[i] * bq[i];
+                    gamma += bp[i] * bq[i];
+                }
+                // tan of the rotation angle t = sign(z) / (|z| + sqrt(1 + z^2)) with
+                // z = (beta - alpha) / (2 gamma), without a division by gamma: t = 0
+                // for gamma = 0 (orthogonal columns), t = +-1 for alpha = beta
+                float d = beta - alpha;
+                float den = fabsf(d) + sqrtf(d * d + 4.0f * gamma * gamma);
+                den += (float)(den == 0.0f);
+                float t = 2.0f * gamma * copysignf(1.0f, d) / den;
+                float c = 1.0f / sqrtf(1.0f + t * t);
+                float sn = c * t;
+                // Norms after the rotation: alpha - t gamma and beta + t gamma,
+                // swap the new columns if the second one is larger
+                int sw = -((alpha - t * gamma) < (beta + t * gamma)); VALUE_BARRIER(sw);
+                float c1 = select_float(sw, sn, c), s1 = select_float(sw, c, -sn);
+                float c2 = select_float(sw, c, sn), s2 = select_float(sw, -sn, c);
+                for (int i = 0; i < r; i++) {
+                    float x = bp[i], y = bq[i];
+                    bp[i] = c1 * x + s1 * y;
+                    bq[i] = c2 * x + s2 * y;
+                }
+                for (int i = 0; i < k; i++) {
+                    float x = vp[i], y = vq[i];
+                    vp[i] = c1 * x + s1 * y;
+                    vq[i] = c2 * x + s2 * y;
+                }
+            }
+        }
+    }
+
+    // Singular values sorted descending: selection sort, swaps of the columns
+    for (int j = 0; j < k; j++) {
+        float acc = 0.0f;
+        for (int i = 0; i < r; i++) acc += b[j * r + i] * b[j * r + i];
+        s[j] = sqrtf(acc);
+    }
+    for (int j = 0; j < k; j++) {
+        int pv = j;
+        for (int i = j + 1; i < k; i++) {
+            int msk = -(s[i] > s[pv]); VALUE_BARRIER(msk);
+            pv = (i & msk) | (pv & ~msk);
+        }
+        float t = s[j]; s[j] = s[pv]; s[pv] = t;
+        float *bj = b + j * r, *bv = b + pv * r, *vj = v + j * k, *vv = v + pv * k;
+        for (int i = 0; i < r; i++) { float x = bj[i]; bj[i] = bv[i]; bv[i] = x; }
+        for (int i = 0; i < k; i++) { float x = vj[i]; vj[i] = vv[i]; vv[i] = x; }
+    }
+
+    // Columns of u_b: normalized columns of b or completed for singular values
+    // close to zero, orthogonalized against the previous columns
+    float tol = s[0] * (float)r * 1.1920929e-7f;
+    for (int j = 0; j < k; j++) {
+        float *restrict bj = b + j * r;
+        int keep = -(s[j] > tol); VALUE_BARRIER(keep);
+        int best_i = 0;
+        float best = -1.0f;
+        for (int i = 0; i < r; i++) {
+            float res = 1.0f;  // Squared norm of the unit vector i orthogonal to the previous columns
+            for (int l = 0; l < j; l++) res -= b[l * r + i] * b[l * r + i];
+            int msk = -(res > best); VALUE_BARRIER(msk);
+            best_i = (i & msk) | (best_i & ~msk);
+            best = select_float(msk, res, best);
+        }
+        float inv = 1.0f / s[j];  // inf for s[j] = 0, not selected then
+        for (int i = 0; i < r; i++) bj[i] = select_float(keep, bj[i] * inv, (float)(i == best_i));
+        for (int pass = 0; pass < 2; pass++) {
+            for (int l = 0; l < j; l++) {
+                const float *bl = b + l * r;
+                float dl = 0.0f;
+                for (int i = 0; i < r; i++) dl += bl[i] * bj[i];
+                for (int i = 0; i < r; i++) bj[i] -= dl * bl[i];
+            }
+        }
+        float acc = 0.0f;
+        for (int i = 0; i < r; i++) acc += bj[i] * bj[i];
+        float nrm = 1.0f / sqrtf(acc);
+        for (int i = 0; i < r; i++) bj[i] *= nrm;
+    }
+
+    for (int j = 0; j < k; j++) s[j] *= unscale.f;
+
+    // u: m x k, vh: k x n
+    float *vh = s + k;
+    for (int i = 0; i < m; i++)
+        for (int j = 0; j < k; j++) o[i * k + j] = tall ? b[j * r + i] : v[j * k + i];
+    for (int j = 0; j < k; j++)
+        for (int i = 0; i < n; i++) vh[j * n + i] = tall ? v[j * k + i] : b[j * r + i];
+}
+
 // Value of the table fp (n >= 2 elements) at the fractional index t by linear
 // interpolation between the elements floor(t) and floor(t) + 1. The index is
 // clamped to the table: t <= 0 results in fp[0], t >= n - 1 in fp[n - 1]. No

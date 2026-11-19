@@ -414,6 +414,25 @@ def array_test_values() -> tuple[list[NumLike], list[NumLike]]:
     add(arrays[id(fa)] < fs, [int(p < 1.5) for p in fa])
     add(arrays[id(ia)] <= arrays[id(ib)], [int(p <= q) for p, q in zip(ia, ib)])
 
+    # Singular value decomposition (tall, wide, rank deficient) compared to the
+    # trace-time decomposition in double precision. Singular vectors are only
+    # defined up to their sign: compared are the products u[i][c] * vh[c][j]
+    svd_inputs = ([[2.0, -1.0, 0.5], [0.0, 1.5, 1.0], [1.0, 0.5, -2.0], [0.5, 0.0, 1.0]],
+                  [[1.0, 2.0, 0.0, -1.0], [0.5, -1.5, 2.5, 0.0]],
+                  [[1.0, 2.0], [2.0, 4.0], [-1.0, -2.0]])
+    for mat in svd_inputs:
+        m, n = len(mat), len(mat[0])
+        k = min(m, n)
+        u, s, vh = cp.svd(cp.tensor([[value(x) for x in row] for row in mat]))
+        u_ref, s_ref, vh_ref = cp.svd(cp.tensor(mat))
+        for c in range(k):
+            add(s.values[c], [s_ref.values[c]])
+            if s_ref.values[c] > 1e-3:  # vectors of zero singular values are arbitrary
+                for i in range(m):
+                    for j in range(n):
+                        add(u.values[i * k + c] * vh.values[c * n + j],
+                            [u_ref.values[i * k + c] * vh_ref.values[c * n + j]])
+
     # Ring buffer stencils: in-place write of an element and of a block of
     # elements (runtime index), copy rotated by a runtime start element
     def put(values: list[Any], sample: Any, index: value[int], m: int) -> cp.array[Any]:

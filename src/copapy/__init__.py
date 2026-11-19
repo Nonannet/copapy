@@ -44,7 +44,7 @@ from ._tensors import tensor, zeros, ones, arange, eye, identity, diagonal, conc
 from ._math import sqrt, abs, sign, sin, cos, tan, tanh, asin, acos, atan, atan2, log, exp, pow, get_42, clamp, minimum, maximum, min, max
 from ._complex import cxvalue, cxtensor
 from ._casts import cast, to_float, to_int, to_bool, to_byte, pack, unpack
-from ._linalg import solve, inv, det, cholesky, solve_triangular, cho_solve
+from ._linalg import solve, inv, det, cholesky, solve_triangular, cho_solve, svd
 from ._interp import interp, lerp
 from ._autograd import grad, jacobian
 from ._tensors import tensor as matrix
@@ -152,6 +152,7 @@ __all__ = [
     "cholesky",
     "solve_triangular",
     "cho_solve",
+    "svd",
     "interp",
     "lerp",
     "eye",
